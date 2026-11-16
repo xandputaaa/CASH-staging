@@ -28,6 +28,7 @@ test('health route reports paper-only mode and source connection status',()=>wit
   const value=JSON.parse(r.body);
   assert.equal(value.ok,true);assert.equal(value.mode,'paper-only');
   assert.ok(value.venueFeeds&&value.spotFeed);
+  assert.equal(value.shadowStorage,'VOLATILE_SERVER_SESSION');assert.equal(value.qualifyingForecasts,0);
 }));
 test('unknown market venue returns an error without calling upstream providers',()=>withServer(async()=>{
   const r=await request('/api/markets?venue=UNKNOWN');
