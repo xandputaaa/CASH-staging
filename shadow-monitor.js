@@ -10,6 +10,7 @@ const {createHash}=require('node:crypto');
 const {verifyChain}=require('./audit-journal');
 const {proposeSpotMomentum,assessSpotMomentum,toContractSide,isValidSpotCandidate}=require('./spot-momentum');
 const {createScanContinuity,classifyQuote}=require('./scan-continuity');
+const {createAuditPreflight}=require('./audit-preflight');
 const {evaluateShadowRecords}=require('./shadow-evaluation');
 const MIN_LEAD_MS=60000,MAX_RECORDS=300,MAX_EVENTS=650;
 const VALID_VENUES=new Set(['Kalshi','Polymarket']);
@@ -114,6 +115,23 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
  const bootAt=ISO(clock()),observations=[],events=[],ids=new Set();
  let lastHash='GENESIS',inflight=null,scanCount=0,lastScanAt=null,lastError=null,pendingCursor=0,totalSettlementChecks=0;
  const collection=createScanContinuity({clock});
+ function capacity(){
+  const unresolved=observations.filter(x=>x.status==='PENDING').length;
+  const remainingEvents=Math.max(0,maxEvents-events.length);
+  const remainingRecords=Math.max(0,maxRecords-observations.length);
+  // Reserve one future resolution event per pending contract. Each new
+  // capture needs another capture + resolution pair before admitting it.
+  const safeNewCaptures=Math.max(0,Math.min(remainingRecords,
+   Math.floor(Math.max(0,remainingEvents-unresolved)/2)));
+  const state=safeNewCaptures===0?'CAPTURE_BLOCKED':
+    safeNewCaptures<=Math.max(2,Math.floor(maxRecords*0.15))?'NEAR_LIMIT':'AVAILABLE';
+  return {state,remainingRecords,remainingEvents,pendingResolutionReservations:unresolved,
+   safeNewCaptures,overflowProtection:'RESERVE_ONE_RESOLUTION_EVENT_PER_PENDING_CONTRACT',
+   warning:state==='CAPTURE_BLOCKED'?
+    'No safely reservable capture capacity remains. Export this session before changing storage; scans may still complete but no new contracts are saved.':
+    'Session event capacity is finite. No auto-rotation or persistent backend is configured.'};
+ }
+
  const spotInputs={checks:0,candidates:0,rejected:0,lastReason:'NOT_CHECKED',lastCheckedAt:null,reasons:{}};
  function inspectSpotInputs(){
   if(!spot)return;
@@ -165,7 +183,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
  }
  function capture(quote){
   const now=clock(),baseline=chooseMarketBaseline(quote);
-  if(!baseline||observations.length>=maxRecords||events.length>=maxEvents-1)return null;
+  if(!baseline||capacity().safeNewCaptures===0)return null;
   const marketId=quote.marketId,quoteAt=Date.parse(quote.fetchedAt),end=Date.parse(quote.endTime);
   const id=quote.venue+':'+marketId;
   if(typeof marketId!=='string'||ids.has(id)
@@ -278,7 +296,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
    qualifyingProspectiveContracts:0,requiredQualifyingContracts:100,
    qualifyingForModelAccuracy:false,independentForecastModel:false,
    warning:journal?.configured?'Read-only public market-favored quote baseline. Events are written to a local filesystem journal, but the volume and capture time have NOT been independently validated. These are NOT verified CASH AI predictions and do not count toward the 100-contract gate.':'Read-only public market-favored quote baseline. Session data disappears on restart and is not independently time-attested. These are NOT verified CASH AI predictions and do not count toward the 100 prospective-contract gate.',
-   bootAt,lastScanAt,scanCount,collection:collection.snapshot(),
+   bootAt,lastScanAt,scanCount,collection:collection.snapshot(),capacity:capacity(),
    cap:{records:maxRecords,events:maxEvents},
    observed:observations.length,pending,settled,voided,correct,incorrect,
    totalSettlementChecks,
@@ -298,11 +316,12 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
   };
  }
  function evaluation(){return evaluateShadowRecords(observations,{now:clock(),verifyOutcome:hasVerifiedEvidence})}
+ function auditPreflight(){return createAuditPreflight(exportSession(),{now:clock()})}
  function exportSession(){
   return {...snapshot(),format:journal?.configured?'CASH-shadow-filesystem-unverified-v1':'CASH-shadow-volatile-v1',exportedAt:ISO(clock()),
    checksumChainWarning:'SHA256 links detect accidental event alteration but do not prove immutable capture times or independent provenance.',
    events:events.map(x=>({...x}))};
  }
- return {scan,capture,resolvePending,snapshot,evaluation,exportSession};
+ return {scan,capture,resolvePending,snapshot,evaluation,auditPreflight,exportSession};
 }
 module.exports={createShadowMonitor,chooseMarketBaseline};

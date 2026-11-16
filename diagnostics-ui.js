@@ -23,6 +23,11 @@
    (Number(data.monitor?.eligibleVenueCount)||0)+'/2 eligible';
   el('diagnosticGaps').textContent=(Number(data.monitor?.longGaps)||0)+' long gaps · '+
    (Number(data.monitor?.consecutiveNoEligibleScans)||0)+' scans without eligible quotes';
+  const cap=data.validation.auditCapacity||{};
+  el('diagnosticCapacity').textContent=(cap.state||'UNKNOWN').replaceAll('_',' ')+
+   ' · '+(Number.isFinite(cap.safeNewCaptures)?cap.safeNewCaptures:'?')+
+   ' reservable captures';
+  el('diagnosticCapacity').className=cap.state==='CAPTURE_BLOCKED'?'bad':'';
   el('diagnosticGate').textContent='0 / '+(Number(data.validation.requiredProspectiveContracts)||100)+' verified';
   el('diagnosticStorage').textContent=data.validation.storageMode==='VOLATILE_SERVER_SESSION'?
    'Server-session only · resets on redeploy':'Local journal · independent retention unverified';
@@ -40,7 +45,7 @@
   }catch{
    el('diagnosticStatus').textContent='DIAGNOSTICS UNAVAILABLE';
    el('diagnosticStatus').className='diagnostic-state';
-   for(const id of ['diagnosticSpot','diagnosticKalshi','diagnosticPoly','diagnosticMonitor',
+   for(const id of ['diagnosticCapacity','diagnosticSpot','diagnosticKalshi','diagnosticPoly','diagnosticMonitor',
      'diagnosticCoverage','diagnosticGaps'])el(id).textContent='UNAVAILABLE';
    el('diagnosticGate').textContent='0 / 100 verified';
    el('diagnosticReason').textContent='Could not verify status; do not rely on previous live indicators';

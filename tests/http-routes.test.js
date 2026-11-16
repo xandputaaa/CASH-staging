@@ -129,3 +129,19 @@ test('experimental evaluation endpoint remains read-only, evidence-scoped and ne
  assert.match(homepage.body,/FORECAST EVIDENCE · EXPERIMENTAL/);
  assert.match(homepage.body,/evaluation-ui\.js/);
 }));
+
+test('audit preflight endpoint exports digest-only commitments and disallows writes',()=>withServer(async()=>{
+ const a=await request('/api/audit-preflight');
+ assert.equal(a.status,200);
+ assert.match(a.headers['cache-control'],/no-store/);
+ const report=JSON.parse(a.body);
+ assert.equal(report.mode,'CASH_AUDIT_PREFLIGHT_V1');
+ assert.equal(report.independentVerification.qualifyingProspectiveContracts,0);
+ assert.equal(report.independentVerification.timeWitnessConfigured,false);
+ assert.equal(report.independentVerification.realOrdersEnabled,false);
+ assert.equal(report.capacity.overflowProtection,'RESERVE_ONE_RESOLUTION_EVENT_PER_PENDING_CONTRACT');
+ assert.equal((await request('/api/audit-preflight','POST')).status,404);
+ const page=await request('/');
+ assert.match(page.body,/id="diagnosticCapacity"/);
+ assert.match(page.body,/\/api\/audit-preflight/);
+}));

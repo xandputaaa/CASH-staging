@@ -58,3 +58,15 @@ test('diagnostics distinguish scanner activity from eligible quote coverage',()=
  assert.equal(d.monitor.longGaps,2);
  assert.equal(d.validation.realOrdersEnabled,false);
 });
+
+test('audit capacity is reported separately from live quote and scan activity',()=>{
+ const data=inputs();
+ data.shadow.capacity={state:'CAPTURE_BLOCKED',safeNewCaptures:0,
+  pendingResolutionReservations:3,remainingEvents:3};
+ const d=createDiagnostics(data);
+ assert.equal(d.monitor.state,'ACTIVE');
+ assert.equal(d.feeds.Kalshi.state,'LIVE');
+ assert.equal(d.validation.auditCapacity.state,'CAPTURE_BLOCKED');
+ assert.equal(d.validation.auditCapacity.safeNewCaptures,0);
+ assert.equal(d.validation.realOrdersEnabled,false);
+});

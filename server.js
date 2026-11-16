@@ -47,6 +47,16 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/evaluation-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(evaluationScript);return;
   }
+  if(req.method==='GET'&&req.url==='/api/audit-preflight'){
+    try{
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify(shadow.auditPreflight()));
+    }catch{
+      res.writeHead(503,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({state:'UNAVAILABLE',qualifyingProspectiveContracts:0}));
+    }
+    return;
+  }
   if(req.method==='GET'&&req.url==='/api/evaluation'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
     res.end(JSON.stringify(shadow.evaluation()));return;

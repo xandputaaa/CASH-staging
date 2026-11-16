@@ -41,6 +41,7 @@ function createDiagnostics({spot={},kalshi={},polymarket={},shadow={},now=Date.n
   Number.isFinite(scan)?'STALE':'STARTING';
  const storageMode=shadow.storageMode||'VOLATILE_SERVER_SESSION';
  const collection=shadow.collection||{};
+ const capacity=shadow.capacity||{};
  const quoteCoverage=['COLLECTING','DEGRADED','NO_ELIGIBLE_QUOTES','STALLED','NOT_STARTED'].includes(collection.state)?
   collection.state:'UNKNOWN';
  const blockers=[
@@ -58,7 +59,12 @@ function createDiagnostics({spot={},kalshi={},polymarket={},shadow={},now=Date.n
    venueStates:collection.lastStates||{Kalshi:'NOT_CHECKED',Polymarket:'NOT_CHECKED'}},
   validation:{state:'NOT_VALIDATED',qualifyingProspectiveContracts:0,
    requiredProspectiveContracts:100,independentModelValidated:false,
-   independentTimeAttestation:false,storageMode,realOrdersEnabled:false,blockers},
+   independentTimeAttestation:false,storageMode,realOrdersEnabled:false,blockers,
+   auditCapacity:{state:capacity.state||'UNKNOWN',
+    safeNewCaptures:Number.isFinite(capacity.safeNewCaptures)?capacity.safeNewCaptures:null,
+    pendingResolutionReservations:Number.isFinite(capacity.pendingResolutionReservations)?
+      capacity.pendingResolutionReservations:null,
+    remainingEvents:Number.isFinite(capacity.remainingEvents)?capacity.remainingEvents:null}},
   note:'LIVE describes public read-only data freshness only, never model accuracy or trading readiness.'};
 }
 module.exports={createDiagnostics,feedState};

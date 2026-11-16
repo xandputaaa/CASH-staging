@@ -269,3 +269,34 @@ test('monitor records long gaps between completed scans without inferring outage
  assert.equal(s.collection.maxObservedGapMs,70000);
  assert.equal(s.collection.recent.length,2);
 });
+
+test('journal reserves an event for each pending settlement instead of overfilling with captures',async()=>{
+ const t=Date.now();let now=t;
+ const monitor=createShadowMonitor({clock:()=>now,maxRecords:4,maxEvents:3,
+  quotes:{query:async v=>fixture(t,v)},
+  results:{lookup:async()=>({status:'pending'})}});
+ const first=monitor.capture(fixture(t));
+ assert.equal(first?.status,'PENDING');
+ const second=monitor.capture({...fixture(t,'Polymarket'),marketId:'0x'+'b'.repeat(64)});
+ assert.equal(second,null,'a new capture needs its own result slot');
+ const snapshot=monitor.snapshot();
+ assert.equal(snapshot.observed,1);
+ assert.equal(snapshot.capacity.safeNewCaptures,0);
+ assert.equal(snapshot.capacity.pendingResolutionReservations,1);
+ assert.equal(snapshot.capacity.state,'CAPTURE_BLOCKED');
+ assert.equal(snapshot.capacity.remainingEvents,2);
+ assert.equal(snapshot.qualifyingProspectiveContracts,0);
+});
+test('capacity reflects available slots after resolution and never mistakes a scanner for retention',async()=>{
+ const t=Date.now(),monitor=createShadowMonitor({clock:()=>t,maxRecords:2,maxEvents:6,
+  quotes:{query:async()=>null},results:{lookup:async()=>({status:'pending'})}});
+ assert.equal(monitor.snapshot().capacity.safeNewCaptures,2);
+ assert.equal(monitor.snapshot().capacity.state,'NEAR_LIMIT');
+ monitor.capture(fixture(t));
+ assert.equal(monitor.snapshot().capacity.safeNewCaptures,1);
+ monitor.capture(fixture(t,'Polymarket'));
+ assert.equal(monitor.snapshot().capacity.safeNewCaptures,0);
+ await monitor.scan();
+ assert.equal(monitor.snapshot().scanCount,1);
+ assert.equal(monitor.snapshot().capacity.state,'CAPTURE_BLOCKED');
+});
