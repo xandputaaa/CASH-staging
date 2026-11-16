@@ -26,3 +26,6 @@ test('integrity detects fictional wallet discrepancies',()=>{const a=app();a.run
 test('legacy ledger is not claimed to be audited',()=>{const a=app();a.run("ledger.push({round:1,venue:'Kalshi',side:'UP',stake:5,result:'WIN'});render()");assert.match(a.get('integrity').textContent,/LEGACY/)});
 
 test('ledger capacity blocks new fictional positions without dropping history',()=>{const a=app();a.run("for(let i=0;i<500;i++)ledger.push({round:i+1,venue:'Kalshi',side:'UP',stake:2,result:'CANCELLED',net:0});buy('UP');render()");assert.equal(a.get('balance').textContent,'$100.00');assert.equal(a.get('up').disabled,true);assert.match(a.get('position').textContent,/limit reached/)});
+
+test('CSV export includes detailed fictional position accounting',()=>{const a=app();a.run("buy('UP');for(let i=0;i<7;i++)advance()");assert.match(a.run('ledgerCsv()'),/round,venue,side,stake,entryPrice,fee,payout,net,result/);assert.match(a.run('ledgerCsv()'),/"WIN"/);assert.equal(a.get('export').disabled,false)});
+test('CSV preserves negative numeric paper P&L',()=>{const a=app();a.run("buy('DOWN');for(let i=0;i<7;i++)advance()");assert.match(a.run('ledgerCsv()'),/"-5"/)});
