@@ -62,7 +62,15 @@ test('shadow watcher records independent side even when market-price favorite di
  const monitor=createShadowMonitor({
   clock:()=>t,spot:{view:()=>samples(t,{change:14})},
   quotes:{query:async venue=>market(now,venue)},
-  results:{lookup:async info=>winner?{...info,status:'verified',winner,source:'official test',checkedAt:new Date(t).toISOString()}:{...info,status:'pending'}}
+  results:{lookup:async info=>{
+   if(!winner||info.venue!=='Kalshi')return {...info,status:'pending'};
+   const evidence={venue:'Kalshi',ticker:info.marketId,status:'settled',result:'yes',is_provisional:false};
+   return {...info,status:'verified',winner,source:'Kalshi public market result',
+    checkedAt:new Date(t).toISOString(),firstObservedAt:new Date(t-21000).toISOString(),
+    confirmationCount:2,evidenceSnapshot:evidence,
+    evidenceSha256:require('node:crypto').createHash('sha256').update(JSON.stringify(evidence)).digest('hex'),
+    evidenceSourceUrl:'https://external-api.kalshi.com/trade-api/v2/markets/'+info.marketId};
+  }}
  });
  await monitor.scan();let snap=monitor.snapshot();
  assert.equal(snap.spotCandidateObservations,2);
