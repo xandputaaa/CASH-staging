@@ -13,7 +13,7 @@ function selectKalshi(data,now){
   const active=data.markets.filter(m=>typeof m?.ticker==='string'&&/^KXBTC15M-[A-Za-z0-9-]+$/.test(m.ticker)&&Number.isFinite(Date.parse(m.close_time))&&Date.parse(m.close_time)>now&&(!m.open_time||Date.parse(m.open_time)<=now));
   active.sort((a,b)=>Date.parse(a.close_time)-Date.parse(b.close_time));
   const m=active[0];if(!m)throw Error('No current Kalshi BTC 15m market');
-  return {venue:'Kalshi',marketId:m.ticker,title:typeof m.title==='string'?m.title.slice(0,180):'BTC Up or Down 15m',endTime:m.close_time,yesBid:price(m.yes_bid_dollars),yesAsk:price(m.yes_ask_dollars),status:'live',quotedFields:'YES bid and YES ask; venue USD dollars per $1 payout'};
+  return {venue:'Kalshi',marketId:m.ticker,title:typeof m.title==='string'?m.title.slice(0,180):'BTC Up or Down 15m',endTime:m.close_time,yesBid:price(m.yes_bid_dollars),yesAsk:price(m.yes_ask_dollars),noAsk:price(m.no_ask_dollars),status:'live',quotedFields:'YES bid and YES ask; venue USD dollars per $1 payout'};
 }
 function parseTokens(raw){const a=typeof raw==='string'?JSON.parse(raw):raw;if(!Array.isArray(a)||a.length!==2||!a.every(x=>/^\d{10,}$/.test(String(x))))throw Error('Invalid CLOB token IDs');return a.map(String)}
 function selectPolyEvent(data,slot,now){
