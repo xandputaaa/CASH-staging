@@ -88,7 +88,7 @@ test('diagnostic API is cached, read-only and never reports trading readiness',(
  assert.equal(v.validation.storageMode,'VOLATILE_SERVER_SESSION');
  assert.ok(v.feeds.Kalshi&&v.feeds.Polymarket&&v.feeds.spot);
  assert.ok(v.monitor);
-});
+}));
 test('CASH diagnostics UI is served and mounted on mobile dashboard',()=>withServer(async()=>{
  const script=await request('/diagnostics-ui.js');
  assert.equal(script.status,200);
