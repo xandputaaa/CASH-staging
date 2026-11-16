@@ -9,7 +9,8 @@
   latest=null;el('k15Status').textContent='NO CALL · DATA UNAVAILABLE';
   el('k15Status').className='shadow-state';
   for(const id of ['k15Target','k15Yes','k15No','k15Bid','k15Remaining',
-    'k15Ticker','k15Spot','k15Signal','k15Fresh','k15AskSum'])el(id).textContent='—';
+    'k15Ticker','k15Spot','k15Signal','k15Fresh','k15AskSum',
+    'k15Breakeven','k15Checklist'])el(id).textContent='—';
   el('k15Reasons').textContent='Could not verify current market. Do not use previously displayed prices.';
   el('k15Updated').textContent='No live verification · real-money calls disabled';
  }
@@ -31,6 +32,10 @@
   if(data?.version!=='CASH_KALSHI15_TERMINAL_V1'||
    data.realTradingAuthorized!==false||data.automaticOrdersEnabled!==false||
    data.independentForecastValidation!==0||data.liveDecision!=='NO_CALL_MODEL_NOT_VALIDATED'||
+   data.finalization?.realTradingGatePassed!==false||
+   data.finalization?.officialBrtiFeedAvailable!==false||
+   data.breakEven?.expectedValue!==null||
+   data.breakEven?.independentWinProbability!==null||
    !['NO_CALL','PAPER_MONITOR_READY'].includes(data.displayState))
    throw Error('Invalid Kalshi15 gate');
   latest=data;updateAt=Date.now();
@@ -51,6 +56,19 @@
    (data.clock.quoteAgeMs/1000).toFixed(0)+' seconds since public quote':'Quote age unknown';
   el('k15AskSum').textContent=Number.isFinite(data.market?.askSum)?
    cents(data.market.askSum)+' combined asks · fees and slippage excluded':'Combined asks unavailable';
+  const be=data.breakEven||{};
+  el('k15Breakeven').textContent='Gross break-even win rate: YES '+
+   (Number.isFinite(be.yesBeforeFees)?(100*be.yesBeforeFees).toFixed(1)+'%':'—')+
+   ' · NO '+(Number.isFinite(be.noBeforeFees)?(100*be.noBeforeFees).toFixed(1)+'%':'—')+
+   '. Fees/slippage raise this threshold; actual required rate and independent model probability unverified.';
+  const checks=Array.isArray(data.releaseChecklist)?data.releaseChecklist:[];
+  el('k15Checklist').replaceChildren();
+  for(const check of checks){
+   if(!check||typeof check.passed!=='boolean'||typeof check.note!=='string')continue;
+   const line=document.createElement('p');line.className='notice';
+   line.textContent=(check.passed?'PASS · ':'BLOCKED · ')+check.note;
+   el('k15Checklist').appendChild(line);
+  }
   el('k15Reasons').textContent=data.blockers?.length?
    data.blockers.join(' · '):
    'Public data meets PAPER monitoring checks. No independently verified BRTI forecast or positive trading edge established.';

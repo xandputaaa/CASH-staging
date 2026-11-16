@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {createVenueFeeds,selectKalshi,selectPolyEvent,price}=require('../venue-feeds');
 const now=Date.now(),open=new Date(now-60000).toISOString(),close=new Date(now+120000).toISOString();
-const kalshiMarket={ticker:'KXBTC15M-26NOV161145-15',title:'Bitcoin Up in next 15m?',status:'open',open_time:open,close_time:close,yes_bid_dollars:'0.4400',yes_ask_dollars:'0.4700',no_ask_dollars:'0.5400',floor_strike:85566.37,rules_primary:'The simple average of the sixty seconds of BRTI before closing is at least the sixty seconds before opening.'};
+const kalshiMarket={ticker:'KXBTC15M-26NOV161145-15',title:'Bitcoin Up in next 15m?',status:'open',open_time:open,close_time:close,yes_bid_dollars:'0.4400',yes_ask_dollars:'0.4700',no_ask_dollars:'0.5400',floor_strike:85566.37,strike_type:'greater_or_equal',rules_primary:'The simple average of the sixty seconds of BRTI before closing is at least the sixty seconds before opening.'};
 function currentSlot(t=Date.now()){return Math.floor(t/300000)*300}
 function polyFixture(slot=currentSlot()){
   const slug='btc-updown-5m-'+slot;
@@ -140,4 +140,22 @@ test('Kalshi metadata fallback outage does not convert a valid quote into fabric
  assert.equal(r.status,'live');
  assert.equal(r.targetPrice,null);
  assert.equal(r.contractRuleStatus,'RULE_TEXT_NOT_CONFIRMED');
+});
+
+test('Kalshi strike type is authoritative for tie settlement',()=>{
+ const o=selectKalshi({markets:[kalshiMarket]},now);
+ assert.equal(o.strikeType,'greater_or_equal');assert.equal(o.tieGoesToYes,true);
+ const different=selectKalshi({markets:[{...kalshiMarket,strike_type:'greater'}]},now);
+ assert.equal(different.strikeType,'greater');assert.equal(different.tieGoesToYes,false);
+});
+test('Kalshi single-market fallback supplies missing tie semantics only for the exact ticker',async()=>{
+ const row={...kalshiMarket,strike_type:null};
+ let calls=0;
+ const feed=createVenueFeeds({clock:()=>now,fetchImpl:async url=>{
+  calls++;
+  if(url.includes('/markets?'))return {ok:true,json:async()=>({markets:[row]})};
+  return {ok:true,json:async()=>({market:kalshiMarket})};
+ }});
+ const out=await feed.query('Kalshi');
+ assert.equal(calls,2);assert.equal(out.tieGoesToYes,true);
 });

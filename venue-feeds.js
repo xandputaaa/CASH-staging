@@ -18,6 +18,8 @@ function selectKalshi(data,now){
   const targetPrice=Number.isFinite(numberStrike)&&numberStrike>1000&&numberStrike<10000000?
     numberStrike:null;
   const rules=typeof m.rules_primary==='string'?m.rules_primary:'';
+  const strikeType=typeof m.strike_type==='string'?m.strike_type:null;
+  const canResolveTieAsYes=strikeType==='greater_or_equal';
   const contractRuleStatus=/\bBRTI\b|CF Benchmarks[^.]*Bitcoin Real[- ]Time Index/i.test(rules)
     &&/sixty seconds|60 seconds|60-second/i.test(rules)&&/before/i.test(rules)
      ?'BRTI_60S_RULE_TEXT_PRESENT':'RULE_TEXT_NOT_CONFIRMED';
@@ -26,7 +28,8 @@ function selectKalshi(data,now){
     title:typeof m.title==='string'?m.title.slice(0,180):'BTC Up or Down 15m',
     openTime:typeof m.open_time==='string'?m.open_time:null,endTime:m.close_time,
     targetPrice,targetSource:targetPrice===null?'MISSING':'KALSHI_FLOOR_STRIKE',
-    contractRuleStatus,yesBid,yesAsk,noAsk,
+    contractRuleStatus,strikeType,
+    tieGoesToYes:canResolveTieAsYes,yesBid,yesAsk,noAsk,
     status:yesAsk!==null&&noAsk!==null?'live':'partial',
     quotedFields:'YES bid, YES ask and NO ask; public observed dollars per $1 payout, not guaranteed executable'};
 }
@@ -63,7 +66,7 @@ function createVenueFeeds({fetchImpl=fetch,clock=()=>Date.now()}={}){
           // Some market-list payloads omit full contract rules/target. Check
           // only the exact current ticker; never invent the BRTI target.
           if(quote.targetPrice===null||
-            quote.contractRuleStatus==='RULE_TEXT_NOT_CONFIRMED'){
+            quote.contractRuleStatus==='RULE_TEXT_NOT_CONFIRMED'||!quote.tieGoesToYes){
             try{
               const detail=await read(BASE_KALSHI+'/markets/'+encodeURIComponent(quote.marketId),fetchImpl,2500);
               const row=detail?.market;
@@ -73,6 +76,7 @@ function createVenueFeeds({fetchImpl=fetch,clock=()=>Date.now()}={}){
                 if(listing){
                   const merged={...row,...listing,
                     floor_strike:listing.floor_strike??row.floor_strike,
+                    strike_type:listing.strike_type||row.strike_type,
                     rules_primary:listing.rules_primary||row.rules_primary};
                   const updated=selectKalshi({markets:[merged]},clock());
                   if(updated.marketId===quote.marketId)quote=updated;

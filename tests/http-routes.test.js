@@ -188,3 +188,21 @@ test('Kalshi 15m terminal serves conservative paper-only readiness and same-orig
  assert.match(page.body,/KALSHI \/ BTC 15 MIN · COMMAND CENTER/);
  assert.match(page.body,/kalshi15-ui\.js/);
 }));
+
+test('Kalshi finalization checklist and break-even report are explanatory not a trade signal',()=>withServer(async()=>{
+ const response=await request('/api/kalshi15');
+ assert.equal(response.status,200);
+ const r=JSON.parse(response.body);
+ assert.equal(r.finalization.realTradingGatePassed,false);
+ assert.equal(r.finalization.officialBrtiFeedAvailable,false);
+ assert.equal(r.finalization.seriesSpecificFeesVerified,false);
+ assert.equal(r.breakEven.expectedValue,null);
+ assert.equal(r.breakEven.independentWinProbability,null);
+ assert.equal(r.breakEven.yesAfterFeesAndSlippage,null);
+ assert.ok(r.releaseChecklist.some(x=>x.id==='OFFICIAL_BRTI_FEED'&&x.passed===false));
+ const page=await request('/');
+ assert.match(page.body,/FINALIZATION CHECKLIST/);
+ assert.match(page.body,/id="k15Breakeven"/);
+ const script=await request('/kalshi15-ui.js');
+ assert.match(script.body,/k15Checklist/);
+}));
