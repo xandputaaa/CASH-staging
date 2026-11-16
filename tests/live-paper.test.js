@@ -76,3 +76,41 @@ test('partial market status can be used when the chosen side has a valid ask',as
  const a=app({venueStatus:'partial'});await a.run("window.CASHLivePaper.place('Polymarket','UP')");
  assert.equal(a.get('lpBalance').textContent,'$95.00');
 });
+
+test('new paper position is visible in a mobile pending ticket immediately',async()=>{
+ const a=app();await a.run("window.CASHLivePaper.place('Kalshi','YES')");
+ assert.match(a.get('lpActiveList').innerHTML,/PENDING · MARKET OPEN/);
+ assert.match(a.get('lpActiveList').innerHTML,/Kalshi · YES/);
+ assert.match(a.get('lpActiveList').innerHTML,/observed ask 55\.0¢/);
+ assert.match(a.get('lpActiveList').innerHTML,/KXBTC15M/);
+});
+test('duplicate same-side paper entry is visibly disabled and cannot charge again',async()=>{
+ const a=app();await a.run("window.CASHLivePaper.place('Kalshi','YES')");
+ assert.equal(a.get('lpKalshiYes').disabled,true);
+ assert.equal(a.get('lpKalshiYes').textContent,'YES · Recorded');
+ assert.equal(a.get('lpKalshiNo').disabled,false);
+ await a.run("window.CASHLivePaper.place('Kalshi','YES')");
+ assert.equal(a.get('lpBalance').textContent,'$95.00');
+ assert.match(a.get('lpMessage').textContent,/Already recorded/);
+ assert.match(a.get('lpActiveList').innerHTML,/PENDING/);
+});
+test('new market IDs restore the paper buttons without deleting previous records',async()=>{
+ const a=app();await a.run("window.CASHLivePaper.place('Kalshi','YES')");
+ a.run("window.CASHLivePaper.setActiveQuote('Kalshi','KXBTC15M-26NOV160945-00')");
+ assert.equal(a.get('lpKalshiYes').disabled,false);
+ assert.equal(a.get('lpBalance').textContent,'$95.00');
+ assert.match(a.get('lpActiveList').innerHTML,/KXBTC15M-26NOV160930-00/);
+});
+test('expired paper positions clearly show official settlement is still pending',async()=>{
+ const a=app();await a.run("window.CASHLivePaper.place('Kalshi','YES')");
+ a.now.ms+=25000;await a.run("window.CASHLivePaper.check()");
+ assert.match(a.get('lpActiveList').innerHTML,/AWAITING OFFICIAL RESULT/);
+ assert.equal(a.get('lpBalance').textContent,'$95.00');
+});
+test('settled paper ticket displays result with fee/slippage caveat',async()=>{
+ const a=app();await a.run("window.CASHLivePaper.place('Kalshi','YES')");
+ a.setResult({status:'verified',winner:'YES',source:'Kalshi public market result'});
+ a.now.ms+=25000;await a.run("window.CASHLivePaper.check()");
+ assert.match(a.get('lpActiveList').innerHTML,/WON/);
+ assert.match(a.get('lpActiveList').innerHTML,/fees\/slippage excluded/);
+});
