@@ -40,6 +40,9 @@ function createDiagnostics({spot={},kalshi={},polymarket={},shadow={},now=Date.n
  const monitor=Number.isFinite(scan)&&scan<=now+2000&&now-scan<=60000?'ACTIVE':
   Number.isFinite(scan)?'STALE':'STARTING';
  const storageMode=shadow.storageMode||'VOLATILE_SERVER_SESSION';
+ const collection=shadow.collection||{};
+ const quoteCoverage=['COLLECTING','DEGRADED','NO_ELIGIBLE_QUOTES','STALLED','NOT_STARTED'].includes(collection.state)?
+  collection.state:'UNKNOWN';
  const blockers=[
   'Independent CASH model has not passed 100 independently verified prospective settlements',
   storageMode==='VOLATILE_SERVER_SESSION'?'Server observations are volatile across redeploys':
@@ -48,7 +51,11 @@ function createDiagnostics({spot={},kalshi={},polymarket={},shadow={},now=Date.n
  ];
  return {service:'CASH',mode:'SIMULATION_ONLY',generatedAt:new Date(now).toISOString(),
   dataStatus,feeds,monitor:{state:monitor,lastScanAt:shadow.lastScanAt||null,
-   observed:Number(shadow.observed)||0,settled:Number(shadow.settled)||0},
+   observed:Number(shadow.observed)||0,settled:Number(shadow.settled)||0,
+   collectionState:quoteCoverage,eligibleVenueCount:Number(collection.lastEligibleVenues)||0,
+   consecutiveNoEligibleScans:Number(collection.consecutiveNoEligibleScans)||0,
+   longGaps:Number(collection.longGaps)||0,overlapCount:Number(collection.overlapCount)||0,
+   venueStates:collection.lastStates||{Kalshi:'NOT_CHECKED',Polymarket:'NOT_CHECKED'}},
   validation:{state:'NOT_VALIDATED',qualifyingProspectiveContracts:0,
    requiredProspectiveContracts:100,independentModelValidated:false,
    independentTimeAttestation:false,storageMode,realOrdersEnabled:false,blockers},

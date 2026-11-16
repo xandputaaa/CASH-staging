@@ -45,3 +45,16 @@ test('only actual captured ask prices count as valid market quote sides',()=>{
  assert.equal(feedState('Kalshi',{status:'live',marketId:'KXBTC15M-ABCDEF',
   yesAsk:null,noAsk:null,fetchedAt:new Date(t).toISOString(),endTime:new Date(t+120000).toISOString()},t).state,'OFFLINE');
 });
+
+test('diagnostics distinguish scanner activity from eligible quote coverage',()=>{
+ const input=inputs();input.shadow.collection={state:'NO_ELIGIBLE_QUOTES',
+  lastEligibleVenues:0,consecutiveNoEligibleScans:5,longGaps:2,overlapCount:1,
+  lastStates:{Kalshi:'PARTIAL',Polymarket:'OFFLINE'}};
+ const d=createDiagnostics(input);
+ assert.equal(d.monitor.state,'ACTIVE');
+ assert.equal(d.monitor.collectionState,'NO_ELIGIBLE_QUOTES');
+ assert.equal(d.monitor.eligibleVenueCount,0);
+ assert.equal(d.monitor.consecutiveNoEligibleScans,5);
+ assert.equal(d.monitor.longGaps,2);
+ assert.equal(d.validation.realOrdersEnabled,false);
+});

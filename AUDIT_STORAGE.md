@@ -39,3 +39,7 @@ On the CASH staging site, **Download browser archive** saves device-local sessio
 ## Read-only archived history review
 
 CASH can now summarize downloaded or restored browser sessions by captured events, unique market IDs, outcome events present in the copies, overlap across sessions, and conflicts. **No outcome in a saved copy is a qualified independent model forecast.** In particular, `withoutResolutionInCopies` describes what is **missing from the archive copy**—it does not mean an official market remains unsettled or prove data loss at the venue. The review cannot infer unobserved markets, offline periods, or unrecorded contracts. Duplicate captured market IDs across restarts are flagged instead of counted as separate model forecasts. This is a read-only consistency report; SHA-256 checksums do not authenticate evidence or timestamps.
+
+## In-process scanner continuity (not durable coverage proof)
+
+CASH records a capped 30-scan rolling diagnostic history with each venue’s eligibility status, completed scans, last scan duration, overlapping calls, and gaps longer than 45 seconds between completed scans. A completed polling loop is **not** the same as receiving a full fresh market quote. In the CASH Diagnostics panel, `NO ELIGIBLE QUOTES` or `DEGRADED` may appear even when the process monitor is ACTIVE. These counters reset at restart and do not reconstruct missed contracts, external timestamps, full uptime, or qualified forecasts. The scanner cannot prove no gaps between server sessions.

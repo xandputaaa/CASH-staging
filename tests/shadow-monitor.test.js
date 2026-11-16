@@ -226,3 +226,46 @@ test('two claimed official checks must be at least 20 seconds apart and begin af
  await monitor.resolvePending();
  assert.equal(monitor.snapshot().settled,1,'valid confirmed post-expiry checks may settle');
 });
+
+test('scanner reports unavailable quote coverage separately from a completed scan',async()=>{
+ const t=Date.now();let now=t;
+ const monitor=createShadowMonitor({
+  clock:()=>now,quotes:{query:async venue=>venue==='Kalshi'?null:{venue,status:'unavailable'}},
+  results:{lookup:async()=>({status:'pending'})}
+ });
+ await monitor.scan();let s=monitor.snapshot();
+ assert.equal(s.scanCount,1);assert.equal(s.collection.state,'NO_ELIGIBLE_QUOTES');
+ assert.equal(s.collection.lastStates.Kalshi,'OFFLINE');
+ assert.equal(s.collection.lastStates.Polymarket,'OFFLINE');
+ assert.equal(s.collection.consecutiveNoEligibleScans,1);
+ assert.equal(s.qualifyingProspectiveContracts,0);
+ now=t+61000;
+ assert.equal(monitor.snapshot().collection.state,'STALLED');
+});
+test('scanner detects one usable quote and an exception without fabricating full coverage',async()=>{
+ const t=Date.now(),monitor=createShadowMonitor({
+  clock:()=>t,quotes:{query:async venue=>{
+   if(venue==='Kalshi')return fixture(t);
+   throw Error('mock Polymarket failure');
+  }},
+  results:{lookup:async()=>({status:'pending'})}
+ });
+ const outcome=await monitor.scan(),s=monitor.snapshot();
+ assert.equal(outcome.captured,1);
+ assert.equal(s.collection.state,'DEGRADED');
+ assert.equal(s.collection.lastEligibleVenues,1);
+ assert.equal(s.collection.lastStates.Kalshi,'ELIGIBLE');
+ assert.equal(s.collection.lastStates.Polymarket,'ERROR');
+ assert.equal(s.collection.venues.Kalshi.eligibleReads,1);
+});
+test('monitor records long gaps between completed scans without inferring outages across restarts',async()=>{
+ const t=Date.now();let now=t;
+ const monitor=createShadowMonitor({clock:()=>now,quotes:{query:async venue=>fixture(t,venue)},
+  results:{lookup:async()=>({status:'pending'})}});
+ await monitor.scan();now=t+70000;await monitor.scan();
+ const s=monitor.snapshot();
+ assert.equal(s.collection.completedScans,2);
+ assert.equal(s.collection.longGaps,1);
+ assert.equal(s.collection.maxObservedGapMs,70000);
+ assert.equal(s.collection.recent.length,2);
+});

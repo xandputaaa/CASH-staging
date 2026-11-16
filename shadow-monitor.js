@@ -9,6 +9,7 @@
 const {createHash}=require('node:crypto');
 const {verifyChain}=require('./audit-journal');
 const {proposeSpotMomentum,toContractSide,isValidSpotCandidate}=require('./spot-momentum');
+const {createScanContinuity,classifyQuote}=require('./scan-continuity');
 const MIN_LEAD_MS=60000,MAX_RECORDS=300,MAX_EVENTS=650;
 const VALID_VENUES=new Set(['Kalshi','Polymarket']);
 const isPrice=n=>Number.isFinite(n)&&n>0&&n<1;
@@ -111,6 +112,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
  if(!quotes||!results)throw Error('Shadow monitor needs read-only quote and result providers');
  const bootAt=ISO(clock()),observations=[],events=[],ids=new Set();
  let lastHash='GENESIS',inflight=null,scanCount=0,lastScanAt=null,lastError=null,pendingCursor=0,totalSettlementChecks=0;
+ const collection=createScanContinuity({clock});
  function loadSavedHistory(){
   const saved=journal?.events||[];
   verifyChain(saved,{limit:maxEvents});
@@ -223,17 +225,26 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
   return {checked,changed};
  }
  async function scan(){
-  if(inflight)return inflight;
+  if(inflight){collection.overlap();return inflight}
+  const startedMs=clock();
   inflight=(async()=>{
    let captured=0;
+   const states={Kalshi:'OFFLINE',Polymarket:'OFFLINE'};
    for(const venue of VALID_VENUES){
     try{
      const quote=await quotes.query(venue);
+     states[venue]=classifyQuote(venue,quote,clock(),minimumLeadMs,Boolean(chooseMarketBaseline(quote)));
      if(capture(quote))captured++;
-    }catch(e){lastError=journal?.configured?'Market quote failed or audit journal could not persist the observation':'Market quote source temporarily unavailable'}
+    }catch(e){
+     states[venue]='ERROR';
+     lastError=journal?.configured?'Market quote failed or audit journal could not persist the observation':
+      'Market quote source temporarily unavailable';
+    }
    }
    const resolution=await resolvePending();
-   scanCount++;lastScanAt=ISO(clock());
+   const finishedMs=clock();
+   collection.record({startedMs,finishedMs,statuses:states,captured,resolved:resolution.changed});
+   scanCount++;lastScanAt=ISO(finishedMs);
    return {captured,resolved:resolution.changed};
   })().finally(()=>{inflight=null});
   return inflight;
@@ -253,7 +264,8 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
    qualifyingProspectiveContracts:0,requiredQualifyingContracts:100,
    qualifyingForModelAccuracy:false,independentForecastModel:false,
    warning:journal?.configured?'Read-only public market-favored quote baseline. Events are written to a local filesystem journal, but the volume and capture time have NOT been independently validated. These are NOT verified CASH AI predictions and do not count toward the 100-contract gate.':'Read-only public market-favored quote baseline. Session data disappears on restart and is not independently time-attested. These are NOT verified CASH AI predictions and do not count toward the 100 prospective-contract gate.',
-   bootAt,lastScanAt,scanCount,cap:{records:maxRecords,events:maxEvents},
+   bootAt,lastScanAt,scanCount,collection:collection.snapshot(),
+   cap:{records:maxRecords,events:maxEvents},
    observed:observations.length,pending,settled,voided,correct,incorrect,
    totalSettlementChecks,
    spotCandidateName:'SPOT_MOMENTUM_90S_V1',
