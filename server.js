@@ -27,5 +27,14 @@ const server=http.createServer(async(req,res)=>{
   }
   res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'});res.end('Not found');
 });
-if(require.main===module)server.listen(port,'0.0.0.0',()=>console.log('CASH paper app listening on 0.0.0.0:'+port));
+if(require.main===module)server.listen(port,'0.0.0.0',()=>{
+  console.log('CASH paper app listening on 0.0.0.0:'+port);
+  let previous='';
+  const probe=()=>feed.update().then(quote=>{
+    const state=quote.status+':'+(quote.source||'none');
+    if(state!==previous){console.log('CASH public BTC spot feed status: '+state);previous=state}
+  }).catch(()=>{if(previous!=='error'){console.log('CASH public BTC spot feed status: error');previous='error'}});
+  probe();
+  const timer=setInterval(probe,15000);timer.unref();
+});
 module.exports={server};
