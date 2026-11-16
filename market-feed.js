@@ -19,10 +19,11 @@ function parseKraken(data){
   if(!isValidPrice(price))throw Error('Invalid Kraken price');
   return {price,source:SOURCES[0].name};
 }
-function parseCoinbase(data){
+function parseCoinbase(data,now=Date.now()){
   const price=Number(data?.price),tradeTime=typeof data?.time==='string'?Date.parse(data.time):NaN;
   if(!isValidPrice(price))throw Error('Invalid Coinbase price');
-  if(Number.isFinite(tradeTime)&&Math.abs(Date.now()-tradeTime)>120000)throw Error('Coinbase trade data too old');
+  if(!Number.isFinite(tradeTime)||tradeTime>now+5000||now-tradeTime>20000)
+    throw Error('Coinbase trade timestamp missing, in the future, or older than 20s');
   return {price,source:SOURCES[1].name};
 }
 function createMarketFeed({fetchImpl=fetch,clock=()=>Date.now()}={}){
@@ -35,7 +36,7 @@ function createMarketFeed({fetchImpl=fetch,clock=()=>Date.now()}={}){
       for(let i=0;i<SOURCES.length;i++){
         try{
           const body=await getJson(SOURCES[i].url,fetchImpl,3500);
-          quote=i===0?parseKraken(body):parseCoinbase(body);
+          quote=i===0?parseKraken(body):parseCoinbase(body,clock());
           break;
         }catch(e){}
       }
