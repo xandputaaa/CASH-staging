@@ -21,6 +21,7 @@
   el('spotCandidateAccuracy').textContent=Number.isFinite(data.spotCandidateAccuracy)?
     (100*data.spotCandidateAccuracy).toFixed(1)+'%':'—';
   el('shadowGate').textContent='0 / 100 qualifying prospective model predictions';
+  el('shadowChecks').textContent='Official settlement checks: '+(Number(data.totalSettlementChecks)||0)+' · pending outcomes are never inferred from the clock';
   el('shadowSession').textContent='Monitoring since '+fmtTime(data.bootAt)+
     ' · '+(data.lastScanAt?'last scan '+fmtTime(data.lastScanAt):'first scan pending')+
     ' · '+(data.storageMode==='FILESYSTEM_JOURNAL_UNVERIFIED'?'local journal configured; mount durability unverified':'local server memory, reset on redeploy');
@@ -31,9 +32,9 @@
       x.spotCandidate?.predictedContractSide
        ?x.spotCandidate.predictedContractSide+(x.status==='PENDING'?' · pending':x.status==='VOID'?' · void':x.winner===x.spotCandidate.predictedContractSide?' · hit':' · miss')
        :'—')+'</td><td>'+
-    Math.round(Math.max(0,Number(x.leadMs)||0)/1000)+'s</td><td>'+safe(x.status)+'</td>'+
+    Math.round(Math.max(0,Number(x.leadMs)||0)/1000)+'s</td><td>'+safe(x.status)+'</td><td>'+safe((Number(x.settlementAttempts)||0)+' checks'+(x.pendingReason?' · '+x.pendingReason:''))+'</td>'+
     '<td>'+safe(x.marketId)+'</td></tr>').join(''):
-    '<tr><td colspan="6" class="muted">No pre-expiry baseline observations this server session</td></tr>';
+    '<tr><td colspan="7" class="muted">No pre-expiry baseline observations this server session</td></tr>';
  }
  async function refresh(){
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),7000);
@@ -46,6 +47,7 @@
    for(const id of ['spotCandidateCount','spotCandidateSettled','spotCandidateCorrect','spotCandidateAccuracy'])el(id).textContent='—';
    el('shadowState').className='shadow-state';
    el('shadowSession').textContent='Could not read this server session. No verified records can be inferred.';
+   el('shadowChecks').textContent='Official settlement check status unavailable';
    el('shadowStorageNote').textContent='Monitor state could not be verified. Do not rely on previous readings.';
   }finally{clearTimeout(timeout)}
  }
