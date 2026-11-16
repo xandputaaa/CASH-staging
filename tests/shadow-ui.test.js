@@ -71,3 +71,17 @@ test('shadow markup explicitly says experimental candidate is not calibrated or 
  assert.match(html,/does not use prediction-market prices/);
  assert.match(html,/do not qualify toward the 100-contract gate/);
 });
+
+test('shadow screen shows actual result check attempts and unresolved oracle reasons',async()=>{
+ const a=app({...valid,totalSettlementChecks:5,
+  recent:[{...valid.recent[0],status:'PENDING',settlementAttempts:3,pendingReason:'Official market not settled'}]});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.match(a.get('shadowChecks').textContent,/Official settlement checks: 5/);
+ assert.match(a.get('shadowRows').innerHTML,/3 checks/);
+ assert.match(a.get('shadowRows').innerHTML,/Official market not settled/);
+ assert.equal(a.get('shadowGate').textContent,'0 / 100 qualifying prospective model predictions');
+});
+test('shadow monitor offline state does not retain a misleading live settlement check count',async()=>{
+ const a=app(valid,{fail:true});await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(a.get('shadowChecks').textContent,'Official settlement check status unavailable');
+});
