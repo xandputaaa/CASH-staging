@@ -12,6 +12,8 @@ const shadowArchiveScript=fs.readFileSync('shadow-browser-archive.js');
 const shadowArchiveUiScript=fs.readFileSync('shadow-browser-archive-ui.js');
 const diagnosticsScript=fs.readFileSync('diagnostics-ui.js');
 const evaluationScript=fs.readFileSync('evaluation-ui.js');
+const cognitionScript=fs.readFileSync('cognition-ui.js');
+const {assessCognition}=require('./cash-cognition');
 const {createDiagnostics}=require('./diagnostics');
 const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
@@ -37,6 +39,24 @@ const server=http.createServer(async(req,res)=>{
   }
   if(req.method==='GET'&&req.url==='/diagnostics-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(diagnosticsScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/cognition-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(cognitionScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/cognition'){
+    try{
+      const diag=createDiagnostics({spot:feed.view(),kalshi:venueFeeds.view('Kalshi'),
+        polymarket:venueFeeds.view('Polymarket'),shadow:shadow.snapshot()});
+      const report=assessCognition({diagnostics:diag,evaluation:shadow.evaluation()});
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify(report));
+    }catch{
+      res.writeHead(503,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({state:'UNAVAILABLE',executionDecision:'ABSTAIN_FROM_REAL_MONEY_TRADING',
+        tradingAllowed:false,qualifyingProspectiveContracts:0}));
+    }
+    return;
   }
   if(req.method==='GET'&&req.url==='/api/diagnostics'){
     const diagnostics=createDiagnostics({spot:feed.view(),kalshi:venueFeeds.view('Kalshi'),

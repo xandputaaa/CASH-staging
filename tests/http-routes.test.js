@@ -145,3 +145,27 @@ test('audit preflight endpoint exports digest-only commitments and disallows wri
  assert.match(page.body,/id="diagnosticCapacity"/);
  assert.match(page.body,/\/api\/audit-preflight/);
 }));
+
+test('CASH cognitive core is read-only metacognition, not consciousness or trading authorization',()=>withServer(async()=>{
+ const response=await request('/api/cognition');
+ assert.equal(response.status,200);
+ assert.match(response.headers['cache-control'],/no-store/);
+ const data=JSON.parse(response.body);
+ assert.equal(data.name,'CASH_COGNITIVE_CORE_V1');
+ assert.equal(data.nature,'DETERMINISTIC_METACOGNITION_NOT_SENTIENCE');
+ assert.equal(data.executionDecision,'ABSTAIN_FROM_REAL_MONEY_TRADING');
+ assert.equal(data.automaticOrdersEnabled,false);
+ assert.equal(data.autonomousModelUpdatesEnabled,false);
+ assert.equal(data.tradingAllowed,false);
+ assert.equal(data.qualifyingProspectiveContracts,0);
+ assert.ok(Array.isArray(data.attention));
+ assert.equal((await request('/api/cognition','POST')).status,404);
+ const script=await request('/cognition-ui.js');
+ assert.equal(script.status,200);
+ assert.match(script.headers['content-type'],/javascript/);
+ assert.match(script.body,/CASH_COGNITIVE_CORE_V1/);
+ const homepage=await request('/');
+ assert.match(homepage.body,/CASH \/ COGNITIVE CORE/);
+ assert.match(homepage.body,/This is not sentience or consciousness/);
+ assert.match(homepage.body,/cognition-ui\.js/);
+}));
