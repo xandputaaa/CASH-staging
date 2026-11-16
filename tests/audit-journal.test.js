@@ -3,9 +3,9 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {createAuditJournal,verifyChain}=require('../audit-journal');
 const {createShadowMonitor}=require('../shadow-monitor');
-function sandbox(fn){
+async function sandbox(fn){
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'cash-audit-test-'));
- try{return fn(directory)}finally{fs.rmSync(directory,{recursive:true,force:true})}
+ try{return await fn(directory)}finally{fs.rmSync(directory,{recursive:true,force:true})}
 }
 const fixture=(now,venue)=>venue==='Kalshi'?{
  venue,status:'live',marketId:'KXBTC15M-26NOV161000-00',
