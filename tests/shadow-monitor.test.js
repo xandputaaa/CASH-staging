@@ -53,7 +53,7 @@ test('server capture excludes stale, expired and incomplete quote snapshots',asy
 });
 test('only final official results resolve prospective session baselines',async()=>{
  const t=Date.now(),d=deps(t);await d.monitor.scan();
- d.clock(t+190000);await d.monitor.scan();
+ d.clock(t+220000);await d.monitor.scan();
  assert.equal(d.monitor.snapshot().pending,2);
  d.setWinner('YES');await d.monitor.scan();
  let snap=d.monitor.snapshot();
@@ -64,7 +64,7 @@ test('only final official results resolve prospective session baselines',async()
  snap=d.monitor.snapshot();assert.equal(snap.settled,2);assert.equal(snap.pending,0);
 });
 test('incompatible winners, void outcomes, and correct/incorrect scoring stay separate',async()=>{
- const t=Date.now(),d=deps(t);await d.monitor.scan();d.clock(t+190000);d.setWinner('NO');
+ const t=Date.now(),d=deps(t);await d.monitor.scan();d.clock(t+220000);d.setWinner('NO');
  await d.monitor.scan();const snap=d.monitor.snapshot();
  assert.equal(snap.incorrect,1);assert.equal(snap.pending,1);assert.equal(snap.baselineDirectionalAccuracy,0);
 });
@@ -106,7 +106,7 @@ test('official result polling rotates fairly so an unresolved oldest three canno
    endTime:new Date(t+120000).toISOString()};
   assert.equal(monitor.capture(quote)?.status,'PENDING');
  }
- now=t+130000;
+ now=t+150000;
  const first=await monitor.resolvePending();
  assert.equal(first.checked,3);assert.equal(first.changed,0);
  assert.equal(seen.includes('KXBTC15M-MARKET4'),false);
@@ -150,7 +150,7 @@ test('unproven or contradictory adapter results never score a shadow observation
    }
    return checked;
   }}});
- await monitor.scan();now=t+200000;
+ await monitor.scan();now=t+220000;
  await monitor.resolvePending();
  assert.equal(monitor.snapshot().settled,0);
  mode='contradiction';await monitor.resolvePending();
@@ -205,4 +205,24 @@ test('early-dated official confirmation cannot settle a shadow observation',asyn
  assert.equal(monitor.snapshot().pending,1);
  assert.equal(monitor.snapshot().settled,0);
  assert.match(monitor.snapshot().recent[0].pendingReason,/Unrecognized or contradictory/);
+});
+
+test('two claimed official checks must be at least 20 seconds apart and begin after expiry',async()=>{
+ const t=Date.now();let time=t,firstOffset=-21000;
+ const monitor=createShadowMonitor({clock:()=>time,
+  quotes:{query:async venue=>venue==='Kalshi'?fixture(t):null},
+  results:{lookup:async info=>{
+   const result=confirmed(info,time,'YES');
+   result.firstObservedAt=new Date(time+firstOffset).toISOString();
+   return result;
+  }}});
+ await monitor.scan();time=t+195000;firstOffset=-21000;
+ await monitor.resolvePending();
+ assert.equal(monitor.snapshot().settled,0,'pre-expiry first observation cannot settle');
+ time=t+220000;firstOffset=-19000;
+ await monitor.resolvePending();
+ assert.equal(monitor.snapshot().settled,0,'insufficient second-check interval cannot settle');
+ firstOffset=-21000;
+ await monitor.resolvePending();
+ assert.equal(monitor.snapshot().settled,1,'valid confirmed post-expiry checks may settle');
 });

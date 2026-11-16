@@ -74,7 +74,8 @@ function hasVerifiedEvidence(result,record){
    ||!Number.isFinite(Date.parse(result.checkedAt))
    ||!Number.isFinite(Date.parse(result.firstObservedAt))
    ||Date.parse(result.firstObservedAt)>Date.parse(result.checkedAt)
-   ||Date.parse(result.firstObservedAt)<Date.parse(record.serverCapturedAt)
+   ||Date.parse(result.firstObservedAt)<Date.parse(record.endTime)
+   ||Date.parse(result.checkedAt)-Date.parse(result.firstObservedAt)<20000
    ||Date.parse(result.checkedAt)<Date.parse(record.endTime))return false;
  const evidence=result.evidenceSnapshot;
  try{

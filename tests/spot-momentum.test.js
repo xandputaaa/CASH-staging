@@ -80,7 +80,7 @@ test('shadow watcher records independent side even when market-price favorite di
  assert.equal(snap.independentForecastModel,false);
  assert.ok(snap.recent.every(x=>x.spotCandidate?.predictedDirection==='UP'));
  assert.ok(snap.recent.every(x=>x.baselineSide==='NO'||x.baselineSide==='DOWN'));
- t=now+190000;winner='YES';await monitor.resolvePending();
+ t=now+220000;winner='YES';await monitor.resolvePending();
  snap=monitor.snapshot();
  assert.equal(snap.spotCandidateSettled,1);
  assert.equal(snap.spotCandidateCorrect,1);

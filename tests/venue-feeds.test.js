@@ -52,3 +52,40 @@ test('Kalshi status=open query returns active market objects, which remain eligi
  assert.equal(active.yesAsk,0.47);
  assert.equal(active.noAsk,0.54);
 });
+
+test('failed Kalshi refresh remains STALE in cached snapshot, diagnostics and API consumers',async()=>{
+ let t=now,failed=false,calls=0;
+ const feed=createVenueFeeds({clock:()=>t,fetchImpl:async()=>{
+  calls++;if(failed)throw Error('mock Kalshi outage');
+  return {ok:true,json:async()=>({markets:[kalshiMarket]})};
+ }});
+ assert.equal((await feed.query('Kalshi')).status,'live');
+ t+=13000;failed=true;
+ const result=await feed.query('Kalshi');
+ assert.equal(result.status,'stale');assert.equal(result.refreshFailed,true);
+ assert.equal(feed.view('Kalshi').status,'stale');
+ assert.equal(feed.view('Kalshi').refreshFailedAt,new Date(t).toISOString());
+ t+=1000;
+ assert.equal((await feed.query('Kalshi')).status,'stale');
+ assert.equal(calls,2);
+ t+=13000;failed=false;
+ const restored=await feed.query('Kalshi');
+ assert.equal(restored.status,'live');assert.equal(restored.refreshFailed,false);
+ assert.equal(restored.refreshFailedAt,null);
+ assert.equal(calls,3);
+});
+test('failed Polymarket refresh cannot silently recover LIVE until upstream succeeds',async()=>{
+ let t=now,failed=false;
+ const fetchImpl=async url=>{
+  if(failed)throw Error('mock Polymarket outage');
+  if(url.includes('gamma-api'))return {ok:true,json:async()=>polyFixture(currentSlot(t))};
+  return {ok:true,json:async()=>({price:url.includes('12345678901234567890')?'0.62':'0.41'})};
+ };
+ const feed=createVenueFeeds({clock:()=>t,fetchImpl});
+ assert.equal((await feed.query('Polymarket')).status,'live');
+ t+=13000;failed=true;
+ assert.equal((await feed.query('Polymarket')).status,'stale');
+ assert.equal(feed.view('Polymarket').status,'stale');
+ t+=13000;failed=false;
+ assert.equal((await feed.query('Polymarket')).status,'live');
+});

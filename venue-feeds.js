@@ -33,8 +33,8 @@ function selectPolyEvent(data,slot,now){
   return {slug,marketId:typeof m.conditionId==='string'?m.conditionId:null,endTime,upToken:tokens[up],downToken:tokens[down],title:typeof ev.title==='string'?ev.title.slice(0,180):'BTC Up or Down 5m'};
 }
 function createVenueFeeds({fetchImpl=fetch,clock=()=>Date.now()}={}){
-  const state={Kalshi:{cached:null,inflight:null},Polymarket:{cached:null,inflight:null}};
-  function view(venue){const cached=state[venue].cached,ageMs=cached?Math.max(0,clock()-cached.fetchedMs):null;return cached?{...cached.quote,status:ageMs>STALE_MS||Date.parse(cached.quote.endTime)<=clock()?'stale':cached.quote.status,ageMs,fetchedAt:cached.fetchedAt}:{venue,status:'unavailable',ageMs:null,fetchedAt:null,marketId:null}}
+  const state={Kalshi:{cached:null,inflight:null,refreshFailed:false,refreshFailedAt:null},Polymarket:{cached:null,inflight:null,refreshFailed:false,refreshFailedAt:null}};
+  function view(venue){if(!state[venue])throw Error('Unsupported venue');const st=state[venue],cached=st.cached,ageMs=cached?Math.max(0,clock()-cached.fetchedMs):null;return cached?{...cached.quote,status:st.refreshFailed||ageMs>STALE_MS||Date.parse(cached.quote.endTime)<=clock()?'stale':cached.quote.status,ageMs,fetchedAt:cached.fetchedAt,refreshFailed:st.refreshFailed,refreshFailedAt:st.refreshFailedAt}:{venue,status:'unavailable',ageMs:null,fetchedAt:null,marketId:null,refreshFailed:st.refreshFailed,refreshFailedAt:st.refreshFailedAt}}
   async function query(venue){
     if(!state[venue])throw Error('Unsupported venue');
     const st=state[venue];if(st.cached&&clock()-st.cached.fetchedMs<CACHE_MS)return view(venue);
@@ -58,11 +58,11 @@ function createVenueFeeds({fetchImpl=fetch,clock=()=>Date.now()}={}){
           if(upAsk===null&&downAsk===null)throw Error('No valid Polymarket prices');
           quote={venue:'Polymarket',marketId:event.marketId,slug:event.slug,title:event.title,endTime:event.endTime,upAsk,downAsk,status:upAsk!==null&&downAsk!==null?'live':'partial',quotedFields:'UP/DOWN public CLOB best BUY prices; venue USD dollars per $1 payout'};
         }
-        const fetchedMs=clock();st.cached={quote,fetchedMs,fetchedAt:new Date(fetchedMs).toISOString()};
+        const fetchedMs=clock();st.cached={quote,fetchedMs,fetchedAt:new Date(fetchedMs).toISOString()};st.refreshFailed=false;st.refreshFailedAt=null;
         return view(venue);
       }catch(e){
-        if(st.cached)return {...view(venue),status:'stale'};
-        return {venue,status:'unavailable',ageMs:null,fetchedAt:null,marketId:null};
+        st.refreshFailed=true;st.refreshFailedAt=new Date(clock()).toISOString();
+        return view(venue);
       }
     })().finally(()=>{st.inflight=null});
     return st.inflight;

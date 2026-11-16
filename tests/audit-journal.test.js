@@ -148,7 +148,7 @@ test('public evidence fields and digest remain auditable after filesystem journa
    evidenceSourceUrl:'https://external-api.kalshi.com/trade-api/v2/markets/'+info.marketId
   }:{...info,status:'pending',reason:'Not final'}};
  const first=createShadowMonitor({journal:createAuditJournal({directory}),clock:()=>clock,quotes,results});
- await first.scan();clock=t+200000;await first.resolvePending();
+ await first.scan();clock=t+220000;await first.resolvePending();
  const before=first.exportSession();
  assert.equal(before.events.length,3);
  const resolved=before.events.find(e=>e.type==='RESOLUTION');
@@ -171,7 +171,7 @@ test('tampered public evidence snapshot fails semantic audit replay even with re
    checkedAt:new Date(clock).toISOString(),confirmationCount:2,
    firstObservedAt:new Date(clock-22000).toISOString(),evidenceSha256:digest,evidenceSnapshot,
    evidenceSourceUrl:'https://external-api.kalshi.com/trade-api/v2/markets/'+info.marketId}:null}});
- await monitor.scan();clock=t+200000;await monitor.resolvePending();
+ await monitor.scan();clock=t+220000;await monitor.resolvePending();
  const filename=path.join(directory,'shadow-events.jsonl'),events=fs.readFileSync(filename,'utf8').trim().split('\n').map(JSON.parse);
  const outcome=events.find(e=>e.type==='RESOLUTION');
  assert.ok(outcome);
