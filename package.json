@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "node server.js",
+    "start": "npm test && node server.js",
     "test": "node --test tests/*.test.js"
   }
 }
