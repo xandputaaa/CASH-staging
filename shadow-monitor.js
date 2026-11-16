@@ -35,7 +35,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
  maxRecords=MAX_RECORDS,maxEvents=MAX_EVENTS,journal=null,spot=null}={}){
  if(!quotes||!results)throw Error('Shadow monitor needs read-only quote and result providers');
  const bootAt=ISO(clock()),observations=[],events=[],ids=new Set();
- let lastHash='GENESIS',inflight=null,scanCount=0,lastScanAt=null,lastError=null;
+ let lastHash='GENESIS',inflight=null,scanCount=0,lastScanAt=null,lastError=null,pendingCursor=0,totalSettlementChecks=0;
  function loadSavedHistory(){
   const saved=journal?.events||[];
   verifyChain(saved,{limit:maxEvents});
@@ -55,7 +55,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
       ||(x.spotCandidate!==undefined&&x.spotCandidate!==null&&!isValidSpotCandidate(x.spotCandidate,x.venue,Date.parse(x.serverCapturedAt))))
       throw Error('Saved capture is semantically invalid');
     observations.push({...x,status:'PENDING',winner:null,outcomeSource:null,
-      outcomeCheckedAt:null,outcomeSettledAt:null,captureSequence:e.sequence});
+      outcomeCheckedAt:null,outcomeSettledAt:null,lastCheckAt:null,settlementAttempts:0,pendingReason:null,captureSequence:e.sequence});
     ids.add(x.id);
    }else if(e.type==='RESOLUTION'){
     const record=observations.find(o=>o.id===x.id),allowed=record?.venue==='Kalshi'?['YES','NO','VOID']:['UP','DOWN','VOID'];
@@ -103,21 +103,31 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
   const event=append('CAPTURE',data);
   if(!event)return null;
   const record={...data,status:'PENDING',winner:null,outcomeSource:null,
-   outcomeCheckedAt:null,outcomeSettledAt:null,captureSequence:event.sequence};
+   outcomeCheckedAt:null,outcomeSettledAt:null,lastCheckAt:null,settlementAttempts:0,pendingReason:null,captureSequence:event.sequence};
   observations.push(record);ids.add(id);
   return record;
  }
  async function resolvePending(){
   let checked=0,changed=0;
-  const candidates=observations.filter(x=>x.status==='PENDING'&&Date.parse(x.endTime)<=clock()).slice(0,3);
+  // Round robin prevents the oldest unresolved markets starving newer expired ones.
+  const eligible=observations.filter(x=>x.status==='PENDING'&&Date.parse(x.endTime)<=clock());
+  const count=Math.min(3,eligible.length);
+  const start=eligible.length?pendingCursor%eligible.length:0;
+  const candidates=Array.from({length:count},(_,i)=>eligible[(start+i)%eligible.length]);
+  pendingCursor=eligible.length?(start+count)%eligible.length:0;
   for(const record of candidates){
    if(events.length>=maxEvents)break;
-   checked++;
+   checked++;totalSettlementChecks++;
+   record.settlementAttempts=(record.settlementAttempts||0)+1;
+   record.lastCheckAt=ISO(clock());
    try{
     const resolution=await results.lookup({venue:record.venue,marketId:record.marketId,slug:record.slug});
+    if(resolution?.status==='pending'){record.pendingReason=String(resolution.reason||'No finalized public result yet').slice(0,160);continue}
     const allowed=record.venue==='Kalshi'?['YES','NO','VOID']:['UP','DOWN','VOID'];
     if(resolution?.status!=='verified'||resolution.marketId!==record.marketId
-      ||resolution.venue!==record.venue||!allowed.includes(resolution.winner))continue;
+      ||resolution.venue!==record.venue||!allowed.includes(resolution.winner)){
+      record.pendingReason='Unrecognized or contradictory result response';continue;
+    }
     const result={
      id:record.id,marketId:record.marketId,venue:record.venue,
      winner:resolution.winner,source:resolution.source||'public official market',
@@ -129,8 +139,8 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
     record.status=resolution.winner==='VOID'?'VOID':resolution.winner===record.baselineSide?'CORRECT':'INCORRECT';
     record.winner=resolution.winner;record.outcomeSource=result.source;
     record.outcomeCheckedAt=result.checkedAt;record.outcomeSettledAt=result.settledAt;
-    record.resolutionSequence=event.sequence;changed++;
-   }catch(e){lastError=journal?.configured?'Official result source or audit journal failed; observations remain pending':'Official result provider failed; observations remain pending'}
+    record.pendingReason=null;record.resolutionSequence=event.sequence;changed++;
+   }catch(e){record.pendingReason='Result lookup or journal write failed';lastError=journal?.configured?'Official result source or audit journal failed; observations remain pending':'Official result provider failed; observations remain pending'}
   }
   return {checked,changed};
  }
@@ -167,6 +177,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
    warning:journal?.configured?'Read-only public market-favored quote baseline. Events are written to a local filesystem journal, but the volume and capture time have NOT been independently validated. These are NOT verified CASH AI predictions and do not count toward the 100-contract gate.':'Read-only public market-favored quote baseline. Session data disappears on restart and is not independently time-attested. These are NOT verified CASH AI predictions and do not count toward the 100 prospective-contract gate.',
    bootAt,lastScanAt,scanCount,cap:{records:maxRecords,events:maxEvents},
    observed:observations.length,pending,settled,voided,correct,incorrect,
+   totalSettlementChecks,
    spotCandidateName:'SPOT_MOMENTUM_90S_V1',
    spotCandidateObservations:candidateObservations.length,
    spotCandidateSettled:candidateSettled.length,
