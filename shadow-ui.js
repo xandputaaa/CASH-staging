@@ -6,8 +6,8 @@
  const fmtTime=s=>{const d=new Date(s);return Number.isFinite(d.valueOf())?d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'—'};
  function safe(str){return String(str).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
  function show(data){
-  if(data.mode!=='PUBLIC_MARKET_FAVORED_ASK_V1'||data.qualifyingForModelAccuracy!==false||data.storageMode!=='VOLATILE_SERVER_SESSION')throw Error('Unverified shadow payload');
-  el('shadowState').textContent='SESSION BASELINE · NOT VERIFIED';
+  if(data.mode!=='PUBLIC_MARKET_FAVORED_ASK_V1'||data.qualifyingForModelAccuracy!==false||!['VOLATILE_SERVER_SESSION','FILESYSTEM_JOURNAL_UNVERIFIED'].includes(data.storageMode))throw Error('Unverified shadow payload');
+  el('shadowState').textContent=data.storageMode==='FILESYSTEM_JOURNAL_UNVERIFIED'?'FILESYSTEM JOURNAL · UNVERIFIED':'SESSION BASELINE · NOT VERIFIED';
   el('shadowState').className='shadow-state';
   el('shadowCount').textContent=String(Number(data.observed)||0);
   el('shadowPending').textContent=String(Number(data.pending)||0);
@@ -17,7 +17,8 @@
   el('shadowGate').textContent='0 / 100 qualifying prospective model predictions';
   el('shadowSession').textContent='Monitoring since '+fmtTime(data.bootAt)+
     ' · '+(data.lastScanAt?'last scan '+fmtTime(data.lastScanAt):'first scan pending')+
-    ' · local server memory, reset on redeploy';
+    ' · '+(data.storageMode==='FILESYSTEM_JOURNAL_UNVERIFIED'?'local journal configured; mount durability unverified':'local server memory, reset on redeploy');
+  el('shadowStorageNote').textContent=data.storageMode==='FILESYSTEM_JOURNAL_UNVERIFIED'?'Filesystem journal configured; '+(Number(data.recoveredEvents)||0)+' events were replayed at startup. Independent timestamps, volume persistence and qualified accuracy are NOT verified.':'No persistent Railway volume attached: session memory resets when the server restarts or redeploys. No qualifying forecasts are retained.';
   const rows=Array.isArray(data.recent)?data.recent.slice(0,8):[];
   el('shadowRows').innerHTML=rows.length?rows.map(x=>
     '<tr><td>'+safe(x.venue)+'</td><td>'+safe(x.baselineSide)+'</td><td>'+
@@ -35,6 +36,7 @@
    el('shadowState').textContent='MONITOR UNAVAILABLE';
    el('shadowState').className='shadow-state';
    el('shadowSession').textContent='Could not read this server session. No verified records can be inferred.';
+   el('shadowStorageNote').textContent='Monitor state could not be verified. Do not rely on previous readings.';
   }finally{clearTimeout(timeout)}
  }
  refresh();
