@@ -7,10 +7,23 @@ function fixture(t,venue='Kalshi'){
  return venue==='Kalshi'?{...common,yesAsk:0.62,noAsk:0.41}:
   {...common,slug:'btc-updown-5m-'+Math.floor(t/300000)*300,upAsk:0.59,downAsk:0.43};
 }
+function confirmed(info,now,winner){
+ const kal=info.venue==='Kalshi',evidence=kal?
+  {venue:'Kalshi',ticker:info.marketId,status:'settled',result:({YES:'yes',NO:'no',VOID:'void'})[winner],is_provisional:false}:
+  {venue:'Polymarket',slug:info.slug,conditionId:info.marketId,closed:true,
+   resolutionStatus:'resolved',outcomes:['Up','Down'],outcomePrices:winner==='UP'?['1','0']:['0','1']};
+ return {...info,status:'verified',winner,source:kal?'Kalshi public market result':'Polymarket Gamma final market result',
+  checkedAt:new Date(now).toISOString(),confirmationCount:2,
+  firstObservedAt:new Date(now-21000).toISOString(),
+  evidenceSnapshot:evidence,
+  evidenceSha256:crypto.createHash('sha256').update(JSON.stringify(evidence)).digest('hex'),
+  evidenceSourceUrl:kal?'https://external-api.kalshi.com/trade-api/v2/markets/'+info.marketId:
+   'https://gamma-api.polymarket.com/events?slug='+info.slug};
+}
 function deps(now){
  let current=now,kal=fixture(now),poly=fixture(now,'Polymarket'),winner=null,calls=0;
  const quotes={query:async venue=>venue==='Kalshi'?kal:poly};
- const results={lookup:async info=>{calls++;return winner?{...info,status:'verified',winner,source:'official-test-result',checkedAt:new Date(current).toISOString()}:{...info,status:'pending',checkedAt:new Date(current).toISOString()}}};
+ const results={lookup:async info=>{calls++;return winner?confirmed(info,current,winner):{...info,status:'pending',checkedAt:new Date(current).toISOString()}}};
  const monitor=createShadowMonitor({quotes,results,clock:()=>current});
  return {monitor,clock:v=>{current=v},setWinner:v=>{winner=v},count:()=>calls,setKal:v=>{kal=v},setPoly:v=>{poly=v}};
 }
@@ -84,9 +97,8 @@ test('official result polling rotates fairly so an unresolved oldest three canno
   clock:()=>now,quotes:{query:async()=>null},
   results:{lookup:async req=>{
    seen.push(req.marketId);
-   return {...req,status:req.marketId.endsWith('MARKET4')?'verified':'pending',
-    winner:req.marketId.endsWith('MARKET4')?'YES':undefined,
-    reason:'Official result not finalized',source:'test',checkedAt:new Date(now).toISOString()};
+   return req.marketId.endsWith('MARKET4')?confirmed(req,now,'YES'):
+    {...req,status:'pending',reason:'Official result not finalized',checkedAt:new Date(now).toISOString()};
   }}
  });
  for(let i=1;i<=4;i++){
@@ -123,4 +135,27 @@ test('pending audit diagnostics do not turn an unknown outcome into a success',a
  assert.equal(snap.totalSettlementChecks,1);
  assert.equal(snap.recent[0].pendingReason,'Oracle still disputed');
  assert.equal(snap.qualifyingProspectiveContracts,0);
+});
+
+test('unproven or contradictory adapter results never score a shadow observation',async()=>{
+ const t=Date.now();let now=t,mode='bare';
+ const monitor=createShadowMonitor({clock:()=>now,
+  quotes:{query:async venue=>venue==='Kalshi'?fixture(t):null},
+  results:{lookup:async info=>{
+   if(mode==='bare')return {...info,status:'verified',winner:'YES',source:'claimed official',checkedAt:new Date(now).toISOString()};
+   const checked=confirmed(info,now,'YES');
+   if(mode==='contradiction'){
+    checked.evidenceSnapshot.result='no';
+    checked.evidenceSha256=crypto.createHash('sha256').update(JSON.stringify(checked.evidenceSnapshot)).digest('hex');
+   }
+   return checked;
+  }}});
+ await monitor.scan();now=t+200000;
+ await monitor.resolvePending();
+ assert.equal(monitor.snapshot().settled,0);
+ mode='contradiction';await monitor.resolvePending();
+ assert.equal(monitor.snapshot().settled,0);
+ mode='valid';await monitor.resolvePending();
+ assert.equal(monitor.snapshot().settled,1);
+ assert.equal(monitor.snapshot().recent[0].outcomeEvidence.confirmationCount,2);
 });

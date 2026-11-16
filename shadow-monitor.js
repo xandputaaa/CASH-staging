@@ -31,6 +31,47 @@ function chooseMarketBaseline(quote){
   source:quote.venue==='Kalshi'?'Kalshi public YES/NO asks':'Polymarket CLOB public UP/DOWN buy asks'
  };
 }
+
+/* Independently verify the public result evidence before scoring or replaying.
+ * An adapter's status:'verified' claim alone is not proof of finality. */
+function hasVerifiedEvidence(result,record){
+ if(!result||result.confirmationCount!==2||!record
+   ||typeof result.evidenceSha256!=='string'||!/^[a-f0-9]{64}$/.test(result.evidenceSha256)
+   ||!result.evidenceSnapshot||typeof result.evidenceSnapshot!=='object'
+   ||Array.isArray(result.evidenceSnapshot)
+   ||typeof result.evidenceSourceUrl!=='string'
+   ||!Number.isFinite(Date.parse(result.checkedAt))
+   ||!Number.isFinite(Date.parse(result.firstObservedAt))
+   ||Date.parse(result.firstObservedAt)>Date.parse(result.checkedAt))return false;
+ const evidence=result.evidenceSnapshot;
+ try{
+  if(createHash('sha256').update(JSON.stringify(evidence)).digest('hex')!==result.evidenceSha256)return false;
+  if(record.venue==='Kalshi'){
+   if(result.evidenceSourceUrl!=='https://external-api.kalshi.com/trade-api/v2/markets/'+encodeURIComponent(record.marketId)
+     ||evidence.venue!=='Kalshi'||evidence.ticker!==record.marketId
+     ||!['settled','finalized'].includes(String(evidence.status||'').toLowerCase())
+     ||evidence.is_provisional===true)return false;
+   const winner={yes:'YES',no:'NO',void:'VOID'}[String(evidence.result||'').toLowerCase()];
+   return Boolean(winner&&winner===result.winner);
+  }
+  if(record.venue==='Polymarket'){
+   if(result.evidenceSourceUrl!=='https://gamma-api.polymarket.com/events?slug='+encodeURIComponent(record.slug)
+     ||evidence.venue!=='Polymarket'||evidence.slug!==record.slug
+     ||evidence.conditionId!==record.marketId||evidence.closed!==true
+     ||!['resolved','settled'].includes(String(evidence.resolutionStatus||evidence.umaResolutionStatus||'').toLowerCase()))return false;
+   const names=typeof evidence.outcomes==='string'?JSON.parse(evidence.outcomes):evidence.outcomes;
+   const values=typeof evidence.outcomePrices==='string'?JSON.parse(evidence.outcomePrices):evidence.outcomePrices;
+   if(!Array.isArray(names)||!Array.isArray(values)||names.length!==2||values.length!==2)return false;
+   const up=names.findIndex(x=>String(x).toLowerCase()==='up');
+   const down=names.findIndex(x=>String(x).toLowerCase()==='down');
+   const payout=values.map(Number);
+   if(up<0||down<0||up===down||!payout.every(x=>x===0||x===1)||payout[up]===payout[down])return false;
+   return (payout[up]===1?'UP':'DOWN')===result.winner;
+  }
+ }catch{}
+ return false;
+}
+
 function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=MIN_LEAD_MS,
  maxRecords=MAX_RECORDS,maxEvents=MAX_EVENTS,journal=null,spot=null}={}){
  if(!quotes||!results)throw Error('Shadow monitor needs read-only quote and result providers');
@@ -62,14 +103,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
     if(!record||record.status!=='PENDING'||x.venue!==record.venue||x.marketId!==record.marketId
       ||!allowed.includes(x.winner)||typeof x.source!=='string'
       ||!Number.isFinite(Date.parse(x.checkedAt))
-      ||(x.confirmationCount!==undefined&&x.confirmationCount!==null&&(
-        x.confirmationCount!==2
-        ||!x.evidenceSnapshot||typeof x.evidenceSnapshot!=='object'
-        ||!x.evidenceSha256||!(/^[a-f0-9]{64}$/).test(x.evidenceSha256)
-        ||createHash('sha256').update(JSON.stringify(x.evidenceSnapshot)).digest('hex')!==x.evidenceSha256
-        ||!Number.isFinite(Date.parse(x.firstObservedAt))
-        ||Date.parse(x.firstObservedAt)>Date.parse(x.checkedAt)
-      )))
+      ||!hasVerifiedEvidence(x,record)
       throw Error('Saved resolution is semantically invalid');
     record.status=x.winner==='VOID'?'VOID':x.winner===record.baselineSide?'CORRECT':'INCORRECT';
     record.winner=x.winner;record.outcomeSource=x.source;
@@ -134,7 +168,8 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
     if(resolution?.status==='pending'){record.pendingReason=String(resolution.reason||'No finalized public result yet').slice(0,160);continue}
     const allowed=record.venue==='Kalshi'?['YES','NO','VOID']:['UP','DOWN','VOID'];
     if(resolution?.status!=='verified'||resolution.marketId!==record.marketId
-      ||resolution.venue!==record.venue||!allowed.includes(resolution.winner)){
+      ||resolution.venue!==record.venue||!allowed.includes(resolution.winner)
+      ||!hasVerifiedEvidence(resolution,record)){
       record.pendingReason='Unrecognized or contradictory result response';continue;
     }
     const result={

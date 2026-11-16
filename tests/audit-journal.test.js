@@ -15,10 +15,23 @@ const fixture=(now,venue)=>venue==='Kalshi'?{
  slug:'btc-updown-5m-'+Math.floor(now/300000)*300,
  upAsk:0.58,downAsk:0.43,fetchedAt:new Date(now).toISOString(),endTime:new Date(now+180000).toISOString()
 };
+function officialFixture(info,now,winner){
+ const isKal=info.venue==='Kalshi';
+ const evidence=isKal?
+  {venue:'Kalshi',ticker:info.marketId,status:'settled',result:({YES:'yes',NO:'no',VOID:'void'})[winner],is_provisional:false}:
+  {venue:'Polymarket',slug:info.slug,conditionId:info.marketId,closed:true,
+   resolutionStatus:'resolved',outcomes:['Up','Down'],outcomePrices:winner==='UP'?['1','0']:['0','1']};
+ return {...info,status:'verified',winner,source:'test-official',
+  checkedAt:new Date(now).toISOString(),firstObservedAt:new Date(now-21000).toISOString(),
+  confirmationCount:2,evidenceSnapshot:evidence,
+  evidenceSha256:require('node:crypto').createHash('sha256').update(JSON.stringify(evidence)).digest('hex'),
+  evidenceSourceUrl:isKal?'https://external-api.kalshi.com/trade-api/v2/markets/'+info.marketId:
+   'https://gamma-api.polymarket.com/events?slug='+info.slug};
+}
 function make(directory,now,outcome=null){
  const journal=createAuditJournal({directory});
  const monitor=createShadowMonitor({quotes:{query:async venue=>fixture(now,venue)},
-  results:{lookup:async info=>outcome?{...info,status:'verified',winner:outcome,source:'test-official',checkedAt:new Date(now+200000).toISOString()}:null},
+  results:{lookup:async info=>outcome?officialFixture(info,now+200000,outcome):null},
   clock:()=>now,journal});
  return {monitor,journal};
 }
