@@ -33,12 +33,14 @@ function selectPolyEvent(data,slot,now){
   return {slug,marketId:typeof m.conditionId==='string'?m.conditionId:null,endTime,upToken:tokens[up],downToken:tokens[down],title:typeof ev.title==='string'?ev.title.slice(0,180):'BTC Up or Down 5m'};
 }
 function createVenueFeeds({fetchImpl=fetch,clock=()=>Date.now()}={}){
-  const state={Kalshi:{cached:null,inflight:null,refreshFailed:false,refreshFailedAt:null},Polymarket:{cached:null,inflight:null,refreshFailed:false,refreshFailedAt:null}};
+  const state={Kalshi:{cached:null,inflight:null,refreshFailed:false,refreshFailedAt:null,lastAttemptMs:null},Polymarket:{cached:null,inflight:null,refreshFailed:false,refreshFailedAt:null,lastAttemptMs:null}};
   function view(venue){if(!state[venue])throw Error('Unsupported venue');const st=state[venue],cached=st.cached,ageMs=cached?Math.max(0,clock()-cached.fetchedMs):null;return cached?{...cached.quote,status:st.refreshFailed||ageMs>STALE_MS||Date.parse(cached.quote.endTime)<=clock()?'stale':cached.quote.status,ageMs,fetchedAt:cached.fetchedAt,refreshFailed:st.refreshFailed,refreshFailedAt:st.refreshFailedAt}:{venue,status:'unavailable',ageMs:null,fetchedAt:null,marketId:null,refreshFailed:st.refreshFailed,refreshFailedAt:st.refreshFailedAt}}
   async function query(venue){
     if(!state[venue])throw Error('Unsupported venue');
-    const st=state[venue];if(st.cached&&clock()-st.cached.fetchedMs<CACHE_MS)return view(venue);
-    if(st.inflight)return st.inflight;
+    const st=state[venue];if(st.inflight)return st.inflight;
+    if(st.refreshFailed&&st.lastAttemptMs!==null&&clock()-st.lastAttemptMs<CACHE_MS)return view(venue);
+    if(st.cached&&clock()-st.cached.fetchedMs<CACHE_MS)return view(venue);
+    st.lastAttemptMs=clock();
     st.inflight=(async()=>{
       try{
         let quote;
