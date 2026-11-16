@@ -1,0 +1,68 @@
+'use strict';
+const BASE_KALSHI='https://external-api.kalshi.com/trade-api/v2';
+const BASE_GAMMA='https://gamma-api.polymarket.com';
+const BASE_CLOB='https://clob.polymarket.com';
+const CACHE_MS=12000,STALE_MS=30000;
+function price(x){const n=Number(x);return Number.isFinite(n)&&n>0&&n<1?n:null}
+async function read(url,fetchImpl,timeout=3500){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
+  try{const resp=await fetchImpl(url,{signal:controller.signal,headers:{'Accept':'application/json','User-Agent':'CASH-readonly-market-dashboard/1.0'}});if(!resp.ok)throw Error('Market source HTTP failure');return await resp.json()}finally{clearTimeout(timer)}
+}
+function selectKalshi(data,now){
+  if(!Array.isArray(data?.markets))throw Error('Invalid market response');
+  const active=data.markets.filter(m=>typeof m?.ticker==='string'&&/^KXBTC15M-[A-Za-z0-9-]+$/.test(m.ticker)&&Number.isFinite(Date.parse(m.close_time))&&Date.parse(m.close_time)>now&&(!m.open_time||Date.parse(m.open_time)<=now));
+  active.sort((a,b)=>Date.parse(a.close_time)-Date.parse(b.close_time));
+  const m=active[0];if(!m)throw Error('No current Kalshi BTC 15m market');
+  return {venue:'Kalshi',marketId:m.ticker,title:typeof m.title==='string'?m.title.slice(0,180):'BTC Up or Down 15m',endTime:m.close_time,yesBid:price(m.yes_bid_dollars),yesAsk:price(m.yes_ask_dollars),status:'live',quotedFields:'YES bid and YES ask; venue USD dollars per $1 payout'};
+}
+function parseTokens(raw){const a=typeof raw==='string'?JSON.parse(raw):raw;if(!Array.isArray(a)||a.length!==2||!a.every(x=>/^\d{10,}$/.test(String(x))))throw Error('Invalid CLOB token IDs');return a.map(String)}
+function selectPolyEvent(data,slot,now){
+  const events=Array.isArray(data)?data:[data],slug='btc-updown-5m-'+slot;
+  const ev=events.find(e=>e?.slug===slug&&e.closed!==true);if(!ev||!Array.isArray(ev.markets))throw Error('No current Polymarket BTC 5m event');
+  const m=ev.markets.find(x=>x&&x.closed!==true&&x.active!==false);if(!m)throw Error('No current active Polymarket market');
+  const outcomes=typeof m.outcomes==='string'?JSON.parse(m.outcomes):m.outcomes;
+  const tokens=parseTokens(m.clobTokenIds);
+  const up=outcomes?.findIndex(x=>String(x).toLowerCase()==='up'),down=outcomes?.findIndex(x=>String(x).toLowerCase()==='down');
+  if(up<0||down<0||up===down)throw Error('Missing market outcomes');
+  const endTime=new Date((slot+300)*1000).toISOString();
+  if(slot>now/1000||slot+300<=now/1000)throw Error('Outside current 5m window');
+  return {slug,marketId:typeof m.conditionId==='string'?m.conditionId:null,endTime,upToken:tokens[up],downToken:tokens[down],title:typeof ev.title==='string'?ev.title.slice(0,180):'BTC Up or Down 5m'};
+}
+function createVenueFeeds({fetchImpl=fetch,clock=()=>Date.now()}={}){
+  const state={Kalshi:{cached:null,inflight:null},Polymarket:{cached:null,inflight:null}};
+  function view(venue){const cached=state[venue].cached,ageMs=cached?Math.max(0,clock()-cached.fetchedMs):null;return cached?{...cached.quote,status:ageMs>STALE_MS?'stale':cached.quote.status,ageMs,fetchedAt:cached.fetchedAt}:{venue,status:'unavailable',ageMs:null,fetchedAt:null,marketId:null}}
+  async function query(venue){
+    if(!state[venue])throw Error('Unsupported venue');
+    const st=state[venue];if(st.cached&&clock()-st.cached.fetchedMs<CACHE_MS)return view(venue);
+    if(st.inflight)return st.inflight;
+    st.inflight=(async()=>{
+      try{
+        let quote;
+        if(venue==='Kalshi'){
+          const data=await read(BASE_KALSHI+'/markets?series_ticker=KXBTC15M&status=open&limit=30',fetchImpl);
+          quote=selectKalshi(data,clock());
+        }else{
+          const slot=Math.floor(clock()/300000)*300;
+          const data=await read(BASE_GAMMA+'/events?slug=btc-updown-5m-'+slot,fetchImpl);
+          const event=selectPolyEvent(data,slot,clock());
+          const [up,down]=await Promise.allSettled([
+            read(BASE_CLOB+'/price?token_id='+encodeURIComponent(event.upToken)+'&side=BUY',fetchImpl),
+            read(BASE_CLOB+'/price?token_id='+encodeURIComponent(event.downToken)+'&side=BUY',fetchImpl)
+          ]);
+          const upAsk=up.status==='fulfilled'?price(up.value?.price):null;
+          const downAsk=down.status==='fulfilled'?price(down.value?.price):null;
+          if(upAsk===null&&downAsk===null)throw Error('No valid Polymarket prices');
+          quote={venue:'Polymarket',marketId:event.marketId,slug:event.slug,title:event.title,endTime:event.endTime,upAsk,downAsk,status:upAsk!==null&&downAsk!==null?'live':'partial',quotedFields:'UP/DOWN public CLOB best BUY prices; venue USD dollars per $1 payout'};
+        }
+        const fetchedMs=clock();st.cached={quote,fetchedMs,fetchedAt:new Date(fetchedMs).toISOString()};
+        return view(venue);
+      }catch(e){
+        if(st.cached)return {...view(venue),status:'stale'};
+        return {venue,status:'unavailable',ageMs:null,fetchedAt:null,marketId:null};
+      }
+    })().finally(()=>{st.inflight=null});
+    return st.inflight;
+  }
+  return {query,view};
+}
+module.exports={createVenueFeeds,selectKalshi,selectPolyEvent,price};
