@@ -91,3 +91,32 @@ test('unexpected but checksum-valid resolution without capture is rejected',()=>
  const journal=createAuditJournal({directory});
  assert.throws(()=>createShadowMonitor({journal,quotes:{},results:{}}),/Saved resolution is semantically invalid/);
 }));
+
+test('independent spot candidate and source evidence survive journal replay, still not qualifying',()=>sandbox(async directory=>{
+ const t=Date.now(),history=[-100000,-90000,-75000,-60000,-45000,-30000,-15000,0].map((dt,i)=>({
+   time:new Date(t+dt).toISOString(),price:85100+i*4,source:'Kraken BTC/USD'
+ }));
+ const quotes={query:async venue=>fixture(t,venue)},results={lookup:async()=>({status:'pending'})};
+ const first=createShadowMonitor({journal:createAuditJournal({directory}),quotes,results,clock:()=>t,
+   spot:{view:()=>({status:'live',source:'Kraken BTC/USD',history})}});
+ await first.scan();
+ assert.equal(first.snapshot().spotCandidateObservations,2);
+ assert.equal(first.snapshot().qualifyingProspectiveContracts,0);
+ const restored=createShadowMonitor({journal:createAuditJournal({directory}),quotes,results,clock:()=>t});
+ assert.equal(restored.snapshot().spotCandidateObservations,2);
+ assert.ok(restored.snapshot().recent.every(x=>x.spotCandidate?.name==='SPOT_MOMENTUM_90S_V1'));
+ assert.equal(restored.snapshot().spotCandidateSettled,0);
+ assert.equal(restored.snapshot().qualifyingProspectiveContracts,0);
+}));
+test('checksum-valid but semantically fabricated independent prediction fails closed',()=>sandbox(async directory=>{
+ const t=Date.now(),first=make(directory,t);await first.monitor.scan();
+ const file=path.join(directory,'shadow-events.jsonl'),events=fs.readFileSync(file,'utf8').trim().split('\n').map(JSON.parse);
+ events[0].payload.spotCandidate={name:'SPOT_MOMENTUM_90S_V1',predictedDirection:'UP',
+  predictedContractSide:'NO',source:'Kraken BTC/USD',calibratedProbability:null};
+ const crypto=require('node:crypto');let previous='GENESIS';
+ for(const event of events){event.previousHash=previous;const {hash,...body}=event;
+   event.hash=crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');previous=event.hash}
+ fs.writeFileSync(file,events.map(x=>JSON.stringify(x)).join('\n')+'\n');
+ const journal=createAuditJournal({directory});
+ assert.throws(()=>createShadowMonitor({journal,quotes:{},results:{}}),/Saved capture is semantically invalid/);
+}));
