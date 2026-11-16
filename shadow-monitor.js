@@ -7,6 +7,7 @@
  * it does NOT authenticate clock times or provide tamper-proof evidence.
  */
 const {createHash}=require('node:crypto');
+const {verifyChain}=require('./audit-journal');
 const MIN_LEAD_MS=60000,MAX_RECORDS=300,MAX_EVENTS=650;
 const VALID_VENUES=new Set(['Kalshi','Polymarket']);
 const isPrice=n=>Number.isFinite(n)&&n>0&&n<1;
@@ -30,14 +31,51 @@ function chooseMarketBaseline(quote){
  };
 }
 function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=MIN_LEAD_MS,
- maxRecords=MAX_RECORDS,maxEvents=MAX_EVENTS}={}){
+ maxRecords=MAX_RECORDS,maxEvents=MAX_EVENTS,journal=null}={}){
  if(!quotes||!results)throw Error('Shadow monitor needs read-only quote and result providers');
  const bootAt=ISO(clock()),observations=[],events=[],ids=new Set();
  let lastHash='GENESIS',inflight=null,scanCount=0,lastScanAt=null,lastError=null;
+ function loadSavedHistory(){
+  const saved=journal?.events||[];
+  verifyChain(saved,{limit:maxEvents});
+  for(const e of saved){
+   const x=e.payload;
+   if(e.type==='CAPTURE'){
+    const acceptedSide=x.venue==='Kalshi'?['YES','NO']:x.venue==='Polymarket'?['UP','DOWN']:[];
+    if(typeof x.marketId!=='string'||x.id!==x.venue+':'+x.marketId
+      ||ids.has(x.id)||observations.length>=maxRecords
+      ||x.baselineName!=='PUBLIC_MARKET_FAVORED_ASK_V1'
+      ||!acceptedSide.includes(x.baselineSide)
+      ||!Number.isFinite(x.normalizedMarketShare)||x.normalizedMarketShare<=0||x.normalizedMarketShare>=1
+      ||!x.observedAsks||!Object.values(x.observedAsks).every(isPrice)
+      ||!Number.isFinite(Date.parse(x.endTime))||!Number.isFinite(Date.parse(x.serverCapturedAt))
+      ||!Number.isFinite(Date.parse(x.quoteFetchedAt))
+      ||!Number.isFinite(x.leadMs)||x.leadMs<minimumLeadMs)
+      throw Error('Saved capture is semantically invalid');
+    observations.push({...x,status:'PENDING',winner:null,outcomeSource:null,
+      outcomeCheckedAt:null,outcomeSettledAt:null,captureSequence:e.sequence});
+    ids.add(x.id);
+   }else if(e.type==='RESOLUTION'){
+    const record=observations.find(o=>o.id===x.id),allowed=record?.venue==='Kalshi'?['YES','NO','VOID']:['UP','DOWN','VOID'];
+    if(!record||record.status!=='PENDING'||x.venue!==record.venue||x.marketId!==record.marketId
+      ||!allowed.includes(x.winner)||typeof x.source!=='string'
+      ||!Number.isFinite(Date.parse(x.checkedAt)))
+      throw Error('Saved resolution is semantically invalid');
+    record.status=x.winner==='VOID'?'VOID':x.winner===record.baselineSide?'CORRECT':'INCORRECT';
+    record.winner=x.winner;record.outcomeSource=x.source;
+    record.outcomeCheckedAt=x.checkedAt;record.outcomeSettledAt=x.settledAt||null;
+    record.resolutionSequence=e.sequence;
+   }
+   events.push(e);lastHash=e.hash;
+  }
+ }
+ loadSavedHistory();
+
  function append(type,payload){
   if(events.length>=maxEvents)return null;
   const e={sequence:events.length+1,type,recordedAt:ISO(clock()),payload,previousHash:lastHash};
   e.hash=createHash('sha256').update(JSON.stringify(e)).digest('hex');
+  if(journal)journal.append(e); // Durable append must succeed before state changes
   lastHash=e.hash;events.push(e);return e;
  }
  function capture(quote){
@@ -86,7 +124,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
     record.winner=resolution.winner;record.outcomeSource=result.source;
     record.outcomeCheckedAt=result.checkedAt;record.outcomeSettledAt=result.settledAt;
     record.resolutionSequence=event.sequence;changed++;
-   }catch(e){lastError='Official result provider failed; observations remain pending'}
+   }catch(e){lastError=journal?.configured?'Official result source or audit journal failed; observations remain pending':'Official result provider failed; observations remain pending'}
   }
   return {checked,changed};
  }
@@ -98,7 +136,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
     try{
      const quote=await quotes.query(venue);
      if(capture(quote))captured++;
-    }catch(e){lastError='Market quote source temporarily unavailable'}
+    }catch(e){lastError=journal?.configured?'Market quote failed or audit journal could not persist the observation':'Market quote source temporarily unavailable'}
    }
    const resolution=await resolvePending();
    scanCount++;lastScanAt=ISO(clock());
@@ -113,10 +151,11 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
     pending=observations.filter(x=>x.status==='PENDING').length,settled=correct+incorrect;
   return {
    mode:'PUBLIC_MARKET_FAVORED_ASK_V1',
-   storageMode:'VOLATILE_SERVER_SESSION',
+   storageMode:journal?.mode||'VOLATILE_SERVER_SESSION',
+   recoveredEvents:journal?.events?.length||0,
    qualifyingProspectiveContracts:0,requiredQualifyingContracts:100,
    qualifyingForModelAccuracy:false,independentForecastModel:false,
-   warning:'Read-only public market-favored quote baseline. Session data disappears on restart and is not independently time-attested. These are NOT verified CASH AI predictions and do not count toward the 100 prospective-contract gate.',
+   warning:journal?.configured?'Read-only public market-favored quote baseline. Events are written to a local filesystem journal, but the volume and capture time have NOT been independently validated. These are NOT verified CASH AI predictions and do not count toward the 100-contract gate.':'Read-only public market-favored quote baseline. Session data disappears on restart and is not independently time-attested. These are NOT verified CASH AI predictions and do not count toward the 100 prospective-contract gate.',
    bootAt,lastScanAt,scanCount,cap:{records:maxRecords,events:maxEvents},
    observed:observations.length,pending,settled,voided,correct,incorrect,
    baselineDirectionalAccuracy:settled?correct/settled:null,
@@ -125,7 +164,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
   };
  }
  function exportSession(){
-  return {...snapshot(),format:'CASH-shadow-volatile-v1',exportedAt:ISO(clock()),
+  return {...snapshot(),format:journal?.configured?'CASH-shadow-filesystem-unverified-v1':'CASH-shadow-volatile-v1',exportedAt:ISO(clock()),
    checksumChainWarning:'SHA256 links detect accidental event alteration but do not prove immutable capture times or independent provenance.',
    events:events.map(x=>({...x}))};
  }
