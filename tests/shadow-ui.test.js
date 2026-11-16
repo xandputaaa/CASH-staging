@@ -35,3 +35,17 @@ test('shadow watch explains missing durability and independent prediction valida
  assert.match(html,/Server memory resets when Railway restarts or redeploys/);
  assert.match(html,/not tamper-proof timestamps/);
 });
+
+test('shadow UI reports configured filesystem replay without calling it qualified data',async()=>{
+ const a=app({...valid,storageMode:'FILESYSTEM_JOURNAL_UNVERIFIED',recoveredEvents:9});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(a.get('shadowState').textContent,'FILESYSTEM JOURNAL · UNVERIFIED');
+ assert.match(a.get('shadowStorageNote').textContent,/9 events were replayed/);
+ assert.match(a.get('shadowStorageNote').textContent,/NOT verified/);
+ assert.equal(a.get('shadowGate').textContent,'0 / 100 qualifying prospective model predictions');
+});
+test('shadow UI explicitly states volatility when Railway volume is not mounted',async()=>{
+ const a=app({...valid,recoveredEvents:0});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.match(a.get('shadowStorageNote').textContent,/No persistent Railway volume attached/);
+});
