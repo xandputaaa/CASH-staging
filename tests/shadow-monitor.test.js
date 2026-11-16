@@ -77,3 +77,50 @@ test('read-only shadow watcher caps observations and cannot imply volume persist
  assert.equal(quota.snapshot().recordedEvents,1);
  assert.equal(quota.snapshot().qualifyingForModelAccuracy,false);
 });
+
+test('official result polling rotates fairly so an unresolved oldest three cannot block a newer market',async()=>{
+ const t=Date.now();let now=t;const seen=[];
+ const monitor=createShadowMonitor({
+  clock:()=>now,quotes:{query:async()=>null},
+  results:{lookup:async req=>{
+   seen.push(req.marketId);
+   return {...req,status:req.marketId.endsWith('MARKET4')?'verified':'pending',
+    winner:req.marketId.endsWith('MARKET4')?'YES':undefined,
+    reason:'Official result not finalized',source:'test',checkedAt:new Date(now).toISOString()};
+  }}
+ });
+ for(let i=1;i<=4;i++){
+  const quote={...fixture(t),marketId:'KXBTC15M-MARKET'+i,
+   endTime:new Date(t+120000).toISOString()};
+  assert.equal(monitor.capture(quote)?.status,'PENDING');
+ }
+ now=t+130000;
+ const first=await monitor.resolvePending();
+ assert.equal(first.checked,3);assert.equal(first.changed,0);
+ assert.equal(seen.includes('KXBTC15M-MARKET4'),false);
+ const second=await monitor.resolvePending();
+ assert.equal(second.checked,3);assert.equal(second.changed,1);
+ assert.equal(seen.includes('KXBTC15M-MARKET4'),true);
+ const snap=monitor.snapshot();
+ assert.equal(snap.settled,1);assert.equal(snap.pending,3);
+ assert.equal(snap.totalSettlementChecks,6);
+ const fourth=snap.recent.find(x=>x.marketId.endsWith('MARKET4'));
+ assert.equal(fourth.status,'CORRECT');
+ assert.equal(fourth.settlementAttempts,1);
+ const other=snap.recent.find(x=>x.marketId.endsWith('MARKET1'));
+ assert.match(other.pendingReason,/not finalized/);
+ assert.ok(Number.isFinite(Date.parse(other.lastCheckAt)));
+});
+test('pending audit diagnostics do not turn an unknown outcome into a success',async()=>{
+ const t=Date.now();let now=t;
+ const monitor=createShadowMonitor({clock:()=>now,quotes:{query:async()=>null},
+  results:{lookup:async req=>({...req,status:'pending',reason:'Oracle still disputed'})}});
+ assert.ok(monitor.capture({...fixture(t),endTime:new Date(t+61000).toISOString()}));
+ now=t+70000;
+ await monitor.resolvePending();
+ const snap=monitor.snapshot();
+ assert.equal(snap.pending,1);assert.equal(snap.correct,0);assert.equal(snap.settled,0);
+ assert.equal(snap.totalSettlementChecks,1);
+ assert.equal(snap.recent[0].pendingReason,'Oracle still disputed');
+ assert.equal(snap.qualifyingProspectiveContracts,0);
+});
