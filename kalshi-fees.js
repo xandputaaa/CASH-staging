@@ -24,7 +24,7 @@ function takerPreview(price,multiplier,contracts=1){
  const raw=0.07*multiplier*contracts*price*(1-price);
  // Kalshi's published direct-member centicent ($0.0001) rounding:
  // an illustrative upper-rounded fee, not a broker-specific exact fill.
- const fee=Math.ceil((raw-1e-12)*10000)/10000;
+ const fee=raw<=0?0:Math.ceil((raw-1e-12)*10000)/10000;
  return {contracts,price,fee,feeBeforeRounding:raw,
   hypotheticalCost:Math.round((cost+fee)*10000)/10000,
   grossBreakEven:price,
