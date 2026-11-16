@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const html=fs.readFileSync('index.html','utf8');
 const script=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 test('simulation script exists',()=>assert.ok(script));
-function app(){const elements=new Map();const document={getElementById(id){if(!elements.has(id))elements.set(id,{textContent:'',className:'',disabled:false,innerHTML:'',setAttribute(k,v){this[k]=v}});return elements.get(id)}};const mem=new Map();const localStorage={getItem:k=>mem.get(k)||null,setItem:(k,v)=>mem.set(k,v)};const ctx=vm.createContext({document,alert:()=>{},localStorage});vm.runInContext(script,ctx);return {run:s=>vm.runInContext(s,ctx),get:id=>document.getElementById(id)}}
+function app(){const elements=new Map();const document={getElementById(id){if(!elements.has(id))elements.set(id,{textContent:'',className:'',disabled:false,innerHTML:'',setAttribute(k,v){this[k]=v}});return elements.get(id)}};const mem=new Map();const localStorage={getItem:k=>mem.get(k)||null,setItem:(k,v)=>mem.set(k,v)};const ctx=vm.createContext({document,alert:()=>{},confirm:()=>false,localStorage});vm.runInContext(script,ctx);return {run:s=>vm.runInContext(s,ctx),get:id=>document.getElementById(id)}}
 test('starts at $100 with no order',()=>{const a=app();assert.equal(a.get('balance').textContent,'$100.00');assert.match(a.get('position').textContent,/No open/)});
 test('stake reservation and reset refund',()=>{const a=app();a.run("setStake(2);buy('UP')");assert.equal(a.get('balance').textContent,'$98.00');a.run('reset()');assert.equal(a.get('balance').textContent,'$100.00');assert.match(a.get('ledger').innerHTML,/CANCELLED/)});
 test('cannot buy after first tick',()=>{const a=app();a.run("advance();buy('UP')");assert.equal(a.get('balance').textContent,'$100.00')});
@@ -29,3 +29,7 @@ test('ledger capacity blocks new fictional positions without dropping history',(
 
 test('CSV export includes detailed fictional position accounting',()=>{const a=app();a.run("buy('UP');for(let i=0;i<7;i++)advance()");assert.match(a.run('ledgerCsv()'),/round,venue,side,stake,entryPrice,fee,payout,net,result/);assert.match(a.run('ledgerCsv()'),/"WIN"/);assert.equal(a.get('export').disabled,false)});
 test('CSV preserves negative numeric paper P&L',()=>{const a=app();a.run("buy('DOWN');for(let i=0;i<7;i++)advance()");assert.match(a.run('ledgerCsv()'),/"-5"/)});
+
+test('account reset is cancelled by default without confirmation',()=>{const a=app();a.run("buy('UP');for(let i=0;i<7;i++)advance();requestClearAccount()");assert.equal(a.get('balance').textContent,'$105.00');assert.match(a.get('ledger').innerHTML,/WIN/)});
+test('account reset cannot erase an open paper position',()=>{const a=app();a.run("buy('UP');requestClearAccount()");assert.equal(a.get('balance').textContent,'$95.00');assert.match(a.get('clearStatus').textContent,/Settle or cancel/)});
+test('confirmed account reset restores fictional starting balance',()=>{const a=app();a.run("buy('UP');for(let i=0;i<7;i++)advance();confirm=()=>true;requestClearAccount()");assert.equal(a.get('balance').textContent,'$100.00');assert.match(a.get('ledger').innerHTML,/No settled paper positions/)});
