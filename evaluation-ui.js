@@ -26,6 +26,10 @@
   el('evaluationCoverage').textContent='Sample-backed: '+count(total.sampleBacked)+
    ' / '+count(total.candidates)+' recorded candidates · settled evidence coverage '+
    pct(total.resultCoverage);
+  el('evaluationNumericRules').textContent='Kalshi official strike-versus-final-value audit: '+
+   count(total.kalshiNumericChecked)+' arithmetic matches · '+
+   count(total.kalshiNumericMissing)+' results missing comparable official numeric fields. '+
+   'Public result labels are not independent index authentication.';
   el('evaluationMissing').textContent='Unresolved after expiry: '+
    count(total.unresolvedAfterExpiry)+' ('+count(total.overdueWithoutOutcome)+
    ' overdue) · void outcomes: '+count(total.voided)+
@@ -53,7 +57,7 @@
   }catch{
    el('evaluationState').textContent='EVALUATION UNAVAILABLE';
    for(const id of ['evaluationScored','evaluationPending','evaluationUnproven',
-    'evaluationRate','evaluationCoverage','evaluationMissing','evaluationVenues',
+    'evaluationRate','evaluationCoverage','evaluationMissing','evaluationNumericRules','evaluationVenues',
     'evaluationUncertainty'])el(id).textContent='—';
    el('evaluationUpdated').textContent='Cannot verify evidence. No results can be inferred.';
   }finally{clearTimeout(timer)}

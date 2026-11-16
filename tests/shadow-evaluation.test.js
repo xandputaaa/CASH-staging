@@ -94,3 +94,15 @@ test('independent venue groups preserve separate denominators and explicit missi
  assert.equal(evaled.venues.Polymarket.unresolvedAfterExpiry,1);
  assert.equal(evaled.total.scored,1);
 });
+
+test('Kalshi exploratory outcome evidence tracks numeric settlement-rule coverage separately from hits',()=>{
+ const r=record({id:'KXBTC15M-NUMERIC',status:'INCORRECT',winner:'YES'});
+ r.outcomeEvidence.evidenceSnapshot.floor_strike=86000.11;
+ r.outcomeEvidence.evidenceSnapshot.expiration_value=86000.17;
+ r.outcomeEvidence.evidenceSnapshot.strike_type='greater_or_equal';
+ const report=evaluateShadowRecords([r],{now:t+240000,verifyOutcome:()=>true});
+ assert.equal(report.venues.Kalshi.kalshiNumericChecked,1);
+ assert.equal(report.venues.Kalshi.kalshiNumericMissing,0);
+ assert.equal(report.total.scored,1);
+ assert.equal(report.qualification.prospectiveIndependentAttested,0);
+});

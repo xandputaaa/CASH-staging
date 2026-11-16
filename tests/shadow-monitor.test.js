@@ -300,3 +300,15 @@ test('capacity reflects available slots after resolution and never mistakes a sc
  assert.equal(monitor.snapshot().scanCount,1);
  assert.equal(monitor.snapshot().capacity.state,'CAPTURE_BLOCKED');
 });
+
+test('captured Kalshi market target is preserved before expiry for later settlement checks',async()=>{
+ const t=Date.now();
+ const d=deps(t);
+ const quote={...fixture(t),targetPrice:86001.12,strikeType:'greater_or_equal'};
+ d.setKal(quote);
+ await d.monitor.scan();
+ const capture=d.monitor.exportSession().events.find(e=>e.type==='CAPTURE'&&e.payload.venue==='Kalshi');
+ assert.equal(capture.payload.targetPriceAtCapture,86001.12);
+ assert.equal(capture.payload.strikeTypeAtCapture,'greater_or_equal');
+ assert.equal(d.monitor.snapshot().qualifyingProspectiveContracts,0);
+});

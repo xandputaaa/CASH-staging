@@ -3,6 +3,7 @@
 // responses obtained at different times. Neither response proves immutable
 // exchange records, source authenticity, or independent market-rule auditing.
 const {createHash}=require('node:crypto');
+const {checkKalshiSettlement}=require('./kalshi-settlement-check');
 const KALSHI='https://external-api.kalshi.com/trade-api/v2';
 const GAMMA='https://gamma-api.polymarket.com';
 const KALSHI_ID=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
@@ -23,7 +24,12 @@ function kalshiOutcome(data,id){
  const state=String(m.status||'').toLowerCase(),result=String(m.result||'').toLowerCase();
  if(!['settled','finalized'].includes(state)||!['yes','no','void'].includes(result))
   return {status:'pending',reason:'Official market not settled'};
- return {status:'verified',winner:result==='yes'?'YES':result==='no'?'NO':'VOID',source:'Kalshi public market result',settledAt:typeof m.settlement_ts==='string'?m.settlement_ts:null};
+ const audit=checkKalshiSettlement(m);
+ if(audit.state==='NUMERIC_CONTRADICTION')
+  return {status:'pending',reason:'Official final result contradicts its published numeric settlement fields'};
+ return {status:'verified',winner:result==='yes'?'YES':result==='no'?'NO':'VOID',
+  numericRuleStatus:audit.state,source:'Kalshi public market result',
+  settledAt:typeof m.settlement_ts==='string'?m.settlement_ts:null};
 }
 function decode(value){return typeof value==='string'?JSON.parse(value):value}
 function polymarketOutcome(data,slug,marketId){
@@ -46,7 +52,11 @@ function marketEvidenceSnapshot(venue,body,marketId,slug){
  let selected;
  if(venue==='Kalshi'){
   const m=body?.market||{};
-  selected={venue,ticker:m.ticker,status:m.status,result:m.result,is_provisional:m.is_provisional??null,settlement_ts:m.settlement_ts??null,close_time:m.close_time??null};
+  selected={venue,ticker:m.ticker,status:m.status,result:m.result,
+   floor_strike:m.floor_strike??null,expiration_value:m.expiration_value??null,
+   strike_type:m.strike_type??null,
+   is_provisional:m.is_provisional??null,settlement_ts:m.settlement_ts??null,
+   close_time:m.close_time??null};
  }else{
   const events=Array.isArray(body)?body:[body],m=events.find(e=>e?.slug===slug)?.markets?.find(x=>x?.conditionId===marketId)||{};
   selected={venue,slug,conditionId:m.conditionId??null,closed:m.closed??null,

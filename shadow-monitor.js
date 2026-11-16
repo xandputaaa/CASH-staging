@@ -12,6 +12,7 @@ const {proposeSpotMomentum,assessSpotMomentum,toContractSide,isValidSpotCandidat
 const {createScanContinuity,classifyQuote}=require('./scan-continuity');
 const {createAuditPreflight}=require('./audit-preflight');
 const {evaluateShadowRecords}=require('./shadow-evaluation');
+const {checkKalshiSettlement}=require('./kalshi-settlement-check');
 const MIN_LEAD_MS=60000,MAX_RECORDS=300,MAX_EVENTS=650;
 const VALID_VENUES=new Set(['Kalshi','Polymarket']);
 const isPrice=n=>Number.isFinite(n)&&n>0&&n<1;
@@ -53,6 +54,12 @@ function isValidCaptureEvidence(x,minimumLeadMs=MIN_LEAD_MS){
    ||fetched>captured+2000||captured-fetched>12000
    ||!Number.isFinite(x.leadMs)||expires-captured!==x.leadMs
    ||x.leadMs<minimumLeadMs)return false;
+ if(x.targetPriceAtCapture!==undefined&&x.targetPriceAtCapture!==null&&
+   (x.venue!=='Kalshi'||!Number.isFinite(x.targetPriceAtCapture)||
+     x.targetPriceAtCapture<=1000||x.targetPriceAtCapture>=10000000))return false;
+ if(x.strikeTypeAtCapture!==undefined&&x.strikeTypeAtCapture!==null&&
+   (x.venue!=='Kalshi'||typeof x.strikeTypeAtCapture!=='string'||
+    !['greater_or_equal','greater','less'].includes(x.strikeTypeAtCapture)))return false;
  const asks=x.observedAsks;
  if(!asks||typeof asks!=='object'||Array.isArray(asks)
    ||Object.keys(asks).length!==2)return false;
@@ -89,6 +96,11 @@ function hasVerifiedEvidence(result,record){
      ||!['settled','finalized'].includes(String(evidence.status||'').toLowerCase())
      ||evidence.is_provisional===true)return false;
    const winner={yes:'YES',no:'NO',void:'VOID'}[String(evidence.result||'').toLowerCase()];
+   if(checkKalshiSettlement(evidence).state==='NUMERIC_CONTRADICTION')return false;
+   const capturedTarget=record.targetPriceAtCapture;
+   const finalTarget=evidence.floor_strike;
+   if(Number.isFinite(capturedTarget)&&Number.isFinite(finalTarget)&&
+     Math.abs(capturedTarget-finalTarget)>0.005)return false;
    return Boolean(winner&&winner===result.winner);
   }
   if(record.venue==='Polymarket'){
@@ -198,6 +210,9 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
   }catch{}}
   const data={
    id,venue:quote.venue,marketId,slug:quote.venue==='Polymarket'?quote.slug:null,
+   targetPriceAtCapture:quote.venue==='Kalshi'&&Number.isFinite(quote.targetPrice)&&
+     quote.targetPrice>1000&&quote.targetPrice<10000000?quote.targetPrice:null,
+   strikeTypeAtCapture:quote.venue==='Kalshi'&&typeof quote.strikeType==='string'?quote.strikeType:null,
    endTime:quote.endTime,quoteFetchedAt:quote.fetchedAt,serverCapturedAt:ISO(now),
    leadMs:end-now,baselineName:'PUBLIC_MARKET_FAVORED_ASK_V1',
    baselineSide:baseline.side,normalizedMarketShare:baseline.normalizedMarketShare,

@@ -6,6 +6,7 @@
  * Outcome validation is provided by the existing public-result checker.
  */
 const {isValidSpotCandidate}=require('./spot-momentum');
+const {checkKalshiSettlement}=require('./kalshi-settlement-check');
 const VENUES=['Kalshi','Polymarket'];
 const MATCH={Kalshi:['YES','NO'],Polymarket:['UP','DOWN']};
 function wilson95(hits,total){
@@ -20,7 +21,8 @@ function blank(){
  return {captured:0,withoutCandidate:0,candidates:0,sampleBacked:0,
   legacyWithoutWindow:0,invalidCandidate:0,
   awaitingExpiry:0,unresolvedAfterExpiry:0,overdueWithoutOutcome:0,
-  voided:0,missingSettlementEvidence:0,scored:0,hits:0,misses:0};
+  voided:0,missingSettlementEvidence:0,scored:0,hits:0,misses:0,
+  kalshiNumericChecked:0,kalshiNumericMissing:0};
 }
 function combine(items){
  const out=blank();
@@ -90,6 +92,11 @@ function evaluateShadowRecords(records,{now=Date.now(),graceMs=600000,
   try{valid=Boolean(consistentStatus&&verifyOutcome(result,record))}catch{}
   if(!valid){group.missingSettlementEvidence++;continue}
   if(winner==='VOID'){group.voided++;continue}
+  if(record.venue==='Kalshi'){
+   const state=checkKalshiSettlement(outcome?.evidenceSnapshot).state;
+   if(state==='NUMERIC_MATCH')group.kalshiNumericChecked++;
+   else group.kalshiNumericMissing++;
+  }
   group.scored++;
   if(candidate.predictedContractSide===winner)group.hits++;
   else group.misses++;

@@ -127,3 +127,29 @@ test('previously confirmed winner is withdrawn immediately if official response 
  const recertified=await resolver.lookup({venue:'Kalshi',marketId:ticker});
  assert.equal(recertified.status,'verified');assert.equal(recertified.winner,'NO');
 });
+
+test('contradictory Kalshi final value cannot pass even two official-result checks',async()=>{
+ let now=Date.now();
+ const body={market:{ticker,status:'settled',result:'yes',strike_type:'greater_or_equal',
+  floor_strike:86000.03,expiration_value:85999.95}};
+ assert.equal(kalshiOutcome(body,ticker).status,'pending');
+ const resolver=createResolver({clock:()=>now,fetchImpl:async()=>({ok:true,json:async()=>body})});
+ const a=await resolver.lookup({venue:'Kalshi',marketId:ticker});
+ now+=23000;
+ const b=await resolver.lookup({venue:'Kalshi',marketId:ticker});
+ assert.equal(a.status,'pending');assert.equal(b.status,'pending');
+ assert.match(b.reason,/contradicts/);
+});
+test('consistent Kalshi strike and final value are included in selected hashed evidence',async()=>{
+ let now=Date.now();
+ const body={market:{ticker,status:'settled',result:'yes',strike_type:'greater_or_equal',
+  floor_strike:86000.03,expiration_value:86000.07}};
+ const resolver=createResolver({clock:()=>now,fetchImpl:async()=>({ok:true,json:async()=>body})});
+ await resolver.lookup({venue:'Kalshi',marketId:ticker});
+ now+=21000;const out=await resolver.lookup({venue:'Kalshi',marketId:ticker});
+ assert.equal(out.status,'verified');
+ assert.equal(out.numericRuleStatus,'NUMERIC_MATCH');
+ assert.equal(out.evidenceSnapshot.floor_strike,86000.03);
+ assert.equal(out.evidenceSnapshot.expiration_value,86000.07);
+ assert.equal(out.evidenceSnapshot.strike_type,'greater_or_equal');
+});
