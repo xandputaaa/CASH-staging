@@ -11,6 +11,7 @@
  * still self-reported public-feed observations, NOT authenticated exchange
  * evidence or independently attested prediction timestamps.
  */
+const {createHash}=require('node:crypto');
 const SOURCES=new Set(['Kraken BTC/USD','Coinbase Exchange BTC-USD']);
 const NAME='SPOT_MOMENTUM_90S_V1';
 const REASONS=Object.freeze({
@@ -45,13 +46,15 @@ function assessSpotMomentum(snapshot,now=Date.now()){
  if(window.some(x=>x.source!==snapshot.source))return denied(REASONS.MIXED);
  const delta=latest.price-previous.price,threshold=Math.max(3,latest.price*0.00003);
  if(Math.abs(delta)<threshold)return denied(REASONS.FLAT);
+ const sampleWindow=window.map(x=>({time:new Date(x.t).toISOString(),price:x.price,source:x.source}));
+ const sampleWindowSha256=createHash('sha256').update(JSON.stringify(sampleWindow)).digest('hex');
  return {reason:REASONS.READY,candidate:{
   name:NAME,predictedDirection:delta>0?'UP':'DOWN',
   source:latest.source,referencePrice:previous.price,latestPrice:latest.price,
   referenceAt:new Date(previous.t).toISOString(),latestAt:new Date(latest.t).toISOString(),
   lookbackSeconds:(latest.t-previous.t)/1000,deltaUsd:delta,
   thresholdUsd:threshold,calibratedProbability:null,
-  sampleWindow:window.map(x=>({time:new Date(x.t).toISOString(),price:x.price,source:x.source})),
+  sampleWindow,sampleWindowSha256,
   caveat:'Single-exchange short-horizon momentum. Not the venue settlement index, an executable signal, or a calibrated forecast.'
  }};
 }
@@ -84,8 +87,11 @@ function isValidSpotCandidate(value,venue,capturedMs){
   ||last>capturedMs+2000||capturedMs-last>12000)return false;
  // Existing pre-upgrade journals may lack sampleWindow. They remain legacy,
  // never qualifying, and are counted separately from reproducible candidates.
- if(value.sampleWindow===undefined)return true;
- if(!Array.isArray(value.sampleWindow)||value.sampleWindow.length<4||value.sampleWindow.length>72)
+ if(value.sampleWindow===undefined)return value.sampleWindowSha256===undefined;
+ if(!Array.isArray(value.sampleWindow)||value.sampleWindow.length<4||value.sampleWindow.length>72||
+   typeof value.sampleWindowSha256!=='string'||
+   !/^[a-f0-9]{64}$/.test(value.sampleWindowSha256)||
+   createHash('sha256').update(JSON.stringify(value.sampleWindow)).digest('hex')!==value.sampleWindowSha256)
   return false;
  const recomputed=proposeSpotMomentum({
   status:'live',source:value.source,history:value.sampleWindow,
@@ -97,7 +103,8 @@ function isValidSpotCandidate(value,venue,capturedMs){
   ||Math.abs(recomputed.latestPrice-value.latestPrice)>0.000001
   ||Math.abs(recomputed.deltaUsd-value.deltaUsd)>0.000001
   ||Math.abs(recomputed.thresholdUsd-value.thresholdUsd)>0.000001
-  ||recomputed.sampleWindow.length!==value.sampleWindow.length)return false;
+  ||recomputed.sampleWindow.length!==value.sampleWindow.length
+  ||recomputed.sampleWindowSha256!==value.sampleWindowSha256)return false;
  for(let i=0;i<recomputed.sampleWindow.length;i++){
   const a=recomputed.sampleWindow[i],b=value.sampleWindow[i];
   if(!b||a.time!==b.time||a.source!==b.source||a.price!==b.price)return false;

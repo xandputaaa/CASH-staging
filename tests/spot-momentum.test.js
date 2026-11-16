@@ -104,6 +104,7 @@ test('spot candidates attach reproducible observed sample windows, never market 
  assert.equal(candidate.sampleWindow.at(-1).time,candidate.latestAt);
  assert.equal(isValidSpotCandidate({...candidate,predictedContractSide:'YES'},'Kalshi',now),true);
  assert.equal(candidate.sampleWindow.some(x=>'marketId' in x||'yesAsk' in x),false);
+ assert.match(candidate.sampleWindowSha256,/^[0-9a-f]{64}$/);
 });
 test('replay rejects fabricated spot sample windows and reduced thresholds even with valid summary',()=>{
  const now=Date.now(),base={...proposeSpotMomentum(samples(now),now),predictedContractSide:'YES'};
@@ -115,6 +116,7 @@ test('replay rejects fabricated spot sample windows and reduced thresholds even 
  wrongTime.sampleWindow[2].time=wrongTime.sampleWindow[1].time;
  assert.equal(isValidSpotCandidate(wrongTime,'Kalshi',now),false);
  assert.equal(isValidSpotCandidate({...base,sampleWindow:null},'Kalshi',now),false);
+ assert.equal(isValidSpotCandidate({...base,sampleWindowSha256:'0'.repeat(64)},'Kalshi',now),false);
 });
 test('spot assessor provides explicit non-call reasons without assigning a probability',()=>{
  const {assessSpotMomentum}=require('../spot-momentum'),now=Date.now();
@@ -127,6 +129,7 @@ test('spot assessor provides explicit non-call reasons without assigning a proba
 test('missing source window remains identifiable as legacy but never qualifies',()=>{
  const now=Date.now(),candidate={...proposeSpotMomentum(samples(now),now),predictedContractSide:'YES'};
  delete candidate.sampleWindow;
+ delete candidate.sampleWindowSha256;
  assert.equal(isValidSpotCandidate(candidate,'Kalshi',now),true);
  const monitor=createShadowMonitor({clock:()=>now,
   quotes:{query:async venue=>market(now,venue)},
