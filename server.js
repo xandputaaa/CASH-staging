@@ -2,16 +2,35 @@
 const http=require('node:http'),fs=require('node:fs');
 const {createMarketFeed}=require('./market-feed');
 const {createVenueFeeds}=require('./venue-feeds');
+const {createResolver}=require('./resolution-feed');
 const page=fs.readFileSync('index.html');
+const livePaperScript=fs.readFileSync('live-paper.js');
 const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
+const resolver=createResolver();
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
-  res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
   if(req.method==='GET'&&(req.url==='/'||req.url==='/index.html'||req.url.startsWith('/?'))){
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(page);return;
+  }
+  if(req.method==='GET'&&req.url==='/live-paper.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(livePaperScript);return;
+  }
+  if(req.method==='GET'&&req.url?.startsWith('/api/result?')){
+    const query=new URL(req.url,'http://localhost').searchParams;
+    const venue=query.get('venue'),marketId=query.get('marketId'),slug=query.get('slug');
+    try{
+      const result=await resolver.lookup({venue,marketId,slug});
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify(result));
+    }catch(e){
+      res.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({status:'invalid',message:'Invalid market identifier'}));
+    }
+    return;
   }
   if(req.method==='GET'&&req.url==='/health'){
     res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,mode:'paper-only',spotFeed:feed.view().status,venueFeeds:{Kalshi:venueFeeds.view('Kalshi').status,Polymarket:venueFeeds.view('Polymarket').status}}));return;
