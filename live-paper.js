@@ -4,7 +4,7 @@
  const KEY='cash-live-paper-v1',LIMIT=150;
  const $=id=>document.getElementById(id);
  if(!$('lpBalance'))return;
- let balance=100,stake=5,seq=1,entries=[],busy=false,checking=false;
+ let balance=100,stake=5,seq=1,entries=[],busy=false,checking=false;const activeQuotes={Kalshi:null,Polymarket:null};
  const money=n=>'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
  const cents=n=>(n*100).toFixed(1)+'¢';
  const escapeHtml=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -29,6 +29,35 @@
    balance=s.balance;stake=s.stake;seq=s.seq;entries=s.entries;
   }catch{}
  }
+ function renderButtons(){
+  const options=[['Kalshi','YES','lpKalshiYes'],['Kalshi','NO','lpKalshiNo'],['Polymarket','UP','lpPolyUp'],['Polymarket','DOWN','lpPolyDown']];
+  options.forEach(([venue,side,id])=>{
+   const button=$(id);
+   if(!button)return;
+   const already=!!activeQuotes[venue]&&entries.some(e=>e.venue===venue&&e.marketId===activeQuotes[venue]&&e.side===side);
+   button.disabled=busy||already;
+   button.textContent=already?side+' · Recorded':'Paper '+side;
+  });
+ }
+ function renderTickets(){
+  const recentPending=entries.filter(e=>e.status==='PENDING').slice(0,3);
+  const selected=recentPending.length?recentPending:entries.slice(0,1);
+  if(!selected.length){$('lpActiveList').innerHTML='<p class="lp-active-label">No live-quote paper positions recorded.</p>';return}
+  const heading=recentPending.length?'Your pending paper positions':'Most recent paper result';
+  const cards=selected.map(e=>{
+   const ms=Date.parse(e.endTime),time=new Date(ms).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+   const waiting=e.status==='PENDING',ended=ms<=Date.now();
+   const status=waiting?(ended?'AWAITING OFFICIAL RESULT':'PENDING · MARKET OPEN'):e.status;
+   const note=waiting?(ended?'Contract window ended. No payout until an official market result is confirmed.':'Market window ends '+time+'. No payout has been determined.'):'Recorded paper net '+(e.net>=0?'+':'−')+money(Math.abs(e.net))+' (fees/slippage excluded).';
+   return '<div class="lp-ticket"><div class="lp-ticket-header"><strong>'+escapeHtml(e.venue)+' · '+escapeHtml(e.side)+'</strong><span class="lp-ticket-state'+(waiting?'':' done')+'">'+escapeHtml(status)+'</span></div><div class="lp-ticket-meta">Paper stake '+money(e.stake)+' · observed ask '+cents(e.price)+' · '+escapeHtml(new Date(e.placedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}))+'</div><div class="lp-ticket-meta">'+escapeHtml(note)+'</div><div class="lp-ticket-id">Contract '+escapeHtml(e.marketId)+'</div></div>';
+  }).join('');
+  $('lpActiveList').innerHTML='<p class="lp-active-label">'+heading+'</p>'+cards+(recentPending.length>3?'<p class="lp-active-label">More pending entries are listed in the journal below.</p>':'');
+ }
+ function setActiveQuote(venue,id){
+  if(!Object.prototype.hasOwnProperty.call(activeQuotes,venue))return;
+  activeQuotes[venue]=typeof id==='string'&&id.length>=6?id:null;
+  renderButtons();
+ }
  function render(){
   $('lpBalance').textContent=money(balance);
   $('lpPositionCount').textContent=entries.length+' recorded';
@@ -39,6 +68,7 @@
    const net=e.status==='PENDING'?'—':(e.net>=0?'+':'−')+money(Math.abs(e.net));
    return '<tr><td>'+escapeHtml(e.venue)+'</td><td>'+escapeHtml(e.side)+'</td><td>'+money(e.stake)+'</td><td>'+cents(e.price)+'</td><td>'+escapeHtml(e.marketId)+'</td><td>'+escapeHtml(outcome)+'</td><td>'+net+'</td></tr>';
   }).join(''):'<tr><td colspan="7" class="muted">No live-quote paper entries yet</td></tr>';
+  renderTickets();renderButtons();
   const pending=entries.some(e=>e.status==='PENDING');
   $('lpBackup').disabled=entries.length===0;
   $('lpSync').disabled=checking||!pending;
@@ -59,7 +89,7 @@
   if(venue==='Kalshi'&&!['YES','NO'].includes(side)||venue==='Polymarket'&&!['UP','DOWN'].includes(side)){message('Invalid paper market selection');return}
   if(balance<stake){message('Insufficient fictional paper balance.');return}
   if(entries.length>=LIMIT){message('Journal capacity reached. Export your journal before a new session.');return}
-  busy=true;message('Checking latest public quote; this does not submit a real order…');
+  busy=true;renderButtons();message('Checking latest public quote; this does not submit a real order…');
   try{
    const quote=await fetchJson('/api/markets?venue='+encodeURIComponent(venue));
    const qtime=Date.parse(quote.fetchedAt),end=Date.parse(quote.endTime),now=Date.now();
@@ -67,17 +97,17 @@
    if(!validId(venue,quote.marketId,quote.slug))throw Error('Venue market identity could not be verified.');
    const price=venue==='Kalshi'?(side==='YES'?quote.yesAsk:quote.noAsk):(side==='UP'?quote.upAsk:quote.downAsk);
    if(!Number.isFinite(price)||price<=0||price>=1)throw Error('Selected outcome has no valid public ask quote.');
-   if(entries.some(e=>e.venue===venue&&e.marketId===quote.marketId&&e.side===side))throw Error('This side of this contract is already recorded in your paper journal.');
+   if(entries.some(e=>e.venue===venue&&e.marketId===quote.marketId&&e.side===side)){activeQuotes[venue]=quote.marketId;renderButtons();message('Already recorded: '+venue+' '+side+' for this contract. Your existing paper position and settlement status are shown below.');return}
    const chosenStake=stake;
    if(balance<chosenStake)throw Error('Insufficient fictional paper balance');
    const entry={id:seq++,venue,side,marketId:quote.marketId,slug:venue==='Polymarket'?quote.slug:null,
     title:String(quote.title||'BTC prediction contract').slice(0,180),endTime:quote.endTime,
     placedAt:new Date(now).toISOString(),observedAt:quote.fetchedAt,price,stake:chosenStake,
     units:chosenStake/price,status:'PENDING',payout:null,net:null,settledAt:null,resultSource:null};
-   entries.unshift(entry);balance=Math.max(0,balance-chosenStake);save();render();
+   entries.unshift(entry);activeQuotes[venue]=quote.marketId;balance=Math.max(0,balance-chosenStake);save();render();
    message('Paper '+side+' saved at observed '+cents(price)+' ask. Awaiting an official resolution. Fees and slippage are NOT included.');
   }catch(e){message('No position recorded: '+(e&&e.message?e.message:'Quote unavailable'))}
-  finally{busy=false}
+  finally{busy=false;renderButtons()}
  }
  async function check(){
   if(checking)return;
@@ -135,7 +165,8 @@
   balance=100;stake=5;seq=1;entries=[];save();render();message('Live-quote paper journal reset. Previously exported files are unaffected.');
  }
  restore();render();
- window.CASHLivePaper={place,check,selectStake,exportJournal,importJournal,resetJournal};
+ if(entries.some(e=>e.status==='PENDING'&&Date.parse(e.endTime)<=Date.now()))check();
+ window.CASHLivePaper={place,check,selectStake,setActiveQuote,exportJournal,importJournal,resetJournal};
  if(typeof setInterval==='function')setInterval(()=>{if(entries.some(e=>e.status==='PENDING'&&Date.parse(e.endTime)<=Date.now()))check()},30000);
  if(typeof document.addEventListener==='function')document.addEventListener('visibilitychange',()=>{if(!document.hidden)check()});
 })();
