@@ -24,3 +24,5 @@ test('performance net reconciles to itemized ledger',()=>{const a=app();a.run("s
 test('integrity matches ledger and wallet for fictional settlement',()=>{const a=app();a.run("setStake(2);setPrice(0.4);toggleFee();buy('UP');for(let i=0;i<7;i++)advance()");assert.match(a.get('integrity').textContent,/MATCH/)});
 test('integrity detects fictional wallet discrepancies',()=>{const a=app();a.run("buy('UP');for(let i=0;i<7;i++)advance();balance+=10;render()");assert.match(a.get('integrity').textContent,/MISMATCH/)});
 test('legacy ledger is not claimed to be audited',()=>{const a=app();a.run("ledger.push({round:1,venue:'Kalshi',side:'UP',stake:5,result:'WIN'});render()");assert.match(a.get('integrity').textContent,/LEGACY/)});
+
+test('ledger capacity blocks new fictional positions without dropping history',()=>{const a=app();a.run("for(let i=0;i<500;i++)ledger.push({round:i+1,venue:'Kalshi',side:'UP',stake:2,result:'CANCELLED',net:0});buy('UP');render()");assert.equal(a.get('balance').textContent,'$100.00');assert.equal(a.get('up').disabled,true);assert.match(a.get('position').textContent,/limit reached/)});
