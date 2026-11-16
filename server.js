@@ -3,18 +3,33 @@ const http=require('node:http'),fs=require('node:fs');
 const {createMarketFeed}=require('./market-feed');
 const {createVenueFeeds}=require('./venue-feeds');
 const {createResolver}=require('./resolution-feed');
+const {createShadowMonitor}=require('./shadow-monitor');
 const page=fs.readFileSync('index.html');
 const livePaperScript=fs.readFileSync('live-paper.js');
+const shadowScript=fs.readFileSync('shadow-ui.js');
 const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
 const resolver=createResolver();
+const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver});
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
   if(req.method==='GET'&&(req.url==='/'||req.url==='/index.html'||req.url.startsWith('/?'))){
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(page);return;
+  }
+  if(req.method==='GET'&&req.url==='/shadow-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(shadowScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/shadow'){
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(shadow.snapshot()));return;
+  }
+  if(req.method==='GET'&&req.url==='/api/shadow/export'){
+    res.setHeader('Content-Disposition','attachment; filename="CASH-shadow-session-not-verified.json"');
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(shadow.exportSession(),null,2));return;
   }
   if(req.method==='GET'&&req.url==='/live-paper.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(livePaperScript);return;
@@ -74,5 +89,8 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   });
   checkVenues();
   const venueTimer=setInterval(checkVenues,15000);venueTimer.unref();
+  shadow.scan().catch(()=>{});
+  const shadowTimer=setInterval(()=>shadow.scan().catch(()=>{}),20000);shadowTimer.unref();
+  console.log('CASH shadow baseline monitor: volatile session only, 0 qualifying forecasts');
 });
 module.exports={server};
