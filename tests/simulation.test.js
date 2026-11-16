@@ -18,3 +18,5 @@ test('fictional scenario band is generated for both markets',()=>{const a=app();
 
 test('ledger captures entry, fee and net for a hypothetical winning position',()=>{const a=app();a.run("setStake(2);setPrice(0.4);toggleFee();buy('UP');for(let i=0;i<7;i++)advance()");assert.match(a.get('ledger').innerHTML,/40¢/);assert.match(a.get('ledger').innerHTML,/\$0\.06/);assert.match(a.get('ledger').innerHTML,/\+\$2\.94/)});
 test('losing position records negative net and zero fee',()=>{const a=app();a.run("buy('DOWN');for(let i=0;i<7;i++)advance()");assert.match(a.get('ledger').innerHTML,/−\$5\.00/);assert.match(a.get('ledger').innerHTML,/\$0\.00/)});
+
+test('performance net reconciles to itemized ledger',()=>{const a=app();a.run("setStake(2);setPrice(0.4);toggleFee();buy('UP');for(let i=0;i<7;i++)advance()");assert.equal(a.get('pnl').textContent,'+$2.94');assert.match(a.get('ledger').innerHTML,/\+\$2\.94/)});
