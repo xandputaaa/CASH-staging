@@ -8,6 +8,8 @@ const {createAuditJournal}=require('./audit-journal');
 const page=fs.readFileSync('index.html');
 const livePaperScript=fs.readFileSync('live-paper.js');
 const shadowScript=fs.readFileSync('shadow-ui.js');
+const shadowArchiveScript=fs.readFileSync('shadow-browser-archive.js');
+const shadowArchiveUiScript=fs.readFileSync('shadow-browser-archive-ui.js');
 const diagnosticsScript=fs.readFileSync('diagnostics-ui.js');
 const {createDiagnostics}=require('./diagnostics');
 const port=3000; // Staging public domain is explicitly routed to port 3000
@@ -22,6 +24,12 @@ const server=http.createServer(async(req,res)=>{
   res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
   if(req.method==='GET'&&(req.url==='/'||req.url==='/index.html'||req.url.startsWith('/?'))){
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(page);return;
+  }
+  if(req.method==='GET'&&req.url==='/shadow-browser-archive.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(shadowArchiveScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/shadow-browser-archive-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(shadowArchiveUiScript);return;
   }
   if(req.method==='GET'&&req.url==='/shadow-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(shadowScript);return;

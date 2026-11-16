@@ -99,3 +99,13 @@ test('CASH diagnostics UI is served and mounted on mobile dashboard',()=>withSer
  assert.match(page.body,/diagnosticGate/);
  assert.match(page.body,/diagnostics-ui\.js/);
 }));
+
+test('browser-only shadow archive assets are same origin and cannot submit real orders',()=>withServer(async()=>{
+ const a=await request('/shadow-browser-archive.js');
+ const b=await request('/shadow-browser-archive-ui.js');
+ assert.equal(a.status,200);assert.equal(b.status,200);
+ assert.match(a.headers['content-type'],/javascript/);
+ assert.match(a.body,/CASH-local-shadow-archive-v1/);
+ assert.match(b.body,/\/api\/shadow\/export/);
+ assert.equal((await request('/shadow-browser-archive.js','POST')).status,404);
+}));
