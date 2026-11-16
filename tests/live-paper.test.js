@@ -17,7 +17,13 @@ function app({shared=new Map(),venueStatus='live'}={}){
  class MockFileReader{readAsText(file){this.result=file.content;this.onload?.()}};
  const window={},ctx=vm.createContext({window,document,localStorage,fetch,Date:FakeDate,FileReader:MockFileReader,AbortController,setTimeout,clearTimeout,setInterval:()=>0,confirm:()=>true,URLSearchParams,encodeURIComponent});
  vm.runInContext(source,ctx);
- return {run:x=>vm.runInContext(x,ctx),get:id=>document.getElementById(id),now,calls,shared,setResult:x=>{result=x}};
+ return {run:x=>vm.runInContext(x,ctx),get:id=>document.getElementById(id),now,calls,shared,setResult:x=>{
+  result=x?.status==='verified'?{
+    confirmationCount:2,firstObservedAt:new Date(now.ms).toISOString(),evidenceSha256:'a'.repeat(64),
+    evidenceSourceUrl:'https://external-api.kalshi.com/trade-api/v2/markets/'+ticker,
+    evidenceSnapshot:{ticker,status:'settled',result:x.winner},...x
+  }:x
+ }};
 }
 test('market-linked paper entry uses observed ASK and preserves original timestamp',async()=>{
  const a=app();await a.run("window.CASHLivePaper.place('Kalshi','YES')");
@@ -113,4 +119,28 @@ test('settled paper ticket displays result with fee/slippage caveat',async()=>{
  a.now.ms+=25000;await a.run("window.CASHLivePaper.check()");
  assert.match(a.get('lpActiveList').innerHTML,/WON/);
  assert.match(a.get('lpActiveList').innerHTML,/fees\/slippage excluded/);
+});
+
+test('paper settlement refuses single-confirmation or incomplete API evidence',async()=>{
+ const a=app();await a.run("window.CASHLivePaper.place('Kalshi','YES')");
+ a.setResult({status:'verified',winner:'YES',source:'Kalshi public market result',confirmationCount:1});
+ a.now.ms+=25000;await a.run("window.CASHLivePaper.check()");
+ let saved=JSON.parse(a.shared.get('cash-live-paper-v1'));
+ assert.equal(saved.entries[0].status,'PENDING');
+ assert.equal(saved.balance,95);
+ a.setResult({status:'verified',winner:'YES',source:'Kalshi public market result',evidenceSha256:null});
+ await a.run("window.CASHLivePaper.check()");
+ saved=JSON.parse(a.shared.get('cash-live-paper-v1'));
+ assert.equal(saved.entries[0].status,'PENDING');
+});
+test('confirmed paper journal exports retain public evidence fingerprint and both-check count',async()=>{
+ const a=app();await a.run("window.CASHLivePaper.place('Kalshi','YES')");
+ a.setResult({status:'verified',winner:'YES',source:'Kalshi public market result'});
+ a.now.ms+=25000;await a.run("window.CASHLivePaper.check()");
+ const saved=JSON.parse(a.shared.get('cash-live-paper-v1'));
+ assert.equal(saved.entries[0].resultEvidence.confirmationCount,2);
+ assert.match(saved.entries[0].resultEvidence.evidenceSha256,/^[a-f0-9]{64}$/);
+ assert.match(saved.entries[0].resultEvidence.evidenceSourceUrl,/kalshi/);
+ const second=app({shared:a.shared});
+ assert.equal(second.get('lpBalance').textContent,saved.balance.toLocaleString('en-US',{style:'currency',currency:'USD'}));
 });
