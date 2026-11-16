@@ -30,7 +30,7 @@ function selectPolyEvent(data,slot,now){
 }
 function createVenueFeeds({fetchImpl=fetch,clock=()=>Date.now()}={}){
   const state={Kalshi:{cached:null,inflight:null},Polymarket:{cached:null,inflight:null}};
-  function view(venue){const cached=state[venue].cached,ageMs=cached?Math.max(0,clock()-cached.fetchedMs):null;return cached?{...cached.quote,status:ageMs>STALE_MS?'stale':cached.quote.status,ageMs,fetchedAt:cached.fetchedAt}:{venue,status:'unavailable',ageMs:null,fetchedAt:null,marketId:null}}
+  function view(venue){const cached=state[venue].cached,ageMs=cached?Math.max(0,clock()-cached.fetchedMs):null;return cached?{...cached.quote,status:ageMs>STALE_MS||Date.parse(cached.quote.endTime)<=clock()?'stale':cached.quote.status,ageMs,fetchedAt:cached.fetchedAt}:{venue,status:'unavailable',ageMs:null,fetchedAt:null,marketId:null}}
   async function query(venue){
     if(!state[venue])throw Error('Unsupported venue');
     const st=state[venue];if(st.cached&&clock()-st.cached.fetchedMs<CACHE_MS)return view(venue);
