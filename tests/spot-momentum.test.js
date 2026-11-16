@@ -95,3 +95,49 @@ test('missing early spot history still records market baseline but no independen
  assert.equal(snap.observed,2);assert.equal(snap.spotCandidateObservations,0);
  assert.equal(snap.spotCandidateAccuracy,null);
 });
+
+test('spot candidates attach reproducible observed sample windows, never market odds',()=>{
+ const now=Date.now(),snap=samples(now),candidate=proposeSpotMomentum(snap,now);
+ assert.ok(Array.isArray(candidate.sampleWindow));
+ assert.ok(candidate.sampleWindow.length>=4);
+ assert.equal(candidate.sampleWindow[0].time,candidate.referenceAt);
+ assert.equal(candidate.sampleWindow.at(-1).time,candidate.latestAt);
+ assert.equal(isValidSpotCandidate({...candidate,predictedContractSide:'YES'},'Kalshi',now),true);
+ assert.equal(candidate.sampleWindow.some(x=>'marketId' in x||'yesAsk' in x),false);
+});
+test('replay rejects fabricated spot sample windows and reduced thresholds even with valid summary',()=>{
+ const now=Date.now(),base={...proposeSpotMomentum(samples(now),now),predictedContractSide:'YES'};
+ assert.equal(isValidSpotCandidate({...base,thresholdUsd:0.001},'Kalshi',now),false);
+ const tampered={...base,sampleWindow:base.sampleWindow.map(x=>({...x}))};
+ tampered.sampleWindow[1].price+=100;
+ assert.equal(isValidSpotCandidate(tampered,'Kalshi',now),false);
+ const wrongTime={...base,sampleWindow:base.sampleWindow.map(x=>({...x}))};
+ wrongTime.sampleWindow[2].time=wrongTime.sampleWindow[1].time;
+ assert.equal(isValidSpotCandidate(wrongTime,'Kalshi',now),false);
+ assert.equal(isValidSpotCandidate({...base,sampleWindow:null},'Kalshi',now),false);
+});
+test('spot assessor provides explicit non-call reasons without assigning a probability',()=>{
+ const {assessSpotMomentum}=require('../spot-momentum'),now=Date.now();
+ assert.equal(assessSpotMomentum(null,now).reason,'SPOT_UNAVAILABLE');
+ assert.equal(assessSpotMomentum(samples(now,{age:30000}),now).reason,'STALE_SPOT');
+ assert.equal(assessSpotMomentum(samples(now,{change:0.1}),now).reason,'MOVEMENT_TOO_SMALL');
+ assert.equal(assessSpotMomentum(samples(now),now).reason,'CANDIDATE');
+ assert.equal(assessSpotMomentum(samples(now),now).candidate.calibratedProbability,null);
+});
+test('missing source window remains identifiable as legacy but never qualifies',()=>{
+ const now=Date.now(),candidate={...proposeSpotMomentum(samples(now),now),predictedContractSide:'YES'};
+ delete candidate.sampleWindow;
+ assert.equal(isValidSpotCandidate(candidate,'Kalshi',now),true);
+ const monitor=createShadowMonitor({clock:()=>now,
+  quotes:{query:async venue=>market(now,venue)},
+  results:{lookup:async()=>({status:'pending'})},
+  spot:{view:()=>samples(now)}});
+ return monitor.scan().then(()=>{
+  const state=monitor.snapshot();
+  assert.equal(state.spotEvidence.sampleBackedCandidates,2);
+  assert.equal(state.spotEvidence.legacyWithoutSampleWindow,0);
+  assert.equal(state.spotEvidence.checks,1);
+  assert.equal(state.spotEvidence.candidates,1);
+  assert.equal(state.qualifyingProspectiveContracts,0);
+ });
+});

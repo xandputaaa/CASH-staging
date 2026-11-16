@@ -20,6 +20,14 @@
   el('spotCandidateCorrect').textContent=String(Number(data.spotCandidateCorrect)||0);
   el('spotCandidateAccuracy').textContent=Number.isFinite(data.spotCandidateAccuracy)?
     (100*data.spotCandidateAccuracy).toFixed(1)+'%':'—';
+  const quality=data.spotEvidence||{};
+  el('spotInputQuality').textContent='Spot input: '+
+   (quality.lastReason||'NOT CHECKED').replaceAll('_',' ')+' · '+
+   (Number(quality.sampleBackedCandidates)||0)+' sample-backed captures · '+
+   (Number(quality.legacyWithoutSampleWindow)||0)+' legacy captures without a source window';
+  el('spotInputCounts').textContent='Spot checks: '+(Number(quality.checks)||0)+
+   ' · candidate windows: '+(Number(quality.candidates)||0)+
+   ' · rejected inputs: '+(Number(quality.rejected)||0);
   el('shadowGate').textContent='0 / 100 qualifying prospective model predictions';
   el('shadowChecks').textContent='Official settlement checks: '+(Number(data.totalSettlementChecks)||0)+' · pending outcomes are never inferred from the clock';
   el('shadowSession').textContent='Monitoring since '+fmtTime(data.bootAt)+
@@ -44,7 +52,8 @@
    show(await res.json());
   }catch{
    el('shadowState').textContent='MONITOR UNAVAILABLE';
-   for(const id of ['spotCandidateCount','spotCandidateSettled','spotCandidateCorrect','spotCandidateAccuracy'])el(id).textContent='—';
+   for(const id of ['spotCandidateCount','spotCandidateSettled','spotCandidateCorrect','spotCandidateAccuracy',
+     'spotInputQuality','spotInputCounts'])el(id).textContent='—';
    el('shadowState').className='shadow-state';
    el('shadowSession').textContent='Could not read this server session. No verified records can be inferred.';
    el('shadowChecks').textContent='Official settlement check status unavailable';

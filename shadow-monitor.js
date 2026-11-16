@@ -8,7 +8,7 @@
  */
 const {createHash}=require('node:crypto');
 const {verifyChain}=require('./audit-journal');
-const {proposeSpotMomentum,toContractSide,isValidSpotCandidate}=require('./spot-momentum');
+const {proposeSpotMomentum,assessSpotMomentum,toContractSide,isValidSpotCandidate}=require('./spot-momentum');
 const {createScanContinuity,classifyQuote}=require('./scan-continuity');
 const MIN_LEAD_MS=60000,MAX_RECORDS=300,MAX_EVENTS=650;
 const VALID_VENUES=new Set(['Kalshi','Polymarket']);
@@ -113,6 +113,18 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
  const bootAt=ISO(clock()),observations=[],events=[],ids=new Set();
  let lastHash='GENESIS',inflight=null,scanCount=0,lastScanAt=null,lastError=null,pendingCursor=0,totalSettlementChecks=0;
  const collection=createScanContinuity({clock});
+ const spotInputs={checks:0,candidates:0,rejected:0,lastReason:'NOT_CHECKED',lastCheckedAt:null,reasons:{}};
+ function inspectSpotInputs(){
+  if(!spot)return;
+  let result;
+  try{result=assessSpotMomentum(spot.view(),clock())}
+  catch{result={candidate:null,reason:'SPOT_SOURCE_ERROR'}}
+  spotInputs.checks++;
+  if(result.candidate)spotInputs.candidates++;else spotInputs.rejected++;
+  spotInputs.lastReason=result.reason;
+  spotInputs.lastCheckedAt=ISO(clock());
+  spotInputs.reasons[result.reason]=(spotInputs.reasons[result.reason]||0)+1;
+ }
  function loadSavedHistory(){
   const saved=journal?.events||[];
   verifyChain(saved,{limit:maxEvents});
@@ -242,6 +254,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
     }
    }
    const resolution=await resolvePending();
+   inspectSpotInputs();
    const finishedMs=clock();
    collection.record({startedMs,finishedMs,statuses:states,captured,resolved:resolution.changed});
    scanCount++;lastScanAt=ISO(finishedMs);
@@ -274,6 +287,10 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
    spotCandidateCorrect:candidateCorrect,
    spotCandidateAccuracy:candidateSettled.length?candidateCorrect/candidateSettled.length:null,
    spotCandidateQualified:false,
+   spotEvidence:{...spotInputs,reasons:{...spotInputs.reasons},
+    sampleBackedCandidates:candidateObservations.filter(x=>Array.isArray(x.spotCandidate?.sampleWindow)).length,
+    legacyWithoutSampleWindow:candidateObservations.filter(x=>!Array.isArray(x.spotCandidate?.sampleWindow)).length,
+    caveat:'Spot window checks are session-only and use self-reported exchange observations; not independently attested.'},
    baselineDirectionalAccuracy:settled?correct/settled:null,
    recordedEvents:events.length,headHash:lastHash,lastError,
    recent:observations.slice(-15).reverse().map(x=>({...x}))

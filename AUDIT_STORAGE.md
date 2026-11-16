@@ -43,3 +43,7 @@ CASH can now summarize downloaded or restored browser sessions by captured event
 ## In-process scanner continuity (not durable coverage proof)
 
 CASH records a capped 30-scan rolling diagnostic history with each venue’s eligibility status, completed scans, last scan duration, overlapping calls, and gaps longer than 45 seconds between completed scans. A completed polling loop is **not** the same as receiving a full fresh market quote. In the CASH Diagnostics panel, `NO ELIGIBLE QUOTES` or `DEGRADED` may appear even when the process monitor is ACTIVE. These counters reset at restart and do not reconstruct missed contracts, external timestamps, full uptime, or qualified forecasts. The scanner cannot prove no gaps between server sessions.
+
+## Experimental spot source windows and non-call visibility
+
+New spot-momentum candidates include a source-only chronological sample window (Kraken or Coinbase BTC/USD). Journal replay can recalculate the exact reference and latest price, movement threshold, and directional proposal from those saved values, rejecting inconsistent sampled candidates. The dashboard also counts missing/stale/mixed/flat input checks instead of treating every unproduced candidate as an error or win. Older candidate records without a sampled window are labeled legacy in the snapshot. Exchange sample content and server timestamps remain **self-reported, not independently authenticated**. The candidate is not a venue-index forecast, the current benchmark is uncalibrated, and none of this meets the 100-contract verification gate.

@@ -85,3 +85,15 @@ test('shadow monitor offline state does not retain a misleading live settlement 
  const a=app(valid,{fail:true});await new Promise(resolve=>setImmediate(resolve));
  assert.equal(a.get('shadowChecks').textContent,'Official settlement check status unavailable');
 });
+
+test('shadow UI displays experimental spot input provenance without implying qualified forecasts',async()=>{
+ const a=app({...valid,spotEvidence:{
+  checks:10,candidates:4,rejected:6,lastReason:'STALE_SPOT',
+  sampleBackedCandidates:2,legacyWithoutSampleWindow:1}});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.match(a.get('spotInputQuality').textContent,/STALE SPOT/);
+ assert.match(a.get('spotInputQuality').textContent,/2 sample-backed captures/);
+ assert.match(a.get('spotInputQuality').textContent,/1 legacy captures/);
+ assert.match(a.get('spotInputCounts').textContent,/rejected inputs: 6/);
+ assert.equal(a.get('shadowGate').textContent,'0 / 100 qualifying prospective model predictions');
+});
