@@ -59,13 +59,13 @@ async function refreshVenue(venue){
     name.textContent=(data.title||'BTC Up or Down')+' · '+(data.marketId||data.slug||'market ID unavailable');
     if(kal){el('kalshiBid').textContent=quoteCents(data.yesBid);el('kalshiAsk').textContent=quoteCents(data.yesAsk);el('kalshiNoAsk').textContent=quoteCents(data.noAsk)}
     else{el('polyUp').textContent=quoteCents(data.upAsk);el('polyDown').textContent=quoteCents(data.downAsk)}
-    venueLast[venue]=data;if(window.CASHLivePaper?.setActiveQuote)window.CASHLivePaper.setActiveQuote(venue,data.marketId);showCountdown(venue);
+    venueLast[venue]=data;if(typeof window!=='undefined'&&window.CASHLivePaper?.setActiveQuote)window.CASHLivePaper.setActiveQuote(venue,data.marketId);showCountdown(venue);
   }catch(e){
     state.textContent='OFFLINE';state.className='venue-state';
     name.textContent='Public venue market quotes unavailable — no invented price';
     if(kal){el('kalshiBid').textContent='—';el('kalshiAsk').textContent='—';el('kalshiNoAsk').textContent='—'}
     else{el('polyUp').textContent='—';el('polyDown').textContent='—'}
-    venueLast[venue]=null;if(window.CASHLivePaper?.setActiveQuote)window.CASHLivePaper.setActiveQuote(venue,null);showCountdown(venue);
+    venueLast[venue]=null;if(typeof window!=='undefined'&&window.CASHLivePaper?.setActiveQuote)window.CASHLivePaper.setActiveQuote(venue,null);showCountdown(venue);
   }
 }
 if(typeof fetch==='function'){
