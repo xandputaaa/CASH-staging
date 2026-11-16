@@ -169,3 +169,22 @@ test('CASH cognitive core is read-only metacognition, not consciousness or tradi
  assert.match(homepage.body,/This is not sentience or consciousness/);
  assert.match(homepage.body,/cognition-ui\.js/);
 }));
+
+test('Kalshi 15m terminal serves conservative paper-only readiness and same-origin UI',()=>withServer(async()=>{
+ const response=await request('/api/kalshi15');
+ assert.equal(response.status,200);
+ const r=JSON.parse(response.body);
+ assert.equal(r.version,'CASH_KALSHI15_TERMINAL_V1');
+ assert.equal(r.liveDecision,'NO_CALL_MODEL_NOT_VALIDATED');
+ assert.equal(r.realTradingAuthorized,false);
+ assert.equal(r.automaticOrdersEnabled,false);
+ assert.equal(r.independentForecastValidation,0);
+ assert.equal(r.spotReference.settlementIndexAvailable,false);
+ assert.equal((await request('/api/kalshi15','POST')).status,404);
+ const script=await request('/kalshi15-ui.js');
+ assert.equal(script.status,200);assert.match(script.headers['content-type'],/javascript/);
+ assert.match(script.body,/NO_CALL_MODEL_NOT_VALIDATED/);
+ const page=await request('/');
+ assert.match(page.body,/KALSHI \/ BTC 15 MIN · COMMAND CENTER/);
+ assert.match(page.body,/kalshi15-ui\.js/);
+}));

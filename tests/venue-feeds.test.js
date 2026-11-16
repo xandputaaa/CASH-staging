@@ -89,3 +89,16 @@ test('failed Polymarket refresh cannot silently recover LIVE until upstream succ
  t+=13000;failed=false;
  assert.equal((await feed.query('Polymarket')).status,'live');
 });
+
+test('Kalshi returns official floor_strike and only identifies BRTI rule when explicitly present',()=>{
+ const m={...kalshiMarket,floor_strike:85765.25,
+  rules_primary:'If the simple average of the sixty seconds of CF Benchmarks BRTI before close is at least the average of the sixty seconds before open, YES wins.'};
+ const r=selectKalshi({markets:[m]},now);
+ assert.equal(r.targetPrice,85765.25);
+ assert.equal(r.targetSource,'KALSHI_FLOOR_STRIKE');
+ assert.equal(r.contractRuleStatus,'BRTI_60S_RULE_TEXT_PRESENT');
+ assert.equal(r.openTime,open);
+ const missing=selectKalshi({markets:[{...m,floor_strike:null,rules_primary:'BTC up'}]},now);
+ assert.equal(missing.targetPrice,null);
+ assert.equal(missing.contractRuleStatus,'RULE_TEXT_NOT_CONFIRMED');
+});

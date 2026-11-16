@@ -13,6 +13,8 @@ const shadowArchiveUiScript=fs.readFileSync('shadow-browser-archive-ui.js');
 const diagnosticsScript=fs.readFileSync('diagnostics-ui.js');
 const evaluationScript=fs.readFileSync('evaluation-ui.js');
 const cognitionScript=fs.readFileSync('cognition-ui.js');
+const kalshi15Script=fs.readFileSync('kalshi15-ui.js');
+const {assessKalshi15}=require('./kalshi15-readiness');
 const {assessCognition}=require('./cash-cognition');
 const {createDiagnostics}=require('./diagnostics');
 const port=3000; // Staging public domain is explicitly routed to port 3000
@@ -43,6 +45,23 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/cognition-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(cognitionScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/kalshi15-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(kalshi15Script);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/kalshi15'){
+    try{
+      const quote=await venueFeeds.query('Kalshi');
+      const report=assessKalshi15({quote,spot:feed.view(),shadow:shadow.snapshot()});
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify(report));
+    }catch{
+      res.writeHead(503,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({version:'CASH_KALSHI15_TERMINAL_V1',
+       displayState:'NO_CALL',realTradingAuthorized:false,automaticOrdersEnabled:false,
+       independentForecastValidation:0}));
+    }return;
   }
   if(req.method==='GET'&&req.url==='/api/cognition'){
     try{

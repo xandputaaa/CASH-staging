@@ -14,8 +14,21 @@ function selectKalshi(data,now){
   active.sort((a,b)=>Date.parse(a.close_time)-Date.parse(b.close_time));
   const m=active[0];if(!m)throw Error('No current Kalshi BTC 15m market');
   const yesBid=price(m.yes_bid_dollars),yesAsk=price(m.yes_ask_dollars),noAsk=price(m.no_ask_dollars);
+  const numberStrike=Number(m.floor_strike);
+  const targetPrice=Number.isFinite(numberStrike)&&numberStrike>1000&&numberStrike<10000000?
+    numberStrike:null;
+  const rules=typeof m.rules_primary==='string'?m.rules_primary:'';
+  const contractRuleStatus=/\bBRTI\b|CF Benchmarks[^.]*Bitcoin Real[- ]Time Index/i.test(rules)
+    &&/sixty seconds|60 seconds|60-second/i.test(rules)&&/before/i.test(rules)
+     ?'BRTI_60S_RULE_TEXT_PRESENT':'RULE_TEXT_NOT_CONFIRMED';
   if(yesAsk===null&&noAsk===null)throw Error('No usable public Kalshi ask quote');
-  return {venue:'Kalshi',marketId:m.ticker,title:typeof m.title==='string'?m.title.slice(0,180):'BTC Up or Down 15m',endTime:m.close_time,yesBid,yesAsk,noAsk,status:yesAsk!==null&&noAsk!==null?'live':'partial',quotedFields:'YES bid, YES ask and NO ask; public observed dollars per $1 payout, not guaranteed executable'};
+  return {venue:'Kalshi',marketId:m.ticker,
+    title:typeof m.title==='string'?m.title.slice(0,180):'BTC Up or Down 15m',
+    openTime:typeof m.open_time==='string'?m.open_time:null,endTime:m.close_time,
+    targetPrice,targetSource:targetPrice===null?'MISSING':'KALSHI_FLOOR_STRIKE',
+    contractRuleStatus,yesBid,yesAsk,noAsk,
+    status:yesAsk!==null&&noAsk!==null?'live':'partial',
+    quotedFields:'YES bid, YES ask and NO ask; public observed dollars per $1 payout, not guaranteed executable'};
 }
 function parseTokens(raw){const a=typeof raw==='string'?JSON.parse(raw):raw;if(!Array.isArray(a)||a.length!==2||!a.every(x=>/^\d{10,}$/.test(String(x))))throw Error('Invalid CLOB token IDs');return a.map(String)}
 function selectPolyEvent(data,slot,now){
