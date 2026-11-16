@@ -55,17 +55,26 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
       ||(x.spotCandidate!==undefined&&x.spotCandidate!==null&&!isValidSpotCandidate(x.spotCandidate,x.venue,Date.parse(x.serverCapturedAt))))
       throw Error('Saved capture is semantically invalid');
     observations.push({...x,status:'PENDING',winner:null,outcomeSource:null,
-      outcomeCheckedAt:null,outcomeSettledAt:null,lastCheckAt:null,settlementAttempts:0,pendingReason:null,captureSequence:e.sequence});
+      outcomeCheckedAt:null,outcomeSettledAt:null,outcomeEvidence:null,lastCheckAt:null,settlementAttempts:0,pendingReason:null,captureSequence:e.sequence});
     ids.add(x.id);
    }else if(e.type==='RESOLUTION'){
     const record=observations.find(o=>o.id===x.id),allowed=record?.venue==='Kalshi'?['YES','NO','VOID']:['UP','DOWN','VOID'];
     if(!record||record.status!=='PENDING'||x.venue!==record.venue||x.marketId!==record.marketId
       ||!allowed.includes(x.winner)||typeof x.source!=='string'
-      ||!Number.isFinite(Date.parse(x.checkedAt)))
+      ||!Number.isFinite(Date.parse(x.checkedAt))
+      ||(x.confirmationCount!==undefined&&x.confirmationCount!==null&&(
+        x.confirmationCount!==2
+        ||!x.evidenceSnapshot||typeof x.evidenceSnapshot!=='object'
+        ||!x.evidenceSha256||!(/^[a-f0-9]{64}$/).test(x.evidenceSha256)
+        ||createHash('sha256').update(JSON.stringify(x.evidenceSnapshot)).digest('hex')!==x.evidenceSha256
+        ||!Number.isFinite(Date.parse(x.firstObservedAt))
+        ||Date.parse(x.firstObservedAt)>Date.parse(x.checkedAt)
+      )))
       throw Error('Saved resolution is semantically invalid');
     record.status=x.winner==='VOID'?'VOID':x.winner===record.baselineSide?'CORRECT':'INCORRECT';
     record.winner=x.winner;record.outcomeSource=x.source;
     record.outcomeCheckedAt=x.checkedAt;record.outcomeSettledAt=x.settledAt||null;
+    record.outcomeEvidence=x.confirmationCount===2?{confirmationCount:2,firstObservedAt:x.firstObservedAt,evidenceSha256:x.evidenceSha256,evidenceSourceUrl:x.evidenceSourceUrl,evidenceSnapshot:x.evidenceSnapshot}:null;
     record.resolutionSequence=e.sequence;
    }
    events.push(e);lastHash=e.hash;
@@ -103,7 +112,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
   const event=append('CAPTURE',data);
   if(!event)return null;
   const record={...data,status:'PENDING',winner:null,outcomeSource:null,
-   outcomeCheckedAt:null,outcomeSettledAt:null,lastCheckAt:null,settlementAttempts:0,pendingReason:null,captureSequence:event.sequence};
+   outcomeCheckedAt:null,outcomeSettledAt:null,outcomeEvidence:null,lastCheckAt:null,settlementAttempts:0,pendingReason:null,captureSequence:event.sequence};
   observations.push(record);ids.add(id);
   return record;
  }
@@ -132,13 +141,19 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
      id:record.id,marketId:record.marketId,venue:record.venue,
      winner:resolution.winner,source:resolution.source||'public official market',
      checkedAt:resolution.checkedAt||ISO(clock()),
-     settledAt:resolution.settledAt||null
+     settledAt:resolution.settledAt||null,
+     confirmationCount:resolution.confirmationCount??null,
+     firstObservedAt:resolution.firstObservedAt??null,
+     evidenceSourceUrl:resolution.evidenceSourceUrl??null,
+     evidenceSha256:resolution.evidenceSha256??null,
+     evidenceSnapshot:resolution.evidenceSnapshot??null
     };
     const event=append('RESOLUTION',result);
     if(!event)break;
     record.status=resolution.winner==='VOID'?'VOID':resolution.winner===record.baselineSide?'CORRECT':'INCORRECT';
     record.winner=resolution.winner;record.outcomeSource=result.source;
     record.outcomeCheckedAt=result.checkedAt;record.outcomeSettledAt=result.settledAt;
+    record.outcomeEvidence=result.confirmationCount===2?{confirmationCount:2,firstObservedAt:result.firstObservedAt,evidenceSha256:result.evidenceSha256,evidenceSourceUrl:result.evidenceSourceUrl,evidenceSnapshot:result.evidenceSnapshot}:null;
     record.pendingReason=null;record.resolutionSequence=event.sequence;changed++;
    }catch(e){record.pendingReason='Result lookup or journal write failed';lastError=journal?.configured?'Official result source or audit journal failed; observations remain pending':'Official result provider failed; observations remain pending'}
   }
