@@ -35,10 +35,68 @@ test('unavailable resolution sources do not produce fabricated results',async()=
   const result=await resolver.lookup({venue:'Kalshi',marketId:ticker});
   assert.equal(result.status,'pending');assert.equal(result.winner,undefined);
 });
-test('official market result lookups are cached',async()=>{
-  let calls=0;const resolver=createResolver({fetchImpl:async url=>{calls++;assert.ok(url.includes(ticker));return {ok:true,json:async()=>({market:{ticker,status:'settled',result:'yes'}})}}});
-  const a=await resolver.lookup({venue:'Kalshi',marketId:ticker}),b=await resolver.lookup({venue:'Kalshi',marketId:ticker});
-  assert.equal(a.status,'verified');assert.equal(b.winner,'YES');assert.equal(calls,1);
+test('official market result requires two independent time-separated matching reads, with cached first result',async()=>{
+  let calls=0,now=Date.now();
+  const body={market:{ticker,status:'settled',result:'yes',is_provisional:false,settlement_ts:new Date(now-1000).toISOString()}};
+  const resolver=createResolver({clock:()=>now,fetchImpl:async url=>{
+    calls++;assert.ok(url.includes(ticker));return {ok:true,json:async()=>body}
+  }});
+  const a=await resolver.lookup({venue:'Kalshi',marketId:ticker});
+  const b=await resolver.lookup({venue:'Kalshi',marketId:ticker});
+  assert.equal(a.status,'pending');assert.match(a.reason,/second matching/);
+  assert.equal(b.status,'pending');assert.equal(calls,1);
+  now+=21000;
+  const verified=await resolver.lookup({venue:'Kalshi',marketId:ticker});
+  assert.equal(verified.status,'verified');assert.equal(verified.winner,'YES');
+  assert.equal(verified.confirmationCount,2);assert.equal(calls,2);
+  assert.match(verified.evidenceSourceUrl,/external-api.kalshi.com/);
+  assert.match(verified.evidenceSha256,/^[0-9a-f]{64}$/);
+  assert.equal(verified.evidenceSnapshot.result,'yes');
+  assert.equal(verified.firstObservedAt,new Date(now-21000).toISOString());
 });
 
 test('Polymarket settled status is final only with closed one-hot payout',()=>{assert.equal(polymarketOutcome(poly({status:'settled'}),slug,id).winner,'UP');assert.equal(polymarketOutcome(poly({status:'settled',prices:'["0.6","0.4"]'}),slug,id).status,'pending')});
+
+test('Kalshi provisional market cannot be verified even when status reports settled',()=>{
+ assert.equal(kalshiOutcome({market:{ticker,status:'settled',result:'yes',is_provisional:true}},ticker).status,'pending');
+});
+test('opposite final outcomes reset confirmation and cannot settle on a single contradictory fetch',async()=>{
+ let now=Date.now(),winner='yes',calls=0;
+ const r=createResolver({clock:()=>now,fetchImpl:async()=>{
+  calls++;return {ok:true,json:async()=>({market:{ticker,status:'settled',result:winner}})};
+ }});
+ assert.equal((await r.lookup({venue:'Kalshi',marketId:ticker})).status,'pending');
+ now+=21000;winner='no';
+ const changed=await r.lookup({venue:'Kalshi',marketId:ticker});
+ assert.equal(changed.status,'pending');assert.equal(changed.tentativeWinner,'NO');
+ now+=21000;
+ const verified=await r.lookup({venue:'Kalshi',marketId:ticker});
+ assert.equal(verified.status,'verified');assert.equal(verified.winner,'NO');
+ assert.equal(calls,3);
+});
+test('an official source outage resets previous tentative settlement confirmation',async()=>{
+ let now=Date.now(),offline=false;
+ const r=createResolver({clock:()=>now,fetchImpl:async()=>{
+  if(offline)throw Error('offline');
+  return {ok:true,json:async()=>({market:{ticker,status:'settled',result:'yes'}})};
+ }});
+ assert.equal((await r.lookup({venue:'Kalshi',marketId:ticker})).status,'pending');
+ now+=21000;offline=true;
+ assert.equal((await r.lookup({venue:'Kalshi',marketId:ticker})).status,'pending');
+ now+=21000;offline=false;
+ assert.equal((await r.lookup({venue:'Kalshi',marketId:ticker})).status,'pending');
+ now+=21000;assert.equal((await r.lookup({venue:'Kalshi',marketId:ticker})).status,'verified');
+});
+test('Polymarket final outcomes require two matching reads and include raw field evidence',async()=>{
+ let now=Date.now(),calls=0;
+ const r=createResolver({clock:()=>now,fetchImpl:async()=>{
+  calls++;return {ok:true,json:async()=>poly({status:'resolved'})};
+ }});
+ const a=await r.lookup({venue:'Polymarket',marketId:id,slug});
+ assert.equal(a.status,'pending');assert.equal(a.tentativeWinner,'UP');
+ now+=21000;const b=await r.lookup({venue:'Polymarket',marketId:id,slug});
+ assert.equal(b.status,'verified');assert.equal(b.winner,'UP');assert.equal(calls,2);
+ assert.equal(b.evidenceSnapshot.conditionId,id);
+ assert.equal(b.evidenceSnapshot.umaResolutionStatus,'resolved');
+ assert.match(b.evidenceSha256,/^[0-9a-f]{64}$/);
+});
