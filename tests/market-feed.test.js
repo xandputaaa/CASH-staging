@@ -36,3 +36,28 @@ test('concurrent viewers share one in-flight market request',async()=>{
   const feed=createMarketFeed({fetchImpl});const [a,b]=await Promise.all([feed.update(),feed.update()]);
   assert.equal(calls,1);assert.equal(a.price,b.price);
 });
+
+test('Coinbase trade clock rejects absent, stale, and future timestamps instead of inventing live freshness',()=>{
+ const now=Date.now();
+ assert.throws(()=>parseCoinbase({price:'85440.80'},now),/timestamp/);
+ assert.throws(()=>parseCoinbase({...coinbase,time:new Date(now-25000).toISOString()},now),/timestamp/);
+ assert.throws(()=>parseCoinbase({...coinbase,time:new Date(now+10000).toISOString()},now),/timestamp/);
+ assert.equal(parseCoinbase({...coinbase,time:new Date(now-15000).toISOString()},now).price,85440.8);
+});
+test('a stale Coinbase fallback is rejected when Kraken is unavailable',async()=>{
+ let now=Date.now();
+ const old={...coinbase,time:new Date(now-60000).toISOString()};
+ const fetchImpl=async url=>url.includes('kraken')?Promise.reject(Error('network')):
+  {ok:true,json:async()=>old};
+ const feed=createMarketFeed({fetchImpl,clock:()=>now});
+ const snap=await feed.update();
+ assert.equal(snap.status,'unavailable');assert.equal(snap.price,null);
+ assert.deepEqual(snap.history,[]);
+});
+test('every stored spot history sample retains its exchange source for independent signal audits',async()=>{
+ const feed=createMarketFeed({fetchImpl:async()=>({ok:true,json:async()=>kraken})});
+ const snap=await feed.update();
+ assert.equal(snap.history.length,1);
+ assert.equal(snap.history[0].source,'Kraken BTC/USD');
+ assert.ok(Number.isFinite(Date.parse(snap.history[0].time)));
+});
