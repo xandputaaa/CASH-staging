@@ -10,7 +10,7 @@
   el('k15Status').className='shadow-state';
   for(const id of ['k15Target','k15Yes','k15No','k15Bid','k15Remaining',
     'k15Ticker','k15Spot','k15Signal','k15Fresh','k15AskSum',
-    'k15Breakeven','k15Checklist'])el(id).textContent='—';
+    'k15Breakeven','k15FeePreview','k15Checklist'])el(id).textContent='—';
   el('k15Reasons').textContent='Could not verify current market. Do not use previously displayed prices.';
   el('k15Updated').textContent='No live verification · real-money calls disabled';
  }
@@ -61,6 +61,17 @@
    (Number.isFinite(be.yesBeforeFees)?(100*be.yesBeforeFees).toFixed(1)+'%':'—')+
    ' · NO '+(Number.isFinite(be.noBeforeFees)?(100*be.noBeforeFees).toFixed(1)+'%':'—')+
    '. Fees/slippage raise this threshold; actual required rate and independent model probability unverified.';
+  const meta=data.feeReference||{};
+  const asPct=n=>Number.isFinite(n)?(100*n).toFixed(2)+'%':'—';
+  const feeSide=side=>{
+   const x=meta.hypotheticalOneContractTaker?.[side];
+   return x?' '+side+': '+(100*x.fee).toFixed(2)+'¢ example fee, '+asPct(x.estimatedAfterFeeBreakEven)+' example break-even':' '+side+': unknown';
+  };
+  el('k15FeePreview').textContent=meta.status==='SERIES_METADATA_LIVE'?
+   'One-contract TAKER illustration (series multiplier '+meta.feeMultiplier+'): '+
+    feeSide('YES')+';'+feeSide('NO')+
+    '. Event overrides, exact member rounding and executable fill costs NOT verified.':
+   'Live series fee metadata unavailable. No after-fee break-even or entry edge can be verified.';
   const checks=Array.isArray(data.releaseChecklist)?data.releaseChecklist:[];
   el('k15Checklist').replaceChildren();
   for(const check of checks){

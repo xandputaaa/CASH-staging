@@ -206,3 +206,19 @@ test('Kalshi finalization checklist and break-even report are explanatory not a 
  const script=await request('/kalshi15-ui.js');
  assert.match(script.body,/k15Checklist/);
 }));
+
+test('Kalshi fee metadata remains hypothetical, read-only and distinct from real entry authorization',()=>withServer(async()=>{
+ const r=await request('/api/kalshi15');
+ assert.equal(r.status,200);
+ const x=JSON.parse(r.body);
+ assert.equal(x.feeReference.notExecutable,true);
+ assert.equal(x.feeReference.eventOverridesVerified,false);
+ assert.equal(x.breakEven.expectedValue,null);
+ assert.equal(x.breakEven.yesAfterFeesAndSlippage,null);
+ assert.equal(x.finalization.realTradingGatePassed,false);
+ assert.equal(x.realTradingAuthorized,false);
+ const page=await request('/');
+ assert.match(page.body,/k15FeePreview/);
+ const script=await request('/kalshi15-ui.js');
+ assert.match(script.body,/One-contract TAKER illustration/);
+}));

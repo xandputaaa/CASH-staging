@@ -113,3 +113,25 @@ test('missing or stale asks never fabricate a fee-free break-even probability',(
  assert.equal(r.breakEven.yesAfterFeesAndSlippage,null);
  assert.equal(r.breakEven.expectedValue,null);
 });
+
+test('fee preview requires current read-only Kalshi series metadata and never enables trading',()=>{
+ const x=inputs();
+ x.fees={state:'SERIES_METADATA_LIVE',feeType:'quadratic',feeMultiplier:1};
+ const r=assessKalshi15(x);
+ assert.equal(r.feeReference.status,'SERIES_METADATA_LIVE');
+ assert.equal(r.feeReference.hypotheticalOneContractTaker.YES.contracts,1);
+ assert.ok(r.breakEven.yesIllustrativeSeriesFeeOnly>r.breakEven.yesBeforeFees);
+ assert.equal(r.breakEven.yesAfterFeesAndSlippage,null);
+ assert.equal(r.breakEven.expectedValue,null);
+ assert.equal(r.finalization.seriesSpecificFeesVerified,false);
+ assert.equal(r.finalization.realTradingGatePassed,false);
+});
+test('unavailable or incompatible fee metadata fails closed',()=>{
+ const x=inputs();x.fees={state:'STALE',feeType:'quadratic',feeMultiplier:1};
+ let r=assessKalshi15(x);
+ assert.equal(r.feeReference.hypotheticalOneContractTaker.YES,null);
+ x.fees={state:'SERIES_METADATA_LIVE',feeType:'flat',feeMultiplier:1};
+ r=assessKalshi15(x);
+ assert.equal(r.feeReference.feeMultiplier,null);
+ assert.equal(r.finalization.seriesFeeMetadataVerified,false);
+});

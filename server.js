@@ -15,11 +15,13 @@ const evaluationScript=fs.readFileSync('evaluation-ui.js');
 const cognitionScript=fs.readFileSync('cognition-ui.js');
 const kalshi15Script=fs.readFileSync('kalshi15-ui.js');
 const {assessKalshi15}=require('./kalshi15-readiness');
+const {createKalshiFeeFeed}=require('./kalshi-fees');
 const {assessCognition}=require('./cash-cognition');
 const {createDiagnostics}=require('./diagnostics');
 const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
+const kalshiFeeFeed=createKalshiFeeFeed();
 const resolver=createResolver();
 const auditJournal=createAuditJournal();
 const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver,journal:auditJournal,spot:feed});
@@ -52,8 +54,8 @@ const server=http.createServer(async(req,res)=>{
   }
   if(req.method==='GET'&&req.url==='/api/kalshi15'){
     try{
-      const quote=await venueFeeds.query('Kalshi');
-      const report=assessKalshi15({quote,spot:feed.view(),shadow:shadow.snapshot()});
+      const [quote,fees]=await Promise.all([venueFeeds.query('Kalshi'),kalshiFeeFeed.query()]);
+      const report=assessKalshi15({quote,spot:feed.view(),shadow:shadow.snapshot(),fees});
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
       res.end(JSON.stringify(report));
     }catch{

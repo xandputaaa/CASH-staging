@@ -10,7 +10,8 @@
 const PRICE=n=>Number.isFinite(n)&&n>0&&n<1;
 const OK_MARKET=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
 const TARGET=n=>Number.isFinite(n)&&n>1000&&n<10000000;
-function assessKalshi15({quote={},spot={},shadow={},now=Date.now()}={}){
+const {takerPreview}=require('./kalshi-fees');
+function assessKalshi15({quote={},spot={},shadow={},fees={},now=Date.now()}={}){
  if(!Number.isFinite(now))throw Error('Invalid clock');
  const blockers=[];
  const id=typeof quote.marketId==='string'&&OK_MARKET.test(quote.marketId)?quote.marketId:null;
@@ -49,6 +50,13 @@ function assessKalshi15({quote={},spot={},shadow={},now=Date.now()}={}){
  const candidateSide=sampleBacked&&['YES','NO'].includes(candidate.predictedContractSide)?
   candidate.predictedContractSide:null;
  const askTotal=asksKnown?quote.yesAsk+quote.noAsk:null;
+ const seriesFeeMetadataVerified=fees.state==='SERIES_METADATA_LIVE'&&
+  ['quadratic','quadratic_with_maker_fees'].includes(fees.feeType)&&
+  Number.isFinite(fees.feeMultiplier)&&fees.feeMultiplier>=0&&fees.feeMultiplier<=5;
+ const yesPreview=seriesFeeMetadataVerified&&PRICE(quote.yesAsk)?
+  takerPreview(quote.yesAsk,fees.feeMultiplier):null;
+ const noPreview=seriesFeeMetadataVerified&&PRICE(quote.noAsk)?
+  takerPreview(quote.noAsk,fees.feeMultiplier):null;
  const releaseChecklist=[
   {id:'PUBLIC_KALSHI_QUOTE',passed:quote.venue==='Kalshi'&&Boolean(id)&&isFresh&&asksKnown,
    note:'Current KXBTC15M market with a fresh complete YES/NO public ask reference'},
@@ -67,7 +75,9 @@ function assessKalshi15({quote={},spot={},shadow={},now=Date.now()}={}){
   {id:'INDEPENDENT_MODEL_VALIDATION',passed:false,
    note:'0/100 independently attested prospective settled forecasts, model not calibrated'},
   {id:'SERIES_FEE_VERIFICATION',passed:false,
-   note:'Specific series fee, rounding, and actual execution costs have not been verified'}
+   note:seriesFeeMetadataVerified?
+    'Series fee multiplier obtained; event-level overrides, member rounding and executable costs unverified':
+    'Public series fee metadata unavailable; event-level overrides and executable costs unverified'}
  ];
  return {
   version:'CASH_KALSHI15_TERMINAL_V1',
@@ -83,12 +93,21 @@ function assessKalshi15({quote={},spot={},shadow={},now=Date.now()}={}){
    paperDataChecksRequired:5,realTradingGatePassed:false,
    brtiRestEntitlement:'NOT_CONNECTED',officialBrtiFeedAvailable:false,
    independentlyTimeAttested:false,permanentJournalVerified:false,
-   seriesSpecificFeesVerified:false,independentModelValidated:false},
+   seriesSpecificFeesVerified:false,independentModelValidated:false,
+   seriesFeeMetadataVerified},
+  feeReference:{status:fees.state||'UNAVAILABLE',
+   feeType:seriesFeeMetadataVerified?fees.feeType:null,
+   feeMultiplier:seriesFeeMetadataVerified?fees.feeMultiplier:null,
+   eventOverridesVerified:false,memberRoundingVerified:false,
+   hypotheticalOneContractTaker:{YES:yesPreview,NO:noPreview},
+   source:'KALSHI_PUBLIC_SERIES_API',notExecutable:true},
   breakEven:{yesBeforeFees:PRICE(quote.yesAsk)?quote.yesAsk:null,
    noBeforeFees:PRICE(quote.noAsk)?quote.noAsk:null,
    yesAfterFeesAndSlippage:null,noAfterFeesAndSlippage:null,
+   yesIllustrativeSeriesFeeOnly:yesPreview?.estimatedAfterFeeBreakEven??null,
+   noIllustrativeSeriesFeeOnly:noPreview?.estimatedAfterFeeBreakEven??null,
    independentWinProbability:null,expectedValue:null,
-   note:'Observed ask alone is the gross break-even win probability for a $1 binary payout. Fees, rounding, slippage, market-specific terms and model probability are unavailable; do not infer profitability.',
+   note:'Observed ask is gross break-even for a $1 binary payout. When series metadata is available, a one-contract taker-fee illustration is shown, but event overrides, member rounding, slippage and independent model probability remain unverified.',
    feeScheduleUrl:'https://kalshi.com/fee-schedule'},
   target:{value:targetKnown?quote.targetPrice:null,
    source:targetKnown?'KALSHI_FLOOR_STRIKE':'UNKNOWN',
