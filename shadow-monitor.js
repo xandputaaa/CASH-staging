@@ -8,6 +8,7 @@
  */
 const {createHash}=require('node:crypto');
 const {verifyChain}=require('./audit-journal');
+const {proposeSpotMomentum,toContractSide,isValidSpotCandidate}=require('./spot-momentum');
 const MIN_LEAD_MS=60000,MAX_RECORDS=300,MAX_EVENTS=650;
 const VALID_VENUES=new Set(['Kalshi','Polymarket']);
 const isPrice=n=>Number.isFinite(n)&&n>0&&n<1;
@@ -31,7 +32,7 @@ function chooseMarketBaseline(quote){
  };
 }
 function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=MIN_LEAD_MS,
- maxRecords=MAX_RECORDS,maxEvents=MAX_EVENTS,journal=null}={}){
+ maxRecords=MAX_RECORDS,maxEvents=MAX_EVENTS,journal=null,spot=null}={}){
  if(!quotes||!results)throw Error('Shadow monitor needs read-only quote and result providers');
  const bootAt=ISO(clock()),observations=[],events=[],ids=new Set();
  let lastHash='GENESIS',inflight=null,scanCount=0,lastScanAt=null,lastError=null;
@@ -50,7 +51,8 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
       ||!x.observedAsks||!Object.values(x.observedAsks).every(isPrice)
       ||!Number.isFinite(Date.parse(x.endTime))||!Number.isFinite(Date.parse(x.serverCapturedAt))
       ||!Number.isFinite(Date.parse(x.quoteFetchedAt))
-      ||!Number.isFinite(x.leadMs)||x.leadMs<minimumLeadMs)
+      ||!Number.isFinite(x.leadMs)||x.leadMs<minimumLeadMs
+      ||(x.spotCandidate!==undefined&&x.spotCandidate!==null&&!isValidSpotCandidate(x.spotCandidate,x.venue,Date.parse(x.serverCapturedAt))))
       throw Error('Saved capture is semantically invalid');
     observations.push({...x,status:'PENDING',winner:null,outcomeSource:null,
       outcomeCheckedAt:null,outcomeSettledAt:null,captureSequence:e.sequence});
@@ -87,12 +89,16 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
      ||!Number.isFinite(quoteAt)||!Number.isFinite(end)
      ||quoteAt>now+2000||now-quoteAt>12000||end-now<minimumLeadMs
      ||(quote.venue==='Polymarket'&&!/^btc-updown-5m-\d{9,12}$/.test(quote.slug||'')))return null;
+  let spotCandidate=null;
+  if(spot){try{const raw=proposeSpotMomentum(spot.view(),now);
+   if(raw)spotCandidate={...raw,predictedContractSide:toContractSide(quote.venue,raw.predictedDirection)};
+  }catch{}}
   const data={
    id,venue:quote.venue,marketId,slug:quote.venue==='Polymarket'?quote.slug:null,
    endTime:quote.endTime,quoteFetchedAt:quote.fetchedAt,serverCapturedAt:ISO(now),
    leadMs:end-now,baselineName:'PUBLIC_MARKET_FAVORED_ASK_V1',
    baselineSide:baseline.side,normalizedMarketShare:baseline.normalizedMarketShare,
-   observedAsks:baseline.observedAsks,quoteSource:baseline.source
+   observedAsks:baseline.observedAsks,quoteSource:baseline.source,spotCandidate
   };
   const event=append('CAPTURE',data);
   if(!event)return null;
@@ -149,6 +155,9 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
     incorrect=observations.filter(x=>x.status==='INCORRECT').length,
     voided=observations.filter(x=>x.status==='VOID').length,
     pending=observations.filter(x=>x.status==='PENDING').length,settled=correct+incorrect;
+  const candidateObservations=observations.filter(x=>x.spotCandidate);
+  const candidateSettled=candidateObservations.filter(x=>['CORRECT','INCORRECT'].includes(x.status));
+  const candidateCorrect=candidateSettled.filter(x=>x.spotCandidate.predictedContractSide===x.winner).length;
   return {
    mode:'PUBLIC_MARKET_FAVORED_ASK_V1',
    storageMode:journal?.mode||'VOLATILE_SERVER_SESSION',
@@ -158,6 +167,12 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
    warning:journal?.configured?'Read-only public market-favored quote baseline. Events are written to a local filesystem journal, but the volume and capture time have NOT been independently validated. These are NOT verified CASH AI predictions and do not count toward the 100-contract gate.':'Read-only public market-favored quote baseline. Session data disappears on restart and is not independently time-attested. These are NOT verified CASH AI predictions and do not count toward the 100 prospective-contract gate.',
    bootAt,lastScanAt,scanCount,cap:{records:maxRecords,events:maxEvents},
    observed:observations.length,pending,settled,voided,correct,incorrect,
+   spotCandidateName:'SPOT_MOMENTUM_90S_V1',
+   spotCandidateObservations:candidateObservations.length,
+   spotCandidateSettled:candidateSettled.length,
+   spotCandidateCorrect:candidateCorrect,
+   spotCandidateAccuracy:candidateSettled.length?candidateCorrect/candidateSettled.length:null,
+   spotCandidateQualified:false,
    baselineDirectionalAccuracy:settled?correct/settled:null,
    recordedEvents:events.length,headHash:lastHash,lastError,
    recent:observations.slice(-15).reverse().map(x=>({...x}))
