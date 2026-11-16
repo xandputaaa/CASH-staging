@@ -4,6 +4,7 @@ const {createMarketFeed}=require('./market-feed');
 const {createVenueFeeds}=require('./venue-feeds');
 const {createResolver}=require('./resolution-feed');
 const {createShadowMonitor}=require('./shadow-monitor');
+const {createAuditJournal}=require('./audit-journal');
 const page=fs.readFileSync('index.html');
 const livePaperScript=fs.readFileSync('live-paper.js');
 const shadowScript=fs.readFileSync('shadow-ui.js');
@@ -11,7 +12,8 @@ const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
 const resolver=createResolver();
-const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver});
+const auditJournal=createAuditJournal();
+const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver,journal:auditJournal});
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
@@ -48,7 +50,7 @@ const server=http.createServer(async(req,res)=>{
     return;
   }
   if(req.method==='GET'&&req.url==='/health'){
-    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,mode:'paper-only',spotFeed:feed.view().status,venueFeeds:{Kalshi:venueFeeds.view('Kalshi').status,Polymarket:venueFeeds.view('Polymarket').status}}));return;
+    res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({ok:true,mode:'paper-only',spotFeed:feed.view().status,venueFeeds:{Kalshi:venueFeeds.view('Kalshi').status,Polymarket:venueFeeds.view('Polymarket').status},shadowStorage:shadow.snapshot().storageMode,qualifyingForecasts:0}));return;
   }
   if(req.method==='GET'&&req.url?.startsWith('/api/markets?')){
     const venue=new URL(req.url,'http://localhost').searchParams.get('venue');
@@ -91,6 +93,6 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   const venueTimer=setInterval(checkVenues,15000);venueTimer.unref();
   shadow.scan().catch(()=>{});
   const shadowTimer=setInterval(()=>shadow.scan().catch(()=>{}),20000);shadowTimer.unref();
-  console.log('CASH shadow baseline monitor: volatile session only, 0 qualifying forecasts');
+  console.log('CASH shadow baseline monitor: '+shadow.snapshot().storageMode+', '+shadow.snapshot().recoveredEvents+' recovered events, 0 qualifying forecasts');
 });
 module.exports={server};
