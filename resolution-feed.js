@@ -27,7 +27,7 @@ function polymarketOutcome(data,slug,marketId){
  if(!m||m.closed!==true)return {status:'pending',reason:'Official market not closed'};
  const resolution=String(m.resolutionStatus||m.umaResolutionStatus||'').toLowerCase();
  // Closure or a 1/0 price alone is not proof: an explicit resolved status is required.
- if(resolution!=='resolved')return {status:'pending',reason:'Official resolution not final'};
+ if(!['resolved','settled'].includes(resolution))return {status:'pending',reason:'Official resolution not final'};
  try{
   const names=decode(m.outcomes),vals=decode(m.outcomePrices);
   if(!Array.isArray(names)||!Array.isArray(vals)||names.length!==2||vals.length!==2)return {status:'pending',reason:'No binary final payout'};
