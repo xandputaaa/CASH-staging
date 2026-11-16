@@ -57,7 +57,7 @@ function marketEvidenceSnapshot(venue,body,marketId,slug){
 }
 function marketEvidence(venue,body,marketId,slug){return createHash('sha256').update(JSON.stringify(marketEvidenceSnapshot(venue,body,marketId,slug))).digest('hex')}
 function createResolver({fetchImpl=fetch,clock=()=>Date.now(),confirmationMs=CONFIRMATION_MS,cacheMs=CACHE_MS}={}){
- const cache=new Map(),tentative=new Map();
+ const cache=new Map(),tentative=new Map(),confirmed=new Map();
  async function lookup({venue,marketId,slug}){
   if(venue==='Kalshi'&&!KALSHI_ID.test(marketId)||venue==='Polymarket'&&(!POLY_ID.test(marketId)||!POLY_SLUG.test(slug))||!['Kalshi','Polymarket'].includes(venue))
    throw Error('Unsupported market identifier');
@@ -71,21 +71,26 @@ function createResolver({fetchImpl=fetch,clock=()=>Date.now(),confirmationMs=CON
   }catch{outcome={status:'pending',reason:'Official result service unavailable'}}
   const checkedAt=new Date(clock()).toISOString();
   if(outcome.status==='verified'&&body){
-   const latest=tentative.get(key);
+   const latest=tentative.get(key),stable=confirmed.get(key);
    const digest=marketEvidence(venue,body,marketId,slug);
-   if(latest&&latest.winner===outcome.winner&&latest.source===outcome.source
-      &&clock()-latest.firstObservedMs>=confirmationMs){
-    outcome={...outcome,confirmationCount:2,firstObservedAt:new Date(latest.firstObservedMs).toISOString(),
+   const stableMatch=stable&&stable.winner===outcome.winner&&stable.source===outcome.source;
+   const secondMatch=latest&&latest.winner===outcome.winner&&latest.source===outcome.source
+      &&clock()-latest.firstObservedMs>=confirmationMs;
+   if(stableMatch||secondMatch){
+    const firstObservedMs=stableMatch?stable.firstObservedMs:latest.firstObservedMs;
+    outcome={...outcome,confirmationCount:2,firstObservedAt:new Date(firstObservedMs).toISOString(),
       evidenceSourceUrl:sourceUrl,evidenceSha256:digest,
       evidenceSnapshot:marketEvidenceSnapshot(venue,body,marketId,slug),
       evidenceCaveat:'Checksum of selected public API fields, not an immutable or independently authenticated settlement proof'};
+    confirmed.set(key,{winner:outcome.winner,source:outcome.source,firstObservedMs});
     tentative.delete(key);
    }else{
+    confirmed.delete(key);
     if(!latest||latest.winner!==outcome.winner||latest.source!==outcome.source)
      tentative.set(key,{winner:outcome.winner,source:outcome.source,firstObservedMs:clock()});
     outcome={status:'pending',reason:'Waiting for second matching finalized public result',tentativeWinner:outcome.winner};
    }
-  }else tentative.delete(key);
+  }else{tentative.delete(key);confirmed.delete(key)}
   const result={venue,marketId,slug:venue==='Polymarket'?slug:null,...outcome,checkedAt};
   cache.set(key,{checkedMs:clock(),result});
   return result;
