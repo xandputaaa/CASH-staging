@@ -60,6 +60,26 @@ function createVenueFeeds({fetchImpl=fetch,clock=()=>Date.now()}={}){
         if(venue==='Kalshi'){
           const data=await read(BASE_KALSHI+'/markets?series_ticker=KXBTC15M&status=open&limit=30',fetchImpl);
           quote=selectKalshi(data,clock());
+          // Some market-list payloads omit full contract rules/target. Check
+          // only the exact current ticker; never invent the BRTI target.
+          if(quote.targetPrice===null||
+            quote.contractRuleStatus==='RULE_TEXT_NOT_CONFIRMED'){
+            try{
+              const detail=await read(BASE_KALSHI+'/markets/'+encodeURIComponent(quote.marketId),fetchImpl,2500);
+              const row=detail?.market;
+              if(row?.ticker===quote.marketId&&
+                (!row.close_time||row.close_time===quote.endTime)){
+                const listing=data.markets.find(m=>m.ticker===quote.marketId);
+                if(listing){
+                  const merged={...row,...listing,
+                    floor_strike:listing.floor_strike??row.floor_strike,
+                    rules_primary:listing.rules_primary||row.rules_primary};
+                  const updated=selectKalshi({markets:[merged]},clock());
+                  if(updated.marketId===quote.marketId)quote=updated;
+                }
+              }
+            }catch{/* Do not fabricate omitted official contract details */}
+          }
         }else{
           const slot=Math.floor(clock()/300000)*300;
           const data=await read(BASE_GAMMA+'/events?slug=btc-updown-5m-'+slot,fetchImpl);

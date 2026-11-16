@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {createVenueFeeds,selectKalshi,selectPolyEvent,price}=require('../venue-feeds');
 const now=Date.now(),open=new Date(now-60000).toISOString(),close=new Date(now+120000).toISOString();
-const kalshiMarket={ticker:'KXBTC15M-26NOV161145-15',title:'Bitcoin Up in next 15m?',status:'open',open_time:open,close_time:close,yes_bid_dollars:'0.4400',yes_ask_dollars:'0.4700',no_ask_dollars:'0.5400'};
+const kalshiMarket={ticker:'KXBTC15M-26NOV161145-15',title:'Bitcoin Up in next 15m?',status:'open',open_time:open,close_time:close,yes_bid_dollars:'0.4400',yes_ask_dollars:'0.4700',no_ask_dollars:'0.5400',floor_strike:85566.37,rules_primary:'The simple average of the sixty seconds of BRTI before closing is at least the sixty seconds before opening.'};
 function currentSlot(t=Date.now()){return Math.floor(t/300000)*300}
 function polyFixture(slot=currentSlot()){
   const slug='btc-updown-5m-'+slot;
@@ -101,4 +101,43 @@ test('Kalshi returns official floor_strike and only identifies BRTI rule when ex
  const missing=selectKalshi({markets:[{...m,floor_strike:null,rules_primary:'BTC up'}]},now);
  assert.equal(missing.targetPrice,null);
  assert.equal(missing.contractRuleStatus,'RULE_TEXT_NOT_CONFIRMED');
+});
+
+test('Kalshi exact-market details recover omitted target and BRTI rule from public official endpoint',async()=>{
+ const market={...kalshiMarket,floor_strike:null,rules_primary:null};
+ let urls=[];
+ const feed=createVenueFeeds({clock:()=>now,fetchImpl:async url=>{
+  urls.push(url);
+  if(url.includes('/markets?'))return {ok:true,json:async()=>({markets:[market]})};
+  return {ok:true,json:async()=>({market:{...kalshiMarket,floor_strike:85888.16}})};
+ }});
+ const r=await feed.query('Kalshi');
+ assert.equal(r.targetPrice,85888.16);
+ assert.equal(r.targetSource,'KALSHI_FLOOR_STRIKE');
+ assert.equal(r.contractRuleStatus,'BRTI_60S_RULE_TEXT_PRESENT');
+ assert.equal(urls.length,2);
+ assert.match(urls[1],/\/markets\/KXBTC15M-/);
+});
+test('detail lookup cannot overwrite current ticker with a different contract',async()=>{
+ const market={...kalshiMarket,floor_strike:null,rules_primary:null};
+ const feed=createVenueFeeds({clock:()=>now,fetchImpl:async url=>{
+  if(url.includes('/markets?'))return {ok:true,json:async()=>({markets:[market]})};
+  return {ok:true,json:async()=>({market:{...kalshiMarket,ticker:'KXBTC15M-OTHER123',
+   floor_strike:70000}})};
+ }});
+ const r=await feed.query('Kalshi');
+ assert.equal(r.marketId,kalshiMarket.ticker);
+ assert.equal(r.targetPrice,null);
+ assert.equal(r.contractRuleStatus,'RULE_TEXT_NOT_CONFIRMED');
+});
+test('Kalshi metadata fallback outage does not convert a valid quote into fabricated target',async()=>{
+ const market={...kalshiMarket,floor_strike:null,rules_primary:null};
+ const feed=createVenueFeeds({clock:()=>now,fetchImpl:async url=>{
+  if(url.includes('/markets?'))return {ok:true,json:async()=>({markets:[market]})};
+  throw Error('Kalshi details unreachable');
+ }});
+ const r=await feed.query('Kalshi');
+ assert.equal(r.status,'live');
+ assert.equal(r.targetPrice,null);
+ assert.equal(r.contractRuleStatus,'RULE_TEXT_NOT_CONFIRMED');
 });
