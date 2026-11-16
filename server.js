@@ -13,7 +13,7 @@ const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
 const resolver=createResolver();
 const auditJournal=createAuditJournal();
-const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver,journal:auditJournal});
+const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver,journal:auditJournal,spot:feed});
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
