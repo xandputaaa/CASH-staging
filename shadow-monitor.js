@@ -103,7 +103,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
     if(!record||record.status!=='PENDING'||x.venue!==record.venue||x.marketId!==record.marketId
       ||!allowed.includes(x.winner)||typeof x.source!=='string'
       ||!Number.isFinite(Date.parse(x.checkedAt))
-      ||!hasVerifiedEvidence(x,record)
+      ||!hasVerifiedEvidence(x,record))
       throw Error('Saved resolution is semantically invalid');
     record.status=x.winner==='VOID'?'VOID':x.winner===record.baselineSide?'CORRECT':'INCORRECT';
     record.winner=x.winner;record.outcomeSource=x.source;
