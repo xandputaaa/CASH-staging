@@ -159,3 +159,50 @@ test('unproven or contradictory adapter results never score a shadow observation
  assert.equal(monitor.snapshot().settled,1);
  assert.equal(monitor.snapshot().recent[0].outcomeEvidence.confirmationCount,2);
 });
+
+test('runtime rejects malformed contract identities before shadow capture',()=>{
+ const t=Date.now();
+ const monitor=createShadowMonitor({clock:()=>t,
+  quotes:{query:async()=>null},results:{lookup:async()=>({status:'pending'})}});
+ assert.equal(monitor.capture({...fixture(t),marketId:'other-btc-market'}),null);
+ assert.equal(monitor.capture({...fixture(t,'Polymarket'),marketId:'0xabc'}),null);
+ assert.equal(monitor.snapshot().recordedEvents,0);
+});
+test('replay rejects rehashed internally contradictory capture evidence',async()=>{
+ const t=Date.now(),monitor=createShadowMonitor({clock:()=>t,
+  quotes:{query:async venue=>fixture(t,venue)},results:{lookup:async()=>({status:'pending'})}});
+ await monitor.scan();
+ const initial=monitor.exportSession().events;
+ function replayWith(mutator){
+  const events=initial.map(e=>({...e,payload:{...e.payload}}));
+  mutator(events[0].payload);
+  let previous='GENESIS';
+  for(const event of events){
+   event.previousHash=previous;
+   const {hash,...body}=event;
+   event.hash=crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
+   previous=event.hash;
+  }
+  return ()=>createShadowMonitor({clock:()=>t,quotes:{query:async()=>null},
+   results:{lookup:async()=>({status:'pending'})},journal:{events,append(){}}});
+ }
+ assert.throws(replayWith(x=>{x.leadMs+=10000}),/Saved capture is semantically invalid/);
+ assert.throws(replayWith(x=>{x.baselineSide='NO'}),/Saved capture is semantically invalid/);
+ assert.throws(replayWith(x=>{x.normalizedMarketShare=0.97}),/Saved capture is semantically invalid/);
+ assert.throws(replayWith(x=>{x.quoteFetchedAt=new Date(t-60000).toISOString()}),/Saved capture is semantically invalid/);
+});
+test('early-dated official confirmation cannot settle a shadow observation',async()=>{
+ const t=Date.now();let now=t;
+ const monitor=createShadowMonitor({clock:()=>now,
+  quotes:{query:async venue=>venue==='Kalshi'?fixture(t):null},
+  results:{lookup:async info=>{
+   const claimed=confirmed(info,t+200000,'YES');
+   claimed.checkedAt=new Date(t+100000).toISOString();
+   claimed.firstObservedAt=new Date(t+79000).toISOString();
+   return claimed;
+  }}});
+ await monitor.scan();now=t+210000;await monitor.resolvePending();
+ assert.equal(monitor.snapshot().pending,1);
+ assert.equal(monitor.snapshot().settled,0);
+ assert.match(monitor.snapshot().recent[0].pendingReason,/Unrecognized or contradictory/);
+});

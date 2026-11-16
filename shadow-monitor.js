@@ -32,6 +32,37 @@ function chooseMarketBaseline(quote){
  };
 }
 
+
+/* Check all capture fields against each other, including when recovering an
+ * otherwise correctly SHA256-linked journal. This is semantic consistency,
+ * NOT proof that an externally recorded timestamp or quote is authentic. */
+function isValidCaptureEvidence(x,minimumLeadMs=MIN_LEAD_MS){
+ if(!x||!VALID_VENUES.has(x.venue)||typeof x.marketId!=='string'
+   ||x.id!==x.venue+':'+x.marketId
+   ||x.baselineName!=='PUBLIC_MARKET_FAVORED_ASK_V1')return false;
+ if(x.venue==='Kalshi'){
+  if(!/^KXBTC15M-[A-Za-z0-9-]{6,70}$/.test(x.marketId)||x.slug!==null)return false;
+ }else if(!/^0x[0-9a-fA-F]{64}$/.test(x.marketId)
+   ||!/^btc-updown-5m-\d{9,12}$/.test(x.slug||''))return false;
+ const captured=Date.parse(x.serverCapturedAt),fetched=Date.parse(x.quoteFetchedAt),
+  expires=Date.parse(x.endTime);
+ if(!Number.isFinite(captured)||!Number.isFinite(fetched)||!Number.isFinite(expires)
+   ||fetched>captured+2000||captured-fetched>12000
+   ||!Number.isFinite(x.leadMs)||expires-captured!==x.leadMs
+   ||x.leadMs<minimumLeadMs)return false;
+ const asks=x.observedAsks;
+ if(!asks||typeof asks!=='object'||Array.isArray(asks)
+   ||Object.keys(asks).length!==2)return false;
+ const recovered=chooseMarketBaseline({venue:x.venue,status:'live',
+  yesAsk:asks.YES,noAsk:asks.NO,upAsk:asks.UP,downAsk:asks.DOWN});
+ if(!recovered||x.baselineSide!==recovered.side
+   ||x.quoteSource!==recovered.source
+   ||!Number.isFinite(x.normalizedMarketShare)
+   ||Math.abs(x.normalizedMarketShare-recovered.normalizedMarketShare)>1e-12)return false;
+ return x.spotCandidate===undefined||x.spotCandidate===null
+  ||isValidSpotCandidate(x.spotCandidate,x.venue,captured);
+}
+
 /* Independently verify the public result evidence before scoring or replaying.
  * An adapter's status:'verified' claim alone is not proof of finality. */
 function hasVerifiedEvidence(result,record){
@@ -42,7 +73,9 @@ function hasVerifiedEvidence(result,record){
    ||typeof result.evidenceSourceUrl!=='string'
    ||!Number.isFinite(Date.parse(result.checkedAt))
    ||!Number.isFinite(Date.parse(result.firstObservedAt))
-   ||Date.parse(result.firstObservedAt)>Date.parse(result.checkedAt))return false;
+   ||Date.parse(result.firstObservedAt)>Date.parse(result.checkedAt)
+   ||Date.parse(result.firstObservedAt)<Date.parse(record.serverCapturedAt)
+   ||Date.parse(result.checkedAt)<Date.parse(record.endTime))return false;
  const evidence=result.evidenceSnapshot;
  try{
   if(createHash('sha256').update(JSON.stringify(evidence)).digest('hex')!==result.evidenceSha256)return false;
@@ -83,17 +116,8 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
   for(const e of saved){
    const x=e.payload;
    if(e.type==='CAPTURE'){
-    const acceptedSide=x.venue==='Kalshi'?['YES','NO']:x.venue==='Polymarket'?['UP','DOWN']:[];
-    if(typeof x.marketId!=='string'||x.id!==x.venue+':'+x.marketId
-      ||ids.has(x.id)||observations.length>=maxRecords
-      ||x.baselineName!=='PUBLIC_MARKET_FAVORED_ASK_V1'
-      ||!acceptedSide.includes(x.baselineSide)
-      ||!Number.isFinite(x.normalizedMarketShare)||x.normalizedMarketShare<=0||x.normalizedMarketShare>=1
-      ||!x.observedAsks||!Object.values(x.observedAsks).every(isPrice)
-      ||!Number.isFinite(Date.parse(x.endTime))||!Number.isFinite(Date.parse(x.serverCapturedAt))
-      ||!Number.isFinite(Date.parse(x.quoteFetchedAt))
-      ||!Number.isFinite(x.leadMs)||x.leadMs<minimumLeadMs
-      ||(x.spotCandidate!==undefined&&x.spotCandidate!==null&&!isValidSpotCandidate(x.spotCandidate,x.venue,Date.parse(x.serverCapturedAt))))
+    if(ids.has(x.id)||observations.length>=maxRecords
+      ||!isValidCaptureEvidence(x,minimumLeadMs))
       throw Error('Saved capture is semantically invalid');
     observations.push({...x,status:'PENDING',winner:null,outcomeSource:null,
       outcomeCheckedAt:null,outcomeSettledAt:null,outcomeEvidence:null,lastCheckAt:null,settlementAttempts:0,pendingReason:null,captureSequence:e.sequence});
@@ -128,10 +152,12 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
   if(!baseline||observations.length>=maxRecords||events.length>=maxEvents-1)return null;
   const marketId=quote.marketId,quoteAt=Date.parse(quote.fetchedAt),end=Date.parse(quote.endTime);
   const id=quote.venue+':'+marketId;
-  if(typeof marketId!=='string'||marketId.length<6||marketId.length>100||ids.has(id)
+  if(typeof marketId!=='string'||ids.has(id)
+     ||(quote.venue==='Kalshi'&&!/^KXBTC15M-[A-Za-z0-9-]{6,70}$/.test(marketId))
+     ||(quote.venue==='Polymarket'&&(!/^0x[0-9a-fA-F]{64}$/.test(marketId)
+       ||!/^btc-updown-5m-\d{9,12}$/.test(quote.slug||'')))
      ||!Number.isFinite(quoteAt)||!Number.isFinite(end)
-     ||quoteAt>now+2000||now-quoteAt>12000||end-now<minimumLeadMs
-     ||(quote.venue==='Polymarket'&&!/^btc-updown-5m-\d{9,12}$/.test(quote.slug||'')))return null;
+     ||quoteAt>now+2000||now-quoteAt>12000||end-now<minimumLeadMs)return null;
   let spotCandidate=null;
   if(spot){try{const raw=proposeSpotMomentum(spot.view(),now);
    if(raw)spotCandidate={...raw,predictedContractSide:toContractSide(quote.venue,raw.predictedDirection)};
@@ -143,6 +169,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
    baselineSide:baseline.side,normalizedMarketShare:baseline.normalizedMarketShare,
    observedAsks:baseline.observedAsks,quoteSource:baseline.source,spotCandidate
   };
+  if(!isValidCaptureEvidence(data,minimumLeadMs))return null;
   const event=append('CAPTURE',data);
   if(!event)return null;
   const record={...data,status:'PENDING',winner:null,outcomeSource:null,
