@@ -52,3 +52,25 @@ test('official result endpoint rejects untrusted identifiers without remote requ
  assert.equal(response.status,400);
  assert.match(response.body,/Invalid market identifier/);
 }));
+
+test('shadow monitor read endpoint is explicit about nonqualifying volatile session data',()=>withServer(async()=>{
+ const r=await request('/api/shadow');assert.equal(r.status,200);
+ const snapshot=JSON.parse(r.body);
+ assert.equal(snapshot.storageMode,'VOLATILE_SERVER_SESSION');
+ assert.equal(snapshot.qualifyingProspectiveContracts,0);
+ assert.equal(snapshot.independentForecastModel,false);
+ assert.match(snapshot.warning,/NOT verified CASH AI predictions/);
+}));
+test('shadow observations are downloadable but not accepted as immutable audit records',()=>withServer(async()=>{
+ const r=await request('/api/shadow/export');assert.equal(r.status,200);
+ assert.match(r.headers['content-disposition'],/attachment/);
+ const data=JSON.parse(r.body);
+ assert.equal(data.format,'CASH-shadow-volatile-v1');assert.equal(data.qualifyingForModelAccuracy,false);
+ assert.match(data.checksumChainWarning,/do not prove immutable capture times/);
+ assert.ok(Array.isArray(data.events));
+}));
+test('shadow frontend script is served same-origin with a clear nonverified badge',()=>withServer(async()=>{
+ const r=await request('/shadow-ui.js');assert.equal(r.status,200);
+ assert.match(r.headers['content-type'],/javascript/);
+ assert.match(r.body,/SESSION BASELINE · NOT VERIFIED/);
+}));
