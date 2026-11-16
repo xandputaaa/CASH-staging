@@ -18,7 +18,14 @@
    &&Number.isFinite(x.units)&&x.units>0&&typeof x.placedAt==='string'
    &&Number.isFinite(Date.parse(x.placedAt))&&Number.isFinite(Date.parse(x.endTime))
    &&['PENDING','WON','LOST','VOID'].includes(x.status)
-   &&(x.status==='PENDING'||(Number.isFinite(x.payout)&&x.payout>=0&&Number.isFinite(x.net)));
+   &&(x.status==='PENDING'||(Number.isFinite(x.payout)&&x.payout>=0&&Number.isFinite(x.net)))
+   &&(x.resultEvidence==null||(
+     x.resultEvidence.confirmationCount===2
+     &&/^[0-9a-f]{64}$/.test(x.resultEvidence.evidenceSha256||'')
+     &&/^https:\/\/(external-api\.kalshi\.com|gamma-api\.polymarket\.com)\//.test(x.resultEvidence.evidenceSourceUrl||'')
+     &&x.resultEvidence.evidenceSnapshot&&typeof x.resultEvidence.evidenceSnapshot==='object'
+     &&Number.isFinite(Date.parse(x.resultEvidence.firstObservedAt))
+   ));
  }
  function restore(){
   try{
@@ -119,17 +126,22 @@
     const qs=new URLSearchParams({venue:e.venue,marketId:e.marketId});
     if(e.venue==='Polymarket')qs.set('slug',e.slug);
     const outcome=await fetchJson('/api/result?'+qs.toString(),8500);
-    if(outcome.status!=='verified'||outcome.marketId!==e.marketId||outcome.venue!==e.venue)continue;
+    if(outcome.status!=='verified'||outcome.marketId!==e.marketId||outcome.venue!==e.venue
+      ||outcome.confirmationCount!==2||!(/^[0-9a-f]{64}$/).test(outcome.evidenceSha256||'')
+      ||!outcome.evidenceSnapshot||!outcome.evidenceSourceUrl)continue;
     if(![e.venue==='Kalshi'?'YES':'UP',e.venue==='Kalshi'?'NO':'DOWN','VOID'].includes(outcome.winner))continue;
     e.status=outcome.winner==='VOID'?'VOID':outcome.winner===e.side?'WON':'LOST';
     e.payout=e.status==='VOID'?e.stake:e.status==='WON'?e.units:0;
     e.net=e.payout-e.stake;e.settledAt=outcome.settledAt||outcome.checkedAt;
     e.resultSource=outcome.source;
+    e.resultEvidence={confirmationCount:2,firstObservedAt:outcome.firstObservedAt,
+      evidenceSha256:outcome.evidenceSha256,evidenceSourceUrl:outcome.evidenceSourceUrl,
+      evidenceSnapshot:outcome.evidenceSnapshot};
     balance+=e.payout;verified++;
    }catch{} // Never infer a win/loss from the clock, spot price, or missing data.
   }
   checking=false;save();render();
-  message(verified?verified+' paper outcome(s) matched official result responses. Earnings exclude fees and slippage.':'No final verified market results yet; pending positions were not changed.');
+  message(verified?verified+' paper outcome(s) matched two public finalized result checks. Earnings exclude fees and slippage.':'No two-check confirmed market results yet; pending positions were not changed.');
  }
  function exportJournal(){
   if(!entries.length)return;
