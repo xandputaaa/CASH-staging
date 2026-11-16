@@ -8,6 +8,8 @@ const {createAuditJournal}=require('./audit-journal');
 const page=fs.readFileSync('index.html');
 const livePaperScript=fs.readFileSync('live-paper.js');
 const shadowScript=fs.readFileSync('shadow-ui.js');
+const diagnosticsScript=fs.readFileSync('diagnostics-ui.js');
+const {createDiagnostics}=require('./diagnostics');
 const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
@@ -23,6 +25,15 @@ const server=http.createServer(async(req,res)=>{
   }
   if(req.method==='GET'&&req.url==='/shadow-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(shadowScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/diagnostics-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(diagnosticsScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/diagnostics'){
+    const diagnostics=createDiagnostics({spot:feed.view(),kalshi:venueFeeds.view('Kalshi'),
+      polymarket:venueFeeds.view('Polymarket'),shadow:shadow.snapshot()});
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(diagnostics));return;
   }
   if(req.method==='GET'&&req.url==='/api/shadow'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});

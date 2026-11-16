@@ -75,3 +75,27 @@ test('shadow frontend script is served same-origin with a clear nonverified badg
  assert.match(r.headers['content-type'],/javascript/);
  assert.match(r.body,/SESSION BASELINE · NOT VERIFIED/);
 }));
+
+test('diagnostic API is cached, read-only and never reports trading readiness',()=>withServer(async()=>{
+ const r=await request('/api/diagnostics');
+ assert.equal(r.status,200);
+ assert.match(r.headers['cache-control'],/no-store/);
+ const v=JSON.parse(r.body);
+ assert.equal(v.mode,'SIMULATION_ONLY');
+ assert.ok(['LIVE','DEGRADED','OFFLINE'].includes(v.dataStatus));
+ assert.equal(v.validation.qualifyingProspectiveContracts,0);
+ assert.equal(v.validation.realOrdersEnabled,false);
+ assert.equal(v.validation.storageMode,'VOLATILE_SERVER_SESSION');
+ assert.ok(v.feeds.Kalshi&&v.feeds.Polymarket&&v.feeds.spot);
+ assert.ok(v.monitor);
+});
+test('CASH diagnostics UI is served and mounted on mobile dashboard',()=>withServer(async()=>{
+ const script=await request('/diagnostics-ui.js');
+ assert.equal(script.status,200);
+ assert.match(script.headers['content-type'],/javascript/);
+ assert.match(script.body,/dataStatus/);
+ const page=await request('/');
+ assert.match(page.body,/CASH DIAGNOSTICS/);
+ assert.match(page.body,/diagnosticGate/);
+ assert.match(page.body,/diagnostics-ui\.js/);
+}));
