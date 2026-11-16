@@ -63,7 +63,7 @@
   try{
    const quote=await fetchJson('/api/markets?venue='+encodeURIComponent(venue));
    const qtime=Date.parse(quote.fetchedAt),end=Date.parse(quote.endTime),now=Date.now();
-   if(quote.status!=='live'||!Number.isFinite(qtime)||now-qtime>13000||qtime-now>5000||!Number.isFinite(end)||end-now<10000)throw Error('Market quote expired, incomplete, or stale. Try the next contract.');
+   if(!['live','partial'].includes(quote.status)||!Number.isFinite(qtime)||now-qtime>13000||qtime-now>5000||!Number.isFinite(end)||end-now<10000)throw Error('Market quote expired, incomplete, or stale. Try the next contract.');
    if(!validId(venue,quote.marketId,quote.slug))throw Error('Venue market identity could not be verified.');
    const price=venue==='Kalshi'?(side==='YES'?quote.yesAsk:quote.noAsk):(side==='UP'?quote.upAsk:quote.downAsk);
    if(!Number.isFinite(price)||price<=0||price>=1)throw Error('Selected outcome has no valid public ask quote.');
@@ -109,12 +109,33 @@
   a.download='CASH-live-paper-journal.json';
   document.body.appendChild(a);a.click();a.remove();
  }
+ function importJournal(event){
+  const input=event?.target,file=input?.files?.[0];
+  if(!file)return;
+  if(file.size>1048576){message('Import rejected: journal exceeds 1 MB.');input.value='';return}
+  const reader=new FileReader();
+  reader.onload=()=>{
+   try{
+    const v=JSON.parse(reader.result);
+    if(v?.format!=='CASH-live-quote-paper-v1'||v?.mode!=='paper-only-unverified-local-journal'
+     ||!Number.isFinite(v.balance)||v.balance<0||v.balance>1000000
+     ||![2,5,10].includes(v.stake)||!Array.isArray(v.entries)
+     ||v.entries.length>LIMIT||!v.entries.every(goodEntry))throw Error('Invalid CASH live paper backup');
+    if(!confirm('Replace your LIVE-QUOTE paper journal with this imported file? Export the current journal first.'))return;
+    entries=v.entries.map(x=>({...x}));
+    balance=v.balance;stake=v.stake;seq=1+entries.reduce((n,x)=>Math.max(n,x.id),0);
+    save();render();message('Local live-quote paper journal restored. These records are not server-verified and do not count toward prospective validation.');
+   }catch(e){message('Import rejected: '+e.message)}
+  };
+  reader.onerror=()=>message('Could not read the journal backup');
+  reader.readAsText(file);input.value='';
+ }
  function resetJournal(){
   if(!confirm('Permanently clear the local LIVE-QUOTE paper journal and reset its paper balance to $100? Export JSON first. This will erase any pending positions and their history.'))return;
   balance=100;stake=5;seq=1;entries=[];save();render();message('Live-quote paper journal reset. Previously exported files are unaffected.');
  }
  restore();render();
- window.CASHLivePaper={place,check,selectStake,exportJournal,resetJournal};
+ window.CASHLivePaper={place,check,selectStake,exportJournal,importJournal,resetJournal};
  if(typeof setInterval==='function')setInterval(()=>{if(entries.some(e=>e.status==='PENDING'&&Date.parse(e.endTime)<=Date.now()))check()},30000);
  if(typeof document.addEventListener==='function')document.addEventListener('visibilitychange',()=>{if(!document.hidden)check()});
 })();
