@@ -11,3 +11,7 @@ test('losing paper position forfeits stake',()=>{const a=app();a.run("buy('DOWN'
 test('duplicate buys do not double reserve',()=>{const a=app();a.run("buy('UP');buy('DOWN')");assert.equal(a.get('balance').textContent,'$95.00')});
 test('no real trading or external fetch APIs in client script',()=>{assert.doesNotMatch(script,/\b(fetch|XMLHttpRequest|WebSocket|sendBeacon)\s*\(/)});
 test('server has no order route',()=>{const server=fs.readFileSync('server.js','utf8');assert.doesNotMatch(server,/\/order|\/trade|\/execute/)});
+
+test('fictional price and fee accounting',()=>{const a=app();a.run("setStake(2);setPrice(0.4);toggleFee();buy('UP');for(let i=0;i<7;i++)advance()");assert.equal(a.get('balance').textContent,'$102.94');assert.equal(a.get('trades').textContent,'1');assert.equal(a.get('winrate').textContent,'100.0%')});
+test('cancelled positions do not inflate win rate',()=>{const a=app();a.run("setStake(2);buy('UP');reset()");assert.equal(a.get('trades').textContent,'0');assert.equal(a.get('cancelled').textContent,'1');assert.equal(a.get('balance').textContent,'$100.00')});
+test('fictional scenario band is generated for both markets',()=>{const a=app();assert.match(a.get('range').d,/^M /);a.run("selectVenue('Polymarket')");assert.match(a.get('range').d,/ Z$/)});
