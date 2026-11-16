@@ -40,3 +40,5 @@ test('official market result lookups are cached',async()=>{
   const a=await resolver.lookup({venue:'Kalshi',marketId:ticker}),b=await resolver.lookup({venue:'Kalshi',marketId:ticker});
   assert.equal(a.status,'verified');assert.equal(b.winner,'YES');assert.equal(calls,1);
 });
+
+test('Polymarket settled status is final only with closed one-hot payout',()=>{assert.equal(polymarketOutcome(poly({status:'settled'}),slug,id).winner,'UP');assert.equal(polymarketOutcome(poly({status:'settled',prices:'["0.6","0.4"]'}),slug,id).status,'pending')});
