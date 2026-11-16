@@ -100,3 +100,30 @@ test('Polymarket final outcomes require two matching reads and include raw field
  assert.equal(b.evidenceSnapshot.umaResolutionStatus,'resolved');
  assert.match(b.evidenceSha256,/^[0-9a-f]{64}$/);
 });
+
+test('subsequent unchanged finalized public results remain confirmed after initial two-check verification',async()=>{
+ let now=Date.now(),calls=0;
+ const resolver=createResolver({clock:()=>now,fetchImpl:async()=>{
+  calls++;return {ok:true,json:async()=>({market:{ticker,status:'settled',result:'yes'}})};
+ }});
+ assert.equal((await resolver.lookup({venue:'Kalshi',marketId:ticker})).status,'pending');
+ now+=21000;assert.equal((await resolver.lookup({venue:'Kalshi',marketId:ticker})).status,'verified');
+ now+=21000;const again=await resolver.lookup({venue:'Kalshi',marketId:ticker});
+ assert.equal(again.status,'verified');
+ assert.equal(again.confirmationCount,2);
+ assert.equal(calls,3);
+});
+test('previously confirmed winner is withdrawn immediately if official response changes',async()=>{
+ let now=Date.now(),winner='yes';
+ const resolver=createResolver({clock:()=>now,fetchImpl:async()=>({
+  ok:true,json:async()=>({market:{ticker,status:'settled',result:winner}})
+ })});
+ await resolver.lookup({venue:'Kalshi',marketId:ticker});
+ now+=21000;assert.equal((await resolver.lookup({venue:'Kalshi',marketId:ticker})).status,'verified');
+ now+=21000;winner='no';
+ const changed=await resolver.lookup({venue:'Kalshi',marketId:ticker});
+ assert.equal(changed.status,'pending');assert.equal(changed.tentativeWinner,'NO');
+ now+=21000;
+ const recertified=await resolver.lookup({venue:'Kalshi',marketId:ticker});
+ assert.equal(recertified.status,'verified');assert.equal(recertified.winner,'NO');
+});
