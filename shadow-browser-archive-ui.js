@@ -10,6 +10,22 @@
   const info=client.summary();
   stats.textContent=info.sessions+' saved sessions · '+info.events+' copied events'+
    (info.evictedSessions?' · '+info.evictedSessions+' older sessions evicted':'');
+  const reviewed=client.review();
+  el('archiveReviewMetrics').textContent=reviewed.uniqueMarketIds+' unique markets · '+
+    reviewed.withResolutionInCopies+' with copied outcomes · '+
+    reviewed.withoutResolutionInCopies+' without copied outcomes';
+  el('archiveReviewSources').textContent='Kalshi '+reviewed.perVenue.Kalshi.captures+
+    ' captures / '+reviewed.perVenue.Kalshi.paired+' paired · Polymarket '+
+    reviewed.perVenue.Polymarket.captures+' captures / '+
+    reviewed.perVenue.Polymarket.paired+' paired';
+  el('archiveReviewWarnings').textContent=(reviewed.duplicateMarketCaptures?
+    reviewed.duplicateMarketCaptures+' overlapping market captures · ':'')+
+    (reviewed.conflictingOutcomeMarkets?reviewed.conflictingOutcomeMarkets+
+      ' conflicting outcome markets · ':'')+
+    (reviewed.unmatchedResolutionEvents||reviewed.incompleteCaptureEvents?
+      (reviewed.unmatchedResolutionEvents+reviewed.incompleteCaptureEvents)+
+        ' incomplete/unpaired records · ':'')+
+    'Historical gaps and uncaptured contracts cannot be inferred. None of these copies qualify toward the 100-contract model gate.';
   download.disabled=info.sessions===0;clear.disabled=info.sessions===0;
  }
  try{client=window.CASHShadowArchive.createBrowserArchive({

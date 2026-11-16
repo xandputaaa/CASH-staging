@@ -134,3 +134,76 @@ test('restore JSON file picker is exposed on CASH staging page',()=>{
  const html=require('node:fs').readFileSync('index.html','utf8');
  assert.match(html,/id="archiveRestore"/);assert.match(html,/Restore JSON backup/);
 });
+
+function pairedSession({venue='Kalshi',winner='YES',marketId='KXBTC15M-ARCHIVE',withResult=true,time=Date.now()}={}){
+ const id=venue+':'+marketId;
+ const rows=[
+  {type:'CAPTURE',recordedAt:new Date(time).toISOString(),payload:{
+   id,venue,marketId,serverCapturedAt:new Date(time).toISOString(),
+   baselineSide:venue==='Kalshi'?'YES':'UP',
+   spotCandidate:{name:'SPOT_MOMENTUM_90S_V1'}}}
+ ];
+ if(withResult)rows.push({type:'RESOLUTION',recordedAt:new Date(time+181000).toISOString(),
+  payload:{id,venue,marketId,winner,confirmationCount:2}});
+ let prev='GENESIS';
+ const events=rows.map((e,i)=>{
+  const body={sequence:i+1,...e,previousHash:prev};
+  const hash=crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
+  prev=hash;return {...body,hash};
+ });
+ return {format:'CASH-shadow-volatile-v1',mode:'PUBLIC_MARKET_FAVORED_ASK_V1',
+  storageMode:'VOLATILE_SERVER_SESSION',bootAt:new Date(time).toISOString(),events,
+  recordedEvents:events.length,headHash:prev,qualifyingForModelAccuracy:false,
+  qualifyingProspectiveContracts:0,independentForecastModel:false};
+}
+test('archive review reconstructs paired outcomes and unique markets but never certifies accuracy',async()=>{
+ const local=storage(),a=factory(local);
+ const t=Date.now();
+ await a.capture(pairedSession({time:t}));
+ await a.capture(pairedSession({time:t+500000,venue:'Polymarket',
+  marketId:'0x'+'b'.repeat(64),winner:'DOWN',withResult:false}));
+ const r=a.review();
+ assert.equal(r.sessions,2);assert.equal(r.captureEvents,2);
+ assert.equal(r.resolutionEvents,1);
+ assert.equal(r.uniqueMarketIds,2);assert.equal(r.withResolutionInCopies,1);
+ assert.equal(r.withoutResolutionInCopies,1);
+ assert.equal(r.spotCandidateCaptures,2);
+ assert.equal(r.perVenue.Kalshi.paired,1);
+ assert.equal(r.perVenue.Polymarket.unpaired,1);
+ assert.equal(r.qualifyingProspectiveContracts,0);
+ assert.equal(r.independentlyVerified,false);
+ assert.match(r.gapWarning,/cannot be reconstructed/);
+});
+test('review detects overlapping captures and contradictory archived outcomes without double-counting contracts',async()=>{
+ const a=factory(storage()),t=Date.now();
+ await a.capture(pairedSession({time:t,winner:'YES'}));
+ await a.capture(pairedSession({time:t+360000,winner:'NO'}));
+ const r=a.review();
+ assert.equal(r.uniqueMarketIds,1);
+ assert.equal(r.captureEvents,2);
+ assert.equal(r.duplicateMarketCaptures,1);
+ assert.equal(r.conflictingOutcomeMarkets,1);
+ assert.equal(r.withResolutionInCopies,1);
+ assert.equal(r.qualifyingProspectiveContracts,0);
+});
+test('review identifies unmatched resolutions and incomplete captures without inventing settled markets',async()=>{
+ const a=factory(storage()),bad=makeSession(1);
+ bad.events[0].payload={id:'NOT_A_MARKET'};
+ const e=bad.events[0],{hash,...body}=e;
+ e.hash=crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
+ bad.headHash=e.hash;
+ await a.capture(bad);
+ const r=a.review();
+ assert.equal(r.incompleteCaptureEvents,1);
+ assert.equal(r.uniqueMarketIds,0);
+ assert.equal(r.withResolutionInCopies,0);
+});
+test('archive review is visible on staging page and remains explicitly unqualified',()=>{
+ const html=require('node:fs').readFileSync('index.html','utf8');
+ assert.match(html,/archiveReviewMetrics/);
+ assert.match(html,/archiveReviewSources/);
+ assert.match(html,/Historical gaps and uncaptured contracts cannot be inferred/);
+ const ui=require('node:fs').readFileSync('shadow-browser-archive-ui.js','utf8');
+ assert.match(ui,/client.review\(\)/);
+ assert.match(ui,/100-contract model gate/);
+});

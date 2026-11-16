@@ -25,9 +25,10 @@
  }
  function hex(arrayBuffer){return Array.from(new Uint8Array(arrayBuffer)).map(v=>v.toString(16).padStart(2,'0')).join('')}
  async function verifySession(v,cryptoImpl){
-  if(!v||!['CASH-shadow-volatile-v1','CASH-shadow-filesystem-unverified-v1'].includes(v.format)
+  if(!v||v.mode!=='PUBLIC_MARKET_FAVORED_ASK_V1'||
+    !['CASH-shadow-volatile-v1','CASH-shadow-filesystem-unverified-v1'].includes(v.format)
     ||v.qualifyingForModelAccuracy!==false||v.qualifyingProspectiveContracts!==0
-    ||v.independentForecastModel!==false
+    ||v.independentForecastModel!==false||v.spotCandidateQualified===true
     ||!Number.isFinite(Date.parse(v.bootAt))||!Array.isArray(v.events)
     ||v.events.length>MAX_EVENTS||v.recordedEvents!==v.events.length
     ||!cryptoImpl||!cryptoImpl.subtle||typeof cryptoImpl.subtle.digest!=='function')
@@ -51,9 +52,87 @@
   if(previous!==v.headHash)throw Error('Shadow export head hash mismatch');
   return true;
  }
+
+ /* Read-only reconciliation of archived event pairs; not an authenticated audit.
+  * A missing RESOLUTION means absent from the saved copy, not a lost market
+  * or a still-open official market. An overlap is not a second prediction. */
+ function reviewEvents(sessions){
+  const contractIndex=new Map();
+  const perVenue={Kalshi:{captures:0,paired:0,unpaired:0},
+   Polymarket:{captures:0,paired:0,unpaired:0}};
+  let captures=0,resolutions=0,unmatchedResolutions=0,incompleteCaptures=0;
+  let duplicatedMarkets=0,conflictingResults=0,withCandidate=0;
+  let firstCapture=null,lastCapture=null;
+  for(const row of sessions){
+   const local=new Map();
+   for(const event of row.session.events){
+    const x=event.payload||{};
+    if(event.type==='CAPTURE'){
+     captures++;
+     const venue=typeof x.venue==='string'&&perVenue[x.venue]?x.venue:null;
+     const id=typeof x.id==='string'?x.id:null;
+     const marketId=typeof x.marketId==='string'?x.marketId:null;
+     if(!venue||!id||!marketId||id!==venue+':'+marketId||local.has(id)){
+      incompleteCaptures++;continue;
+     }
+     const t=Date.parse(x.serverCapturedAt);
+     if(Number.isFinite(t)){
+      if(firstCapture===null||t<firstCapture)firstCapture=t;
+      if(lastCapture===null||t>lastCapture)lastCapture=t;
+     }
+     perVenue[venue].captures++;
+     if(x.spotCandidate)withCandidate++;
+     const key=venue+':'+marketId;
+     const global=contractIndex.get(key);
+     if(global){duplicatedMarkets++}else{
+      contractIndex.set(key,{venue,marketId,outcomes:new Set(),paired:false});
+     }
+     local.set(id,{key,venue,paired:false});
+    }else if(event.type==='RESOLUTION'){
+     resolutions++;
+     const entry=local.get(x.id);
+     if(!entry||entry.paired||x.venue!==entry.venue||
+        x.marketId!==contractIndex.get(entry.key)?.marketId||
+        !(['Kalshi'].includes(entry.venue)?['YES','NO','VOID']:['UP','DOWN','VOID']).includes(x.winner)){
+      unmatchedResolutions++;continue;
+     }
+     entry.paired=true;
+     perVenue[entry.venue].paired++;
+     const global=contractIndex.get(entry.key);
+     global.paired=true;global.outcomes.add(x.winner);
+    }
+   }
+  }
+  const unique=[...contractIndex.values()];
+  const paired=unique.filter(x=>x.paired).length;
+  const unresolvedInCopies=unique.length-paired;
+  conflictingResults=unique.filter(x=>x.outcomes.size>1).length;
+  for(const venue of Object.keys(perVenue)){
+   const v=perVenue[venue];v.unpaired=v.captures-v.paired;
+  }
+  return {mode:'ARCHIVE_SNAPSHOT_REVIEW_ONLY',sessions:sessions.length,
+   copiedEvents:sessions.reduce((n,s)=>n+s.session.events.length,0),
+   captureEvents:captures,resolutionEvents:resolutions,
+   uniqueMarketIds:unique.length,withResolutionInCopies:paired,
+   withoutResolutionInCopies:unresolvedInCopies,
+   duplicateMarketCaptures:duplicatedMarkets,
+   conflictingOutcomeMarkets:conflictingResults,
+   unmatchedResolutionEvents:unmatchedResolutions,
+   incompleteCaptureEvents:incompleteCaptures,
+   spotCandidateCaptures:withCandidate,
+   earliestCapturedAt:firstCapture===null?null:new Date(firstCapture).toISOString(),
+   latestCapturedAt:lastCapture===null?null:new Date(lastCapture).toISOString(),
+   perVenue,qualifyingProspectiveContracts:0,independentlyVerified:false,
+   gapWarning:'Unobserved intervals, expired browser storage, unavailable exports and contracts never captured cannot be reconstructed or counted.'};
+ }
+
  function createBrowserArchive({storage,cryptoImpl,clock=()=>Date.now()}={}){
   if(!storage||typeof storage.getItem!=='function'||typeof storage.setItem!=='function')
    throw Error('Browser storage is not accessible');
+  function review(){
+   const current=load(storage);
+   return reviewEvents(current.sessions);
+  }
   function summary(){
    const v=load(storage);
    return {sessions:v.sessions.length,events:v.sessions.reduce((n,s)=>n+s.session.events.length,0),
@@ -65,6 +144,7 @@
    const v=load(storage),idx=v.sessions.findIndex(s=>s.bootAt===session.bootAt);
    if(idx!==-1){
     const earlier=v.sessions[idx].session;
+    await verifySession(earlier,cryptoImpl);
     if(session.events.length<earlier.events.length)
      return {...summary(),saved:false,reason:'Older snapshot ignored'};
     for(let i=0;i<earlier.events.length;i++){
@@ -154,9 +234,9 @@
     warning:'Local browser copy only. Not an immutable audit, independent timestamp, or validated CASH model forecast.'},null,2);
   }
   function clear(){storage.removeItem(KEY);return summary()}
-  return {summary,capture,importJson,exportJson,clear};
+  return {summary,review,capture,importJson,exportJson,clear};
  }
- const api={KEY,createBrowserArchive,verifySession};
+ const api={KEY,createBrowserArchive,verifySession,reviewEvents};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;
  if(root)root.CASHShadowArchive=api;
 })(typeof window!=='undefined'?window:null);
