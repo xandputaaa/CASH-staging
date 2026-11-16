@@ -49,3 +49,25 @@ test('shadow UI explicitly states volatility when Railway volume is not mounted'
  await new Promise(resolve=>setImmediate(resolve));
  assert.match(a.get('shadowStorageNote').textContent,/No persistent Railway volume attached/);
 });
+
+test('spot momentum candidate metrics are kept apart from market-favored baseline and do not qualify',async()=>{
+ const a=app({...valid,spotCandidateObservations:4,spotCandidateSettled:2,spotCandidateCorrect:1,spotCandidateAccuracy:.5,spotCandidateQualified:false,
+  recent:[{...valid.recent[0],winner:'NO',status:'INCORRECT',spotCandidate:{predictedContractSide:'YES'}}]});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(a.get('spotCandidateCount').textContent,'4');
+ assert.equal(a.get('spotCandidateSettled').textContent,'2');
+ assert.equal(a.get('spotCandidateCorrect').textContent,'1');
+ assert.equal(a.get('spotCandidateAccuracy').textContent,'50.0%');
+ assert.match(a.get('shadowRows').innerHTML,/YES · miss/);
+ assert.equal(a.get('shadowGate').textContent,'0 / 100 qualifying prospective model predictions');
+});
+test('shadow UI refuses a falsely qualified spot candidate payload',async()=>{
+ const a=app({...valid,spotCandidateQualified:true});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(a.get('shadowState').textContent,'MONITOR UNAVAILABLE');
+});
+test('shadow markup explicitly says experimental candidate is not calibrated or settlement reference',()=>{
+ assert.match(html,/EXPERIMENTAL SPOT MOMENTUM · 90S/);
+ assert.match(html,/does not use prediction-market prices/);
+ assert.match(html,/do not qualify toward the 100-contract gate/);
+});
