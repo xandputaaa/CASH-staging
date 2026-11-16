@@ -39,3 +39,16 @@ test('real orders and POST market actions are never exposed',()=>withServer(asyn
   assert.equal((await request('/trade','POST')).status,404);
   assert.equal((await request('/api/markets?venue=Kalshi','POST')).status,404);
 }));
+
+test('mobile live-quote paper client is served with JavaScript MIME',()=>withServer(async()=>{
+ const response=await request('/live-paper.js');
+ assert.equal(response.status,200);
+ assert.match(response.headers['content-type'],/javascript/);
+ assert.match(response.body,/CASHLivePaper/);
+ assert.match(response.body,/cash-live-paper-v1/);
+}));
+test('official result endpoint rejects untrusted identifiers without remote requests',()=>withServer(async()=>{
+ const response=await request('/api/result?venue=Kalshi&marketId=https%3A%2F%2Fevil.test');
+ assert.equal(response.status,400);
+ assert.match(response.body,/Invalid market identifier/);
+}));
