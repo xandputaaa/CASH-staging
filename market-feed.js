@@ -3,7 +3,7 @@ const SOURCES=[
   {name:'Kraken BTC/USD',url:'https://api.kraken.com/0/public/Ticker?pair=xbtusd'},
   {name:'Coinbase Exchange BTC-USD',url:'https://api.exchange.coinbase.com/products/BTC-USD/ticker'}
 ];
-const CACHE_MS=5000,STALE_MS=30000,HISTORY_LIMIT=72;
+const CACHE_MS=5000,LIVE_MS=12000,HISTORY_LIMIT=72;
 function isValidPrice(price){return Number.isFinite(price)&&price>1000&&price<10000000}
 async function getJson(url,fetchImpl=fetch,timeoutMs=3500){
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),timeoutMs);
@@ -34,7 +34,7 @@ function createMarketFeed({fetchImpl=fetch,clock=()=>Date.now()}={}){
       let quote=null;
       for(let i=0;i<SOURCES.length;i++){
         try{
-          const body=await getJson(SOURCES[i].url,fetchImpl);
+          const body=await getJson(SOURCES[i].url,fetchImpl,3500);
           quote=i===0?parseKraken(body):parseCoinbase(body);
           break;
         }catch(e){}
@@ -51,7 +51,7 @@ function createMarketFeed({fetchImpl=fetch,clock=()=>Date.now()}={}){
   }
   function view(){
     const ageMs=cached?Math.max(0,clock()-cached.fetchedMs):null;
-    const status=!cached?'unavailable':ageMs<=STALE_MS?'live':'stale';
+    const status=!cached?'unavailable':ageMs<=LIVE_MS?'live':'stale';
     return {status,price:cached?.price??null,source:cached?.source??null,fetchedAt:cached?.fetchedAt??null,ageMs,history:history.slice(),description:'Public spot BTC/USD reference only. Not a Kalshi BRTI value, venue order book, contract quote, or official settlement.'};
   }
   return {update,view};
