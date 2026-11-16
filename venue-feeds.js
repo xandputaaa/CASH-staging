@@ -10,10 +10,12 @@ async function read(url,fetchImpl,timeout=3500){
 }
 function selectKalshi(data,now){
   if(!Array.isArray(data?.markets))throw Error('Invalid market response');
-  const active=data.markets.filter(m=>typeof m?.ticker==='string'&&/^KXBTC15M-[A-Za-z0-9-]+$/.test(m.ticker)&&Number.isFinite(Date.parse(m.close_time))&&Date.parse(m.close_time)>now&&(!m.open_time||Date.parse(m.open_time)<=now));
+  const active=data.markets.filter(m=>typeof m?.ticker==='string'&&/^KXBTC15M-[A-Za-z0-9-]+$/.test(m.ticker)&&(!m.status||m.status==='open')&&Number.isFinite(Date.parse(m.close_time))&&Date.parse(m.close_time)>now&&(!m.open_time||Date.parse(m.open_time)<=now));
   active.sort((a,b)=>Date.parse(a.close_time)-Date.parse(b.close_time));
   const m=active[0];if(!m)throw Error('No current Kalshi BTC 15m market');
-  return {venue:'Kalshi',marketId:m.ticker,title:typeof m.title==='string'?m.title.slice(0,180):'BTC Up or Down 15m',endTime:m.close_time,yesBid:price(m.yes_bid_dollars),yesAsk:price(m.yes_ask_dollars),noAsk:price(m.no_ask_dollars),status:'live',quotedFields:'YES bid and YES ask; venue USD dollars per $1 payout'};
+  const yesBid=price(m.yes_bid_dollars),yesAsk=price(m.yes_ask_dollars),noAsk=price(m.no_ask_dollars);
+  if(yesAsk===null&&noAsk===null)throw Error('No usable public Kalshi ask quote');
+  return {venue:'Kalshi',marketId:m.ticker,title:typeof m.title==='string'?m.title.slice(0,180):'BTC Up or Down 15m',endTime:m.close_time,yesBid,yesAsk,noAsk,status:yesAsk!==null&&noAsk!==null?'live':'partial',quotedFields:'YES bid, YES ask and NO ask; public observed dollars per $1 payout, not guaranteed executable'};
 }
 function parseTokens(raw){const a=typeof raw==='string'?JSON.parse(raw):raw;if(!Array.isArray(a)||a.length!==2||!a.every(x=>/^\d{10,}$/.test(String(x))))throw Error('Invalid CLOB token IDs');return a.map(String)}
 function selectPolyEvent(data,slot,now){
@@ -22,6 +24,8 @@ function selectPolyEvent(data,slot,now){
   const m=ev.markets.find(x=>x&&x.closed!==true&&x.active!==false);if(!m)throw Error('No current active Polymarket market');
   const outcomes=typeof m.outcomes==='string'?JSON.parse(m.outcomes):m.outcomes;
   const tokens=parseTokens(m.clobTokenIds);
+  if(tokens[0]===tokens[1])throw Error('Duplicate CLOB outcome tokens');
+  if(typeof m.conditionId!=='string'||!/^0x[0-9a-fA-F]{64}$/.test(m.conditionId))throw Error('Invalid Polymarket condition identifier');
   const up=outcomes?.findIndex(x=>String(x).toLowerCase()==='up'),down=outcomes?.findIndex(x=>String(x).toLowerCase()==='down');
   if(up<0||down<0||up===down)throw Error('Missing market outcomes');
   const endTime=new Date((slot+300)*1000).toISOString();
