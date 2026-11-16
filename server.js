@@ -2,7 +2,7 @@
 const http=require('node:http'),fs=require('node:fs');
 const {createMarketFeed}=require('./market-feed');
 const page=fs.readFileSync('index.html');
-const port=Number(process.env.PORT)||3000;
+const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
