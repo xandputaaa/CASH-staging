@@ -120,3 +120,52 @@ test('checksum-valid but semantically fabricated independent prediction fails cl
  const journal=createAuditJournal({directory});
  assert.throws(()=>createShadowMonitor({journal,quotes:{},results:{}}),/Saved capture is semantically invalid/);
 }));
+
+test('public evidence fields and digest remain auditable after filesystem journal replay',()=>sandbox(async directory=>{
+ const t=Date.now();let clock=t;
+ const evidenceSnapshot={venue:'Kalshi',ticker:'KXBTC15M-26NOV161000-00',status:'settled',result:'yes',
+   is_provisional:false,settlement_ts:null,close_time:new Date(t+180000).toISOString()};
+ const crypto=require('node:crypto');
+ const digest=crypto.createHash('sha256').update(JSON.stringify(evidenceSnapshot)).digest('hex');
+ const quotes={query:async venue=>fixture(t,venue)};
+ const results={lookup:async info=>info.venue==='Kalshi'?{...info,status:'verified',winner:'YES',
+   checkedAt:new Date(clock).toISOString(),source:'Kalshi public market result',settledAt:null,
+   confirmationCount:2,firstObservedAt:new Date(clock-21000).toISOString(),
+   evidenceSha256:digest,evidenceSnapshot,
+   evidenceSourceUrl:'https://external-api.kalshi.com/trade-api/v2/markets/'+info.marketId
+  }:{...info,status:'pending',reason:'Not final'}};
+ const first=createShadowMonitor({journal:createAuditJournal({directory}),clock:()=>clock,quotes,results});
+ await first.scan();clock=t+200000;await first.resolvePending();
+ const before=first.exportSession();
+ assert.equal(before.events.length,3);
+ const resolved=before.events.find(e=>e.type==='RESOLUTION');
+ assert.equal(resolved.payload.confirmationCount,2);
+ assert.equal(resolved.payload.evidenceSha256,digest);
+ const restored=createShadowMonitor({journal:createAuditJournal({directory}),clock:()=>clock,quotes,results});
+ const record=restored.snapshot().recent.find(x=>x.venue==='Kalshi');
+ assert.equal(record.status,'CORRECT');
+ assert.equal(record.outcomeEvidence.evidenceSha256,digest);
+ assert.equal(restored.exportSession().headHash,before.headHash);
+}));
+test('tampered public evidence snapshot fails semantic audit replay even with recomputed chain hashes',()=>sandbox(async directory=>{
+ const t=Date.now();let clock=t;
+ const crypto=require('node:crypto');
+ const evidenceSnapshot={venue:'Kalshi',ticker:'KXBTC15M-26NOV161000-00',status:'settled',result:'yes'};
+ const digest=crypto.createHash('sha256').update(JSON.stringify(evidenceSnapshot)).digest('hex');
+ const monitor=createShadowMonitor({journal:createAuditJournal({directory}),clock:()=>clock,
+  quotes:{query:async venue=>fixture(t,venue)},
+  results:{lookup:async info=>info.venue==='Kalshi'?{...info,status:'verified',winner:'YES',source:'official',
+   checkedAt:new Date(clock).toISOString(),confirmationCount:2,
+   firstObservedAt:new Date(clock-22000).toISOString(),evidenceSha256:digest,evidenceSnapshot,
+   evidenceSourceUrl:'https://external-api.kalshi.com/trade-api/v2/markets/'+info.marketId}:null}});
+ await monitor.scan();clock=t+200000;await monitor.resolvePending();
+ const filename=path.join(directory,'shadow-events.jsonl'),events=fs.readFileSync(filename,'utf8').trim().split('\n').map(JSON.parse);
+ const outcome=events.find(e=>e.type==='RESOLUTION');
+ assert.ok(outcome);
+ outcome.payload.evidenceSnapshot.result='no';
+ let previous='GENESIS';
+ for(const e of events){e.previousHash=previous;const {hash,...body}=e;e.hash=crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');previous=e.hash}
+ fs.writeFileSync(filename,events.map(e=>JSON.stringify(e)).join('\n')+'\n');
+ const journal=createAuditJournal({directory});
+ assert.throws(()=>createShadowMonitor({journal,quotes:{},results:{}}),/Saved resolution is semantically invalid/);
+}));
