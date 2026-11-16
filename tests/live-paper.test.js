@@ -14,7 +14,8 @@ function app({shared=new Map(),venueStatus='live'}={}){
  {venue:'Polymarket',status:venueStatus,marketId:polyId,slug:'btc-updown-5m-'+Math.floor(now.ms/300000)*300,title:'Bitcoin Up or Down 5m',endTime:new Date(now.ms+20000).toISOString(),fetchedAt:new Date(now.ms).toISOString(),upAsk:.62,downAsk:.4};
  let result={status:'pending'};
  const fetch=async url=>{calls.push(url);const venue=url.includes('Polymarket')?'Polymarket':'Kalshi';const value=url.startsWith('/api/result?')?{...result,marketId:venue==='Kalshi'?ticker:polyId,venue,checkedAt:new Date(now.ms).toISOString()}:quote(venue);return {ok:true,json:async()=>value}};
- const window={},ctx=vm.createContext({window,document,localStorage,fetch,Date:FakeDate,AbortController,setTimeout,clearTimeout,setInterval:()=>0,confirm:()=>true,URLSearchParams,encodeURIComponent});
+ class MockFileReader{readAsText(file){this.result=file.content;this.onload?.()}};
+ const window={},ctx=vm.createContext({window,document,localStorage,fetch,Date:FakeDate,FileReader:MockFileReader,AbortController,setTimeout,clearTimeout,setInterval:()=>0,confirm:()=>true,URLSearchParams,encodeURIComponent});
  vm.runInContext(source,ctx);
  return {run:x=>vm.runInContext(x,ctx),get:id=>document.getElementById(id),now,calls,shared,setResult:x=>{result=x}};
 }
@@ -54,4 +55,24 @@ test('confirmed official result updates paper balance only after expiry',async()
 test('local live paper journal is separate from original fictional paper wallet',async()=>{
  const a=app();await a.run("window.CASHLivePaper.place('Kalshi','NO')");
  assert.equal(a.shared.has('cash-paper-v1'),false);assert.equal(a.shared.has('cash-live-paper-v1'),true);
+});
+
+test('live paper journal can be restored from an exported JSON backup',async()=>{
+ const first=app();await first.run("window.CASHLivePaper.place('Kalshi','YES')");
+ const saved=JSON.parse(first.shared.get('cash-live-paper-v1'));
+ const backup={format:'CASH-live-quote-paper-v1',mode:'paper-only-unverified-local-journal',balance:saved.balance,stake:saved.stake,entries:saved.entries};
+ const second=app(),text=JSON.stringify(backup);
+ second.run("window.CASHLivePaper.importJournal({target:{files:[{size:300,content:"+JSON.stringify(text)+"}],value:'backup'}})");
+ assert.equal(second.get('lpBalance').textContent,'$95.00');
+ assert.match(second.get('lpLedger').innerHTML,/KXBTC15M/);
+ assert.match(second.get('lpMessage').textContent,/restored/);
+});
+test('malformed imported live-paper journal cannot replace existing balance',()=>{
+ const a=app();a.run("window.CASHLivePaper.importJournal({target:{files:[{size:40,content:'{}'}],value:'backup'}})");
+ assert.equal(a.get('lpBalance').textContent,'$100.00');
+ assert.match(a.get('lpMessage').textContent,/Import rejected/);
+});
+test('partial market status can be used when the chosen side has a valid ask',async()=>{
+ const a=app({venueStatus:'partial'});await a.run("window.CASHLivePaper.place('Polymarket','UP')");
+ assert.equal(a.get('lpBalance').textContent,'$95.00');
 });
