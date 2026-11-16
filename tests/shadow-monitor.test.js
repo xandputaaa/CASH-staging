@@ -1,0 +1,79 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const {createShadowMonitor,chooseMarketBaseline}=require('../shadow-monitor');
+function fixture(t,venue='Kalshi'){
+ const common={venue,status:'live',marketId:venue==='Kalshi'?'KXBTC15M-26NOV161000-00':'0x'+'a'.repeat(64),
+  endTime:new Date(t+180000).toISOString(),fetchedAt:new Date(t).toISOString()};
+ return venue==='Kalshi'?{...common,yesAsk:0.62,noAsk:0.41}:
+  {...common,slug:'btc-updown-5m-'+Math.floor(t/300000)*300,upAsk:0.59,downAsk:0.43};
+}
+function deps(now){
+ let current=now,kal=fixture(now),poly=fixture(now,'Polymarket'),winner=null,calls=0;
+ const quotes={query:async venue=>venue==='Kalshi'?kal:poly};
+ const results={lookup:async info=>{calls++;return winner?{...info,status:'verified',winner,source:'official-test-result',checkedAt:new Date(current).toISOString()}:{...info,status:'pending',checkedAt:new Date(current).toISOString()}}};
+ const monitor=createShadowMonitor({quotes,results,clock:()=>current});
+ return {monitor,clock:v=>{current=v},setWinner:v=>{winner=v},count:()=>calls,setKal:v=>{kal=v},setPoly:v=>{poly=v}};
+}
+test('market baseline uses higher public ask and labels non-independent methodology',()=>{
+ const t=Date.now(),k=chooseMarketBaseline(fixture(t)),p=chooseMarketBaseline(fixture(t,'Polymarket'));
+ assert.equal(k.side,'YES');assert.equal(p.side,'UP');
+ assert.ok(k.normalizedMarketShare>0.5&&k.normalizedMarketShare<1);
+ assert.equal(chooseMarketBaseline({...fixture(t),noAsk:null}),null);
+ assert.equal(chooseMarketBaseline({...fixture(t),yesAsk:.5,noAsk:.5}),null);
+});
+test('live watcher freezes both market observations before expiry without duplicating them',async()=>{
+ const d=deps(Date.now());
+ const one=await d.monitor.scan(),two=await d.monitor.scan(),snap=d.monitor.snapshot();
+ assert.equal(one.captured,2);assert.equal(two.captured,0);
+ assert.equal(snap.observed,2);assert.equal(snap.pending,2);assert.equal(snap.settled,0);
+ assert.equal(snap.qualifyingProspectiveContracts,0);
+ assert.equal(snap.independentForecastModel,false);
+ assert.equal(snap.storageMode,'VOLATILE_SERVER_SESSION');
+ assert.ok(snap.recent.every(x=>x.leadMs>=60000&&x.baselineName==='PUBLIC_MARKET_FAVORED_ASK_V1'));
+});
+test('server capture excludes stale, expired and incomplete quote snapshots',async()=>{
+ const now=Date.now(),d=deps(now);
+ d.setKal({...fixture(now),fetchedAt:new Date(now-25000).toISOString()});
+ d.setPoly({...fixture(now,'Polymarket'),endTime:new Date(now+10000).toISOString()});
+ await d.monitor.scan();
+ assert.equal(d.monitor.snapshot().observed,0);
+});
+test('only final official results resolve prospective session baselines',async()=>{
+ const t=Date.now(),d=deps(t);await d.monitor.scan();
+ d.clock(t+190000);await d.monitor.scan();
+ assert.equal(d.monitor.snapshot().pending,2);
+ d.setWinner('YES');await d.monitor.scan();
+ let snap=d.monitor.snapshot();
+ assert.equal(snap.settled,1);assert.equal(snap.pending,1);assert.equal(snap.correct,1);
+ assert.equal(snap.baselineDirectionalAccuracy,1);
+ assert.equal(snap.qualifyingProspectiveContracts,0);
+ d.setWinner('UP');await d.monitor.scan();
+ snap=d.monitor.snapshot();assert.equal(snap.settled,2);assert.equal(snap.pending,0);
+});
+test('incompatible winners, void outcomes, and correct/incorrect scoring stay separate',async()=>{
+ const t=Date.now(),d=deps(t);await d.monitor.scan();d.clock(t+190000);d.setWinner('NO');
+ await d.monitor.scan();const snap=d.monitor.snapshot();
+ assert.equal(snap.incorrect,1);assert.equal(snap.pending,1);assert.equal(snap.baselineDirectionalAccuracy,0);
+});
+test('exported event chain detects a modified capture field but cannot prove wall-clock truth',async()=>{
+ const d=deps(Date.now());await d.monitor.scan();
+ const out=d.monitor.exportSession();
+ assert.equal(out.events.length,2);assert.equal(out.checksumChainWarning.includes('do not prove'),true);
+ let prev='GENESIS';
+ for(const ev of out.events){
+  assert.equal(ev.previousHash,prev);
+  const {hash,...body}=ev;
+  assert.equal(crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex'),hash);
+  prev=hash;
+ }
+ assert.equal(prev,out.headHash);
+ const altered={...out.events[0],payload:{...out.events[0].payload,baselineSide:'NO'}};
+ const {hash,...body}=altered;
+ assert.notEqual(crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex'),hash);
+});
+test('read-only shadow watcher caps observations and cannot imply volume persistence',async()=>{
+ const t=Date.now(),d=deps(t),quota=createShadowMonitor({quotes:{query:async venue=>fixture(t,venue)},results:{lookup:async()=>({status:'pending'})},clock:()=>t,maxRecords:1,maxEvents:3});
+ await quota.scan();assert.equal(quota.snapshot().observed,1);
+ assert.equal(quota.snapshot().recordedEvents,1);
+ assert.equal(quota.snapshot().qualifyingForModelAccuracy,false);
+});
