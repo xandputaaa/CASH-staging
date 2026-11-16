@@ -42,7 +42,7 @@ function createMarketFeed({fetchImpl=fetch,clock=()=>Date.now()}={}){
       if(quote){
         const fetchedMs=clock(),fetchedAt=new Date(fetchedMs).toISOString();
         cached={...quote,fetchedMs,fetchedAt};
-        history.push({time:fetchedAt,price:quote.price});
+        history.push({time:fetchedAt,price:quote.price,source:quote.source});
         if(history.length>HISTORY_LIMIT)history=history.slice(-HISTORY_LIMIT);
       }
       return view();
