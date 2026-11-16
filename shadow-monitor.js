@@ -10,6 +10,7 @@ const {createHash}=require('node:crypto');
 const {verifyChain}=require('./audit-journal');
 const {proposeSpotMomentum,assessSpotMomentum,toContractSide,isValidSpotCandidate}=require('./spot-momentum');
 const {createScanContinuity,classifyQuote}=require('./scan-continuity');
+const {evaluateShadowRecords}=require('./shadow-evaluation');
 const MIN_LEAD_MS=60000,MAX_RECORDS=300,MAX_EVENTS=650;
 const VALID_VENUES=new Set(['Kalshi','Polymarket']);
 const isPrice=n=>Number.isFinite(n)&&n>0&&n<1;
@@ -296,11 +297,12 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
    recent:observations.slice(-15).reverse().map(x=>({...x}))
   };
  }
+ function evaluation(){return evaluateShadowRecords(observations,{now:clock(),verifyOutcome:hasVerifiedEvidence})}
  function exportSession(){
   return {...snapshot(),format:journal?.configured?'CASH-shadow-filesystem-unverified-v1':'CASH-shadow-volatile-v1',exportedAt:ISO(clock()),
    checksumChainWarning:'SHA256 links detect accidental event alteration but do not prove immutable capture times or independent provenance.',
    events:events.map(x=>({...x}))};
  }
- return {scan,capture,resolvePending,snapshot,exportSession};
+ return {scan,capture,resolvePending,snapshot,evaluation,exportSession};
 }
 module.exports={createShadowMonitor,chooseMarketBaseline};

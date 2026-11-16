@@ -109,3 +109,23 @@ test('browser-only shadow archive assets are same origin and cannot submit real 
  assert.match(b.body,/\/api\/shadow\/export/);
  assert.equal((await request('/shadow-browser-archive.js','POST')).status,404);
 }));
+
+test('experimental evaluation endpoint remains read-only, evidence-scoped and never qualified',()=>withServer(async()=>{
+ const r=await request('/api/evaluation');assert.equal(r.status,200);
+ assert.match(r.headers['cache-control'],/no-store/);
+ const report=JSON.parse(r.body);
+ assert.equal(report.report,'CASH_EXPERIMENTAL_SPOT_EVALUATION_V1');
+ assert.equal(report.mode,'DESCRIPTIVE_SESSION_ONLY');
+ assert.equal(report.qualification.state,'NOT_VALIDATED');
+ assert.equal(report.qualification.realOrdersEnabled,false);
+ assert.equal(report.qualification.prospectiveIndependentAttested,0);
+ assert.equal(report.total.hits+report.total.misses,report.total.scored);
+ assert.equal((await request('/api/evaluation','POST')).status,404);
+ const asset=await request('/evaluation-ui.js');
+ assert.equal(asset.status,200);
+ assert.match(asset.headers['content-type'],/javascript/);
+ assert.match(asset.body,/EXPERIMENTAL_SPOT_EVALUATION/);
+ const homepage=await request('/');
+ assert.match(homepage.body,/FORECAST EVIDENCE · EXPERIMENTAL/);
+ assert.match(homepage.body,/evaluation-ui\.js/);
+}));

@@ -11,6 +11,7 @@ const shadowScript=fs.readFileSync('shadow-ui.js');
 const shadowArchiveScript=fs.readFileSync('shadow-browser-archive.js');
 const shadowArchiveUiScript=fs.readFileSync('shadow-browser-archive-ui.js');
 const diagnosticsScript=fs.readFileSync('diagnostics-ui.js');
+const evaluationScript=fs.readFileSync('evaluation-ui.js');
 const {createDiagnostics}=require('./diagnostics');
 const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
@@ -42,6 +43,13 @@ const server=http.createServer(async(req,res)=>{
       polymarket:venueFeeds.view('Polymarket'),shadow:shadow.snapshot()});
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
     res.end(JSON.stringify(diagnostics));return;
+  }
+  if(req.method==='GET'&&req.url==='/evaluation-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});res.end(evaluationScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/evaluation'){
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(shadow.evaluation()));return;
   }
   if(req.method==='GET'&&req.url==='/api/shadow'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
