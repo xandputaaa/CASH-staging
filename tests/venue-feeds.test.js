@@ -45,3 +45,10 @@ test('Polymarket requires a full condition ID and distinct outcome tokens before
  duplicate[0].markets[0].clobTokenIds='["12345678901234567890","12345678901234567890"]';
  assert.throws(()=>selectPolyEvent(duplicate,slot,now),/Duplicate CLOB/);
 });
+
+test('Kalshi status=open query returns active market objects, which remain eligible',()=>{
+ const active=selectKalshi({markets:[{...kalshiMarket,status:'active'}]},now);
+ assert.equal(active.status,'live');
+ assert.equal(active.yesAsk,0.47);
+ assert.equal(active.noAsk,0.54);
+});

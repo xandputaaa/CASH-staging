@@ -10,7 +10,7 @@ async function read(url,fetchImpl,timeout=3500){
 }
 function selectKalshi(data,now){
   if(!Array.isArray(data?.markets))throw Error('Invalid market response');
-  const active=data.markets.filter(m=>typeof m?.ticker==='string'&&/^KXBTC15M-[A-Za-z0-9-]+$/.test(m.ticker)&&(!m.status||m.status==='open')&&Number.isFinite(Date.parse(m.close_time))&&Date.parse(m.close_time)>now&&(!m.open_time||Date.parse(m.open_time)<=now));
+  const active=data.markets.filter(m=>typeof m?.ticker==='string'&&/^KXBTC15M-[A-Za-z0-9-]+$/.test(m.ticker)&&(!m.status||m.status==='open'||m.status==='active')&&Number.isFinite(Date.parse(m.close_time))&&Date.parse(m.close_time)>now&&(!m.open_time||Date.parse(m.open_time)<=now));
   active.sort((a,b)=>Date.parse(a.close_time)-Date.parse(b.close_time));
   const m=active[0];if(!m)throw Error('No current Kalshi BTC 15m market');
   const yesBid=price(m.yes_bid_dollars),yesAsk=price(m.yes_ask_dollars),noAsk=price(m.no_ask_dollars);
