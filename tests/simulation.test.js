@@ -20,3 +20,7 @@ test('ledger captures entry, fee and net for a hypothetical winning position',()
 test('losing position records negative net and zero fee',()=>{const a=app();a.run("buy('DOWN');for(let i=0;i<7;i++)advance()");assert.match(a.get('ledger').innerHTML,/−\$5\.00/);assert.match(a.get('ledger').innerHTML,/\$0\.00/)});
 
 test('performance net reconciles to itemized ledger',()=>{const a=app();a.run("setStake(2);setPrice(0.4);toggleFee();buy('UP');for(let i=0;i<7;i++)advance()");assert.equal(a.get('pnl').textContent,'+$2.94');assert.match(a.get('ledger').innerHTML,/\+\$2\.94/)});
+
+test('integrity matches ledger and wallet for fictional settlement',()=>{const a=app();a.run("setStake(2);setPrice(0.4);toggleFee();buy('UP');for(let i=0;i<7;i++)advance()");assert.match(a.get('integrity').textContent,/MATCH/)});
+test('integrity detects fictional wallet discrepancies',()=>{const a=app();a.run("buy('UP');for(let i=0;i<7;i++)advance();balance+=10;render()");assert.match(a.get('integrity').textContent,/MISMATCH/)});
+test('legacy ledger is not claimed to be audited',()=>{const a=app();a.run("ledger.push({round:1,venue:'Kalshi',side:'UP',stake:5,result:'WIN'});render()");assert.match(a.get('integrity').textContent,/LEGACY/)});
