@@ -14,6 +14,12 @@
   el('shadowSettled').textContent=String(Number(data.settled)||0);
   el('shadowAccuracy').textContent=Number.isFinite(data.baselineDirectionalAccuracy)?
    (100*data.baselineDirectionalAccuracy).toFixed(1)+'%':'—';
+  if(data.spotCandidateQualified===true)throw Error('Unverified signal was marked qualified');
+  el('spotCandidateCount').textContent=String(Number(data.spotCandidateObservations)||0);
+  el('spotCandidateSettled').textContent=String(Number(data.spotCandidateSettled)||0);
+  el('spotCandidateCorrect').textContent=String(Number(data.spotCandidateCorrect)||0);
+  el('spotCandidateAccuracy').textContent=Number.isFinite(data.spotCandidateAccuracy)?
+    (100*data.spotCandidateAccuracy).toFixed(1)+'%':'—';
   el('shadowGate').textContent='0 / 100 qualifying prospective model predictions';
   el('shadowSession').textContent='Monitoring since '+fmtTime(data.bootAt)+
     ' · '+(data.lastScanAt?'last scan '+fmtTime(data.lastScanAt):'first scan pending')+
@@ -21,10 +27,13 @@
   el('shadowStorageNote').textContent=data.storageMode==='FILESYSTEM_JOURNAL_UNVERIFIED'?'Filesystem journal configured; '+(Number(data.recoveredEvents)||0)+' events were replayed at startup. Independent timestamps, volume persistence and qualified accuracy are NOT verified.':'No persistent Railway volume attached: session memory resets when the server restarts or redeploys. No qualifying forecasts are retained.';
   const rows=Array.isArray(data.recent)?data.recent.slice(0,8):[];
   el('shadowRows').innerHTML=rows.length?rows.map(x=>
-    '<tr><td>'+safe(x.venue)+'</td><td>'+safe(x.baselineSide)+'</td><td>'+
+    '<tr><td>'+safe(x.venue)+'</td><td>'+safe(x.baselineSide)+'</td><td>'+safe(
+      x.spotCandidate?.predictedContractSide
+       ?x.spotCandidate.predictedContractSide+(x.status==='PENDING'?' · pending':x.status==='VOID'?' · void':x.winner===x.spotCandidate.predictedContractSide?' · hit':' · miss')
+       :'—')+'</td><td>'+
     Math.round(Math.max(0,Number(x.leadMs)||0)/1000)+'s</td><td>'+safe(x.status)+'</td>'+
     '<td>'+safe(x.marketId)+'</td></tr>').join(''):
-    '<tr><td colspan="5" class="muted">No pre-expiry baseline observations this server session</td></tr>';
+    '<tr><td colspan="6" class="muted">No pre-expiry baseline observations this server session</td></tr>';
  }
  async function refresh(){
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),7000);
@@ -34,6 +43,7 @@
    show(await res.json());
   }catch{
    el('shadowState').textContent='MONITOR UNAVAILABLE';
+   for(const id of ['spotCandidateCount','spotCandidateSettled','spotCandidateCorrect','spotCandidateAccuracy'])el(id).textContent='—';
    el('shadowState').className='shadow-state';
    el('shadowSession').textContent='Could not read this server session. No verified records can be inferred.';
    el('shadowStorageNote').textContent='Monitor state could not be verified. Do not rely on previous readings.';
