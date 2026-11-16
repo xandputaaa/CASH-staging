@@ -80,3 +80,57 @@ test('browser archive script and controls are present without order submission',
  assert.match(html,/storage can be cleared or evicted/);
  assert.match(html,/shadow-browser-archive-ui\.js/);
 });
+
+test('downloaded browser archive restores to another browser and deduplicates sessions',async()=>{
+ const src=factory(storage()),a=makeSession(2),b=makeSession(3);
+ await src.capture(a);await src.capture(b);
+ const dest=factory(storage()),result=await dest.importJson(src.exportJson());
+ assert.equal(result.importedSessions,2);assert.equal(result.events,5);
+ assert.equal(dest.summary().sessions,2);
+ assert.equal((await dest.importJson(src.exportJson())).importedSessions,0);
+ assert.equal(dest.summary().events,5);
+});
+test('restore accepts a raw CASH server session export and refuses to shorten the saved chain',async()=>{
+ const dst=factory(storage()),full=makeSession(3);
+ assert.equal((await dst.importJson(JSON.stringify(full))).importedSessions,1);
+ const older={...full,events:full.events.slice(0,1),headHash:full.events[0].hash,recordedEvents:1};
+ const result=await dst.importJson(JSON.stringify(older));
+ assert.equal(result.updatedSessions,0);assert.equal(dst.summary().events,3);
+});
+test('importing a longer matching session extends the archive without adding a duplicate',async()=>{
+ const dst=factory(storage()),full=makeSession(3);
+ const short={...full,events:full.events.slice(0,1),headHash:full.events[0].hash,recordedEvents:1};
+ await dst.capture(short);
+ const result=await dst.importJson(JSON.stringify(full));
+ assert.equal(result.updatedSessions,1);assert.equal(dst.summary().sessions,1);
+ assert.equal(dst.summary().events,3);
+});
+test('conflicting, fraudulent or partly invalid imports preserve existing history atomically',async()=>{
+ const dst=factory(storage()),original=makeSession(2);
+ await dst.capture(original);
+ const other={...makeSession(1),bootAt:original.bootAt};
+ await assert.rejects(dst.importJson(JSON.stringify(other)),/Conflicting event history/);
+ await assert.rejects(dst.importJson(JSON.stringify({...original,independentForecastModel:true})),/invalid/);
+ const okay=makeSession(1),broken={...makeSession(1),headHash:'a'.repeat(64)};
+ const packageFile={format:'CASH-local-shadow-archive-v1',evictedSessions:0,
+  qualifyingForModelAccuracy:false,sessions:[
+   {bootAt:okay.bootAt,savedAt:new Date().toISOString(),session:okay},
+   {bootAt:broken.bootAt,savedAt:new Date().toISOString(),session:broken}]};
+ await assert.rejects(dst.importJson(JSON.stringify(packageFile)),/head hash mismatch/);
+ assert.equal(dst.summary().events,2);assert.equal(dst.summary().sessions,1);
+});
+test('browser restore enforces import size and session count limits without losing existing data',async()=>{
+ const dst=factory(storage()),initial=makeSession(1);await dst.capture(initial);
+ await assert.rejects(dst.importJson('x'.repeat(2400000)),/too large/);
+ const bundle={format:'CASH-local-shadow-archive-v1',evictedSessions:0,
+  qualifyingForModelAccuracy:false,sessions:[]};
+ for(let i=0;i<9;i++){
+  const s=makeSession(1);bundle.sessions.push({bootAt:s.bootAt,savedAt:new Date().toISOString(),session:s});
+ }
+ await assert.rejects(dst.importJson(JSON.stringify(bundle)),/invalid format/);
+ assert.equal(dst.summary().sessions,1);assert.equal(dst.summary().events,1);
+});
+test('restore JSON file picker is exposed on CASH staging page',()=>{
+ const html=require('node:fs').readFileSync('index.html','utf8');
+ assert.match(html,/id="archiveRestore"/);assert.match(html,/Restore JSON backup/);
+});

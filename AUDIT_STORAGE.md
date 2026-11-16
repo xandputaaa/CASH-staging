@@ -31,3 +31,7 @@ Events are stored in `/data/shadow-events.jsonl` when configured, appended in se
 ## Accuracy gate
 
 `qualifyingProspectiveContracts=0` remains hardcoded by design. Market-quote baseline observations and browser paper trades cannot qualify for the 100 chronological, officially settled, genuinely prospective **independent-model** forecasts. Real-money orders remain disabled; existing KAREN is not modified.
+
+## Browser JSON recovery (not server durability)
+
+On the CASH staging site, **Download browser archive** saves device-local session copies. **Restore JSON backup** can merge the download into another browser; it also accepts a direct `GET /api/shadow/export` file. Every incoming chain and existing local chain is checked for SHA-256 consistency before any write. Conflicting histories and insufficient capacity fail closed. An older snapshot cannot replace a newer saved session. The import is entirely local to the browser, never uploads an archive to CASH, and never qualifies for the 100-contract gate. The server cannot recover its own session history from a browser backup; missed history while the page was closed remains missing. Browser backups are not independently time-attested or tamper-proof.

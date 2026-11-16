@@ -88,14 +88,73 @@
    storage.setItem(KEY,json);
    return {...summary(),saved:true,reason:'Browser copy saved (not time-attested)'};
   }
-  function exportJson(){
+ 
+ async function importJson(json){
+  if(typeof json!=='string'||new TextEncoder().encode(json).length>MAX_BYTES+150000)
+   throw Error('Import is too large for the browser archive');
+  let parsed;try{parsed=JSON.parse(json)}catch{throw Error('Import is not valid JSON')}
+  let sessions;
+  if(parsed?.format===FORMAT){
+   if(parsed.qualifyingForModelAccuracy!==false||
+      !Array.isArray(parsed.sessions)||parsed.sessions.length>MAX_SESSIONS||
+      !Number.isSafeInteger(parsed.evictedSessions)||parsed.evictedSessions<0)
+    throw Error('Imported archive has an invalid format or qualification claim');
+   sessions=parsed.sessions.map(row=>{
+    if(!row||row.bootAt!==row.session?.bootAt||
+      !Number.isFinite(Date.parse(row.savedAt)))
+     throw Error('Imported archive has an invalid session wrapper');
+    return row.session;
+   });
+  }else if(['CASH-shadow-volatile-v1','CASH-shadow-filesystem-unverified-v1'].includes(parsed?.format))
+   sessions=[parsed];
+  else throw Error('Unsupported CASH archive or session export');
+  const seen=new Set();
+  for(const session of sessions){
+   if(typeof session?.bootAt!=='string'||seen.has(session.bootAt))
+    throw Error('Imported archive has duplicate or invalid session identities');
+   seen.add(session.bootAt);
+  }
+  const current=load(storage);
+  // Verify all imported and existing records before a single transactional write.
+  for(const row of current.sessions)await verifySession(row.session,cryptoImpl);
+  for(const session of sessions)await verifySession(session,cryptoImpl);
+  const updated={...current,sessions:current.sessions.map(row=>({...row}))};
+  let importedSessions=0,updatedSessions=0,unchangedSessions=0;
+  for(const session of sessions){
+   if(!session.events.length){unchangedSessions++;continue}
+   const idx=updated.sessions.findIndex(row=>row.bootAt===session.bootAt);
+   if(idx===-1){
+    updated.sessions.push({bootAt:session.bootAt,savedAt:new Date(clock()).toISOString(),session});
+    importedSessions++;continue;
+   }
+   const old=updated.sessions[idx].session;
+   for(let i=0;i<Math.min(old.events.length,session.events.length);i++){
+    if(old.events[i].hash!==session.events[i].hash)
+     throw Error('Conflicting event history for an archived server session');
+   }
+   if(session.events.length>old.events.length){
+    updated.sessions[idx]={bootAt:session.bootAt,savedAt:new Date(clock()).toISOString(),session};
+    updatedSessions++;
+   }else unchangedSessions++;
+  }
+  if(importedSessions||updatedSessions){
+   updated.sessions.sort((a,b)=>Date.parse(a.savedAt)-Date.parse(b.savedAt));
+   if(updated.sessions.length>MAX_SESSIONS||
+      new TextEncoder().encode(JSON.stringify(updated)).length>MAX_BYTES)
+    throw Error('Import exceeds local archive capacity; export and clear old copies first');
+   storage.setItem(KEY,JSON.stringify(updated));
+  }
+  return {...summary(),importedSessions,updatedSessions,unchangedSessions,
+   warning:'Browser backup only; checksum consistency does not authenticate time or provenance'};
+ }
+ function exportJson(){
    const v=load(storage);
    return JSON.stringify({...v,exportedAt:new Date(clock()).toISOString(),
     qualifyingForModelAccuracy:false,
     warning:'Local browser copy only. Not an immutable audit, independent timestamp, or validated CASH model forecast.'},null,2);
   }
   function clear(){storage.removeItem(KEY);return summary()}
-  return {summary,capture,exportJson,clear};
+  return {summary,capture,importJson,exportJson,clear};
  }
  const api={KEY,createBrowserArchive,verifySession};
  if(typeof module!=='undefined'&&module.exports)module.exports=api;

@@ -4,7 +4,7 @@
  if(!root||!window.CASHShadowArchive)return;
  const el=id=>document.getElementById(id);
  const status=el('archiveState'),stats=el('archiveCount');
- const download=el('archiveDownload'),clear=el('archiveClear');
+ const download=el('archiveDownload'),clear=el('archiveClear'),restore=el('archiveRestore');
  let client;
  function show(){
   const info=client.summary();
@@ -19,7 +19,16 @@
  }catch(e){
   status.textContent='LOCAL STORAGE UNAVAILABLE';
   stats.textContent='This browser cannot preserve session copies';
-  download.disabled=true;clear.disabled=true;return;
+  download.disabled=true;restore.disabled=true;
+  if(client){
+   clear.disabled=false;
+   clear.addEventListener('click',()=>{
+    if(!window.confirm('Saved CASH archive data is unreadable. Clear local copies? Any downloaded files remain unaffected.'))return;
+    try{client.clear();show();status.textContent='CORRUPT LOCAL ARCHIVE CLEARED'}
+    catch{status.textContent='CLEAR FAILED'}
+   });
+  }else clear.disabled=true;
+  return;
  }
  let inflight=false;
  async function refresh(){
@@ -36,9 +45,27 @@
   }catch(e){
    status.textContent='ARCHIVE CHECK FAILED';
    stats.textContent='Not saved: '+String(e.message||'unavailable').slice(0,140);
-   download.disabled=client.summary().sessions===0;
+   try{download.disabled=client.summary().sessions===0}catch{download.disabled=true;status.textContent='LOCAL ARCHIVE INTEGRITY ERROR'}
   }finally{clearTimeout(timeout);inflight=false}
  }
+
+ restore.addEventListener('change',event=>{
+  const file=event.target.files?.[0];if(!file)return;
+  if(file.size>2400000){status.textContent='IMPORT REJECTED · FILE TOO LARGE';restore.value='';return}
+  const reader=new FileReader();
+  reader.onload=async()=>{
+   try{
+    const result=await client.importJson(String(reader.result));
+    show();
+    status.textContent=(result.importedSessions||result.updatedSessions)?
+      'RESTORED '+(result.importedSessions+result.updatedSessions)+' SESSION COPIES · UNVERIFIED':
+      'NO NEW ARCHIVED RECORDS';
+   }catch(e){status.textContent='IMPORT REJECTED · '+String(e.message||'Invalid backup').slice(0,100)}
+   finally{restore.value=''}
+  };
+  reader.onerror=()=>{status.textContent='IMPORT READ FAILED';restore.value=''};
+  reader.readAsText(file);
+ });
  download.addEventListener('click',()=>{
   try{
    const blob=new Blob([client.exportJson()],{type:'application/json'});
