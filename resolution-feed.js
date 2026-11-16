@@ -42,7 +42,7 @@ function polymarketOutcome(data,slug,marketId){
   return {status:'verified',winner:prices[up]===1?'UP':'DOWN',source:'Polymarket Gamma final market result',settledAt:typeof m.updatedAt==='string'?m.updatedAt:null};
  }catch{return {status:'pending',reason:'Unreadable official payout'}}
 }
-function marketEvidence(venue,body,marketId,slug){
+function marketEvidenceSnapshot(venue,body,marketId,slug){
  let selected;
  if(venue==='Kalshi'){
   const m=body?.market||{};
@@ -53,8 +53,9 @@ function marketEvidence(venue,body,marketId,slug){
    resolutionStatus:m.resolutionStatus??null,umaResolutionStatus:m.umaResolutionStatus??null,
    outcomes:m.outcomes??null,outcomePrices:m.outcomePrices??null,updatedAt:m.updatedAt??null};
  }
- return createHash('sha256').update(JSON.stringify(selected)).digest('hex');
+ return selected;
 }
+function marketEvidence(venue,body,marketId,slug){return createHash('sha256').update(JSON.stringify(marketEvidenceSnapshot(venue,body,marketId,slug))).digest('hex')}
 function createResolver({fetchImpl=fetch,clock=()=>Date.now(),confirmationMs=CONFIRMATION_MS,cacheMs=CACHE_MS}={}){
  const cache=new Map(),tentative=new Map();
  async function lookup({venue,marketId,slug}){
@@ -76,6 +77,7 @@ function createResolver({fetchImpl=fetch,clock=()=>Date.now(),confirmationMs=CON
       &&clock()-latest.firstObservedMs>=confirmationMs){
     outcome={...outcome,confirmationCount:2,firstObservedAt:new Date(latest.firstObservedMs).toISOString(),
       evidenceSourceUrl:sourceUrl,evidenceSha256:digest,
+      evidenceSnapshot:marketEvidenceSnapshot(venue,body,marketId,slug),
       evidenceCaveat:'Checksum of selected public API fields, not an immutable or independently authenticated settlement proof'};
     tentative.delete(key);
    }else{
@@ -90,4 +92,4 @@ function createResolver({fetchImpl=fetch,clock=()=>Date.now(),confirmationMs=CON
  }
  return {lookup};
 }
-module.exports={createResolver,kalshiOutcome,polymarketOutcome,marketEvidence};
+module.exports={createResolver,kalshiOutcome,polymarketOutcome,marketEvidence,marketEvidenceSnapshot};
