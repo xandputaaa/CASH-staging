@@ -34,7 +34,7 @@ test('market quote comparison uses ASK side at freeze, never data from after set
  const a=summarize([
   row({side:'YES',winner:'NO',status:'MISS',yesAsk:.85,noAsk:.17}),
   row({side:'NO',winner:'NO',status:'HIT',yesAsk:.8,noAsk:.2}),
-  row({side:'NO',winner:'YES',status:'MISS',yesAsk:.2,noAsk:.8})
+  row({side:'NO',winner:'YES',status:'MISS',yesAsk:.75,noAsk:.26})
  ]);
  assert.equal(a.comparison.comparableScored,3);
  assert.equal(a.comparison.marketFavoredHits,1);
