@@ -14,7 +14,16 @@ test('winning paper position pays $10 on $5 stake',()=>{const a=app();a.run("buy
 test('losing paper position forfeits stake',()=>{const a=app();a.run("buy('DOWN');for(let i=0;i<7;i++)advance()");assert.equal(a.get('balance').textContent,'$95.00');assert.match(a.get('ledger').innerHTML,/LOSS/)});
 test('duplicate buys do not double reserve',()=>{const a=app();a.run("buy('UP');buy('DOWN')");assert.equal(a.get('balance').textContent,'$95.00')});
 test('client fetches only read-only same-origin market data',()=>{const calls=[...script.matchAll(/\bfetch\s*\(\s*(['"])(.*?)\1/g)];assert.equal(calls.length,2);assert.deepEqual(calls.map(x=>x[2]).sort(),['/api/markets?venue=','/api/spot']);assert.doesNotMatch(script,/\b(XMLHttpRequest|WebSocket|sendBeacon)\s*\(/)});
-test('server has no order route',()=>{const server=fs.readFileSync('server.js','utf8');assert.doesNotMatch(server,/\/order|\/trade|\/execute/)});
+test('only a protected read-only verification route is allowed; no exchange order execution is implemented',()=>{
+ const server=fs.readFileSync('server.js','utf8');
+ const verifier=fs.readFileSync('kalshi-order-verify.js','utf8');
+ assert.match(server,/req\.method==='POST'&&req\.url==='\/api\/private\/order-verify'/);
+ assert.match(server,/ownerAuthorized\(process\.env\.CASH_OWNER_VERIFY_TOKEN/);
+ assert.doesNotMatch(server,/\/api\/(?:trade|execute|buy|sell|cancel|place-order)/);
+ assert.doesNotMatch(verifier,/method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/);
+ assert.doesNotMatch(verifier,/\/portfolio\/events\/orders/);
+ assert.match(verifier,/method:'GET'/);
+});
 
 test('fictional price and fee accounting',()=>{const a=app();a.run("setStake(2);setPrice(0.4);toggleFee();buy('UP');for(let i=0;i<7;i++)advance()");assert.equal(a.get('balance').textContent,'$102.94');assert.equal(a.get('trades').textContent,'1');assert.equal(a.get('winrate').textContent,'100.0%')});
 test('cancelled positions do not inflate win rate',()=>{const a=app();a.run("setStake(2);buy('UP');reset()");assert.equal(a.get('trades').textContent,'0');assert.equal(a.get('cancelled').textContent,'1');assert.equal(a.get('balance').textContent,'$100.00')});
