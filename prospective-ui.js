@@ -27,16 +27,22 @@
    set('pfCount',r.directional+' frozen directions · '+r.waits+' waits');
    set('pfScored',r.officiallyScored+' paired official settlements');
    set('pfAccuracy',pct(r.hitRate)+' exploratory, NOT validated');
-   const v=r.latest;
+   const v=r.active;
    const dir=v?.side;
-   set('pfSide',dir?'PROVISIONAL '+dir:'NO FROZEN DIRECTION');
+   set('pfSide',dir?'CURRENT PROVISIONAL '+dir:'NO ACTIVE FROZEN DIRECTION');
+   const why=r.captureReadiness?.lastReason||'NOT_CHECKED';
+   const status=why.replaceAll('_',' ');
+   const mode=v?.indexSourceType==='OFFICIAL_BRTI_LIVE'?
+    'private official index research':'public BTC proxy research';
    set('pfContext',v?
     'Frozen '+new Date(v.at).toLocaleTimeString()+' · '+v.reason.replaceAll('_',' ')+
-    ' · '+v.status+' · spot proxy only; BRTI not connected':
-    'Waiting for a Kalshi window approximately 1.5–4 minutes before expiry, with sufficient spot history.');
+    ' · expires '+new Date(v.endTime).toLocaleTimeString()+
+    ' · '+mode+' · NOT an authorized live-money signal':
+    'No CURRENT unexpired frozen forecast. Last scanner assessment: '+status+
+    '. Model only freezes 1.5–4 minutes before Kalshi expiry, with continuous past-only market history.');
    if(simpleCall)simpleCall.textContent=dir?
-    'Experimental CASH forecast: '+dir+' (NOT verified or a real-money recommendation).':
-    'No verified pick. Experimental forecast: waiting for sufficient market evidence.';
+    'Current experimental CASH direction: '+dir+' (UNVALIDATED, not a real-money recommendation).':
+    'NO CURRENT EXPERIMENTAL FORECAST. Last check: '+status+'. No verified pick.';
   }catch{missing()}
   finally{clearTimeout(timeout)}
   try{

@@ -109,7 +109,7 @@ test('filesystem journal replay preserves previous frozen prediction but does no
   assert.equal(second.snapshot().qualifiedCount,0);
   const filename=path.join(dir,'prospective-kalshi-events.jsonl');
   const original=fs.readFileSync(filename,'utf8');
-  fs.writeFileSync(filename,original.replace('KXBTC15M_STRIKE_VOL_V1','FORGED_MODEL'));
+  fs.writeFileSync(filename,original.replace('KXBTC15M_STRIKE_VOL_V2','FORGED_MODEL'));
   assert.throws(()=>createProspectiveStore({directory:dir}),/integrity invalid/);
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
@@ -134,4 +134,30 @@ test('licensed BRTI model preserves private evidence but public APIs redact raw 
  assert.equal(exportCopy.format,'CASH_PROSPECTIVE_REDACTED_COMMITMENTS_V1');
  assert.equal(exportCopy.events[0].payload,undefined);
  assert.equal(JSON.stringify(exportCopy).includes(String(brtiPoints.price)),false);
+});
+
+test('expired historical prediction cannot be displayed as the current live direction',async()=>{
+ const h=harness(),m=createProspectiveMonitor(h.sources);
+ await m.scan();
+ assert.equal(m.snapshot().active.side,'YES');
+ h.setTime(t+180001);
+ const s=m.snapshot();
+ assert.equal(s.active,null);
+ assert.equal(s.latest.side,'YES');
+ assert.equal(s.tradingAuthorized,false);
+ assert.equal(s.qualifiedCount,0);
+});
+test('readiness diagnostics explain missing targets and narrow forecast windows without inventing records',async()=>{
+ const h=harness(),m=createProspectiveMonitor(h.sources);
+ const missed=fixtures(t);
+ missed.quote.targetPrice=null;h.setValues(missed);
+ await m.scan();
+ assert.equal(m.snapshot().records,0);
+ assert.equal(m.snapshot().captureReadiness.lastReason,'OFFICIAL_STRIKE_OR_RULE_NOT_VERIFIED');
+ const early=fixtures(t);
+ early.quote.endTime=iso(t+500000);h.setValues(early);
+ await m.scan();
+ assert.equal(m.snapshot().captureReadiness.lastReason,'OUTSIDE_FROZEN_PREDICTION_WINDOW');
+ assert.equal(m.snapshot().captureReadiness.checks,2);
+ assert.equal(m.snapshot().captureReadiness.reasons.OUTSIDE_FROZEN_PREDICTION_WINDOW,1);
 });

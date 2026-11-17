@@ -1,6 +1,6 @@
 'use strict';
 /*
- * FROZEN FORECAST RESEARCH MODEL -- KXBTC15M_STRIKE_VOL_V1
+ * FROZEN FORECAST RESEARCH MODEL -- KXBTC15M_STRIKE_VOL_V2
  *
  * YES/NO/WAIT forecast uses public Kraken or Coinbase BTC spot history,
  * official Kalshi strike and market time remaining. It NEVER uses Kalshi asks,
@@ -9,10 +9,11 @@
  * Side classifications are NOT calibrated probabilities or real-money advice.
  */
 const {createHash}=require('node:crypto');
-const NAME='KXBTC15M_STRIKE_VOL_V1';
+const NAME='KXBTC15M_STRIKE_VOL_V2';
 const MODEL=Object.freeze({
  minHistoryMs:180000,
  minSamples:14,
+ sampleBucketMs:15000,
  maxGapMs:45000,
  minLeadMs:90000,
  maxLeadMs:240000,
@@ -52,19 +53,28 @@ function evaluateProspective({quote,spot,now=Date.now()}={}){
  const latestAt=Date.parse(spot.fetchedAt);
  if(!Number.isFinite(latestAt)||latestAt>now+2000||now-latestAt>MODEL.maxSpotAgeMs)
   return why('SPOT_PROXY_STALE');
- // Fail closed when the last observation window switches exchange sources.
- // A cross-exchange splice could mimic signal momentum that never occurred.
+ // Reject invalid or mixed-source samples rather than selecting a visually
+ // convenient subset. Historical data must remain chronological.
  const recent=spot.history.filter(x=>{
   const t=Date.parse(x?.time);
   return Number.isFinite(t)&&t<=now&&t>=now-360000;
  });
  if(recent.some(x=>x.source!==spot.source))return why('MIXED_SOURCE_SPOT_WINDOW');
- // Strictly select chronological past-only samples from one exchange.
- const samples=recent.filter(x=>{
-  const t=Date.parse(x?.time);
-  return Number.isFinite(t)&&t<=now&&t>=now-360000 &&
-   x?.source===spot.source&&Number.isFinite(x.price)&&x.price>1000&&x.price<10000000;
- }).map(x=>({time:x.time,price:x.price,source:x.source}));
+ if(recent.some(x=>!Number.isFinite(x.price)||x.price<=1000||x.price>=10000000))
+  return why('INVALID_SPOT_SAMPLE');
+ for(let i=1;i<recent.length;i++)
+  if(Date.parse(recent[i].time)<=Date.parse(recent[i-1].time))
+   return why('NON_CHRONOLOGICAL_SPOT_HISTORY');
+ // Kraken's cache may be polled every 5s (72 samples cover ~6 minutes).
+ // Selecting the newest 24 *raw* samples can span under 180s forever,
+ // silently preventing all real forecast captures. Deterministically
+ // downsample into 15s buckets before selecting the most recent 24 bins.
+ const bins=new Map();
+ for(const x of recent){
+  const key=Math.floor(Date.parse(x.time)/MODEL.sampleBucketMs);
+  bins.set(key,{time:x.time,price:x.price,source:x.source});
+ }
+ const samples=[...bins.values()];
  if(samples.length<MODEL.minSamples)return why('INSUFFICIENT_SPOT_HISTORY');
  const tail=samples.slice(-24);
  const first=Date.parse(tail[0].time),last=Date.parse(tail[tail.length-1].time);

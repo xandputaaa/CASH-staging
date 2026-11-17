@@ -17,6 +17,16 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
  if(!quotes||!spot||!results)throw Error('Missing prospective data feeds');
  const records=[],ids=new Set(),events=[];
  let lastHash='GENESIS',inflight=null,scans=0,lastScanAt=null,failures=0,pendingCursor=0;
+ const readiness={lastReason:'NOT_CHECKED',lastMarketId:null,lastCheckedAt:null,
+  observedWindowMs:null,checks:0,reasons:{}};
+ function noteReadiness(reason,marketId=null,leadMs=null){
+  readiness.lastReason=reason;
+  readiness.lastMarketId=typeof marketId==='string'?marketId:null;
+  readiness.lastCheckedAt=clockISO(clock());
+  readiness.observedWindowMs=Number.isFinite(leadMs)?leadMs:null;
+  readiness.checks++;
+  readiness.reasons[reason]=(readiness.reasons[reason]||0)+1;
+ }
  function append(type,payload){
   const body={sequence:events.length+1,type,recordedAt:clockISO(clock()),payload,
    previousHash:lastHash};
@@ -70,17 +80,23 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
     // source is offline; never silently switch back to a proxy model.
     const useIndex=brti?.forecastingEnabled?.()===true;
     const source=useIndex?brti.internal():s;
-    if(q?.marketId&&!ids.has(q.marketId)&&records.length<maxRecords){
+    const market=q?.marketId||null;
+    const lead=q?.endTime?Date.parse(q.endTime)-clock():null;
+    if(!market)noteReadiness('KALSHI_QUOTE_MISSING',null,lead);
+    else if(ids.has(market))noteReadiness('ALREADY_FROZEN',market,lead);
+    else if(records.length>=maxRecords)noteReadiness('JOURNAL_CAPACITY_REACHED',market,lead);
+    else{
      const p=evaluateProspective({quote:q,spot:source,now:clock()});
-     if(p.marketId&&p.state!=='WAIT'||
-        p.marketId&&p.reason==='EDGE_UNCLEAR_VS_VOLATILITY'){
+     noteReadiness(p.reason,market,lead);
+     if(p.marketId&&(p.state==='PROVISIONAL_DIRECTION'||
+       p.reason==='EDGE_UNCLEAR_VS_VOLATILITY')){
       const frozen={...p};
       append('FORECAST',frozen);
       records.push({...frozen,status:'PENDING',winner:null,resolvedAt:null,outcomeEvidence:null});
-      ids.add(q.marketId);created++;if(!p.side)recordedWait++;
+      ids.add(market);created++;if(!p.side)recordedWait++;
      }
     }
-   }catch{failures++}
+   }catch{failures++;noteReadiness('SOURCE_OR_JOURNAL_EXCEPTION');}
    // Stagger official outcome polling; max 4 lookups per scan. A result is
    // acceptable only after two separate public reads and evidence checks.
    const pending=records.filter(x=>x.status==='PENDING'&&Date.parse(x.endTime)<=clock());
@@ -121,6 +137,10 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
    realMoneyAuthorized:false};
  }
  function snapshot(){
+  const now=clock();
+  // Only an unexpired active contract can be described as the current call.
+  const current=records.findLast(x=>x.status==='PENDING'&&
+   Number.isFinite(Date.parse(x.endTime))&&Date.parse(x.endTime)>now)||null;
   const predictions=records.filter(x=>x.side==='YES'||x.side==='NO');
   const scored=predictions.filter(x=>x.status==='HIT'||x.status==='MISS');
   const hit=scored.filter(x=>x.status==='HIT').length;
@@ -130,6 +150,8 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
    model:NAME,
    state:records.length>=maxRecords?'CAPACITY_BLOCKED':'COLLECTING_EXPERIMENTAL',
    scans,lastScanAt,failures,
+   captureReadiness:{...readiness,reasons:{...readiness.reasons},
+    note:'Repeated readiness checks are diagnostics, not independently frozen contracts.'},
    storage:store?.mode||'VOLATILE_SERVER_SESSION',headHash:lastHash,
    records:records.length,directional:predictions.length,
    waits:records.filter(x=>x.side===null).length,
@@ -146,6 +168,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
    qualifiedCount:0,requiredQualified:100,
    independentlyTimeAttested:false,modelCalibrated:false,
    tradingAuthorized:false,automatedOrdersEnabled:false,
+   active:safeRecord(current),
    latest:safeRecord(records.at(-1)),
    recent:records.slice(-12).reverse().map(safeRecord),
    disclaimer:'Real pre-expiry frozen decisions, but no independent time witness, durable production store, calibrated accuracy or verified edge. Never represent as actionable investment advice.'

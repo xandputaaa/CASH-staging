@@ -85,3 +85,27 @@ test('explicit official BRTI history has a separate unvalidated provenance from 
  assert.equal(r.calibratedProbability,null);
  assert.equal(r.realMoneyAuthorized,false);
 });
+
+test('high-frequency 5-second Kraken polling retains 3+ minutes of history after bucket normalization',()=>{
+ const n=now,a=fixture({delta:500});
+ a.spot.history=Array.from({length:72},(_,i)=>({
+  time:iso(n-(71-i)*5000),price:85000+500+i*0.05,source:'Kraken BTC/USD'
+ }));
+ a.spot.price=a.spot.history.at(-1).price;
+ a.spot.fetchedAt=a.spot.history.at(-1).time;
+ const result=evaluateProspective(a);
+ assert.equal(result.state,'PROVISIONAL_DIRECTION');
+ assert.equal(result.side,'YES');
+ assert.ok(result.sampleWindow.length>=14&&result.sampleWindow.length<=24);
+ assert.ok(Date.parse(result.sampleWindow.at(-1).time)-
+  Date.parse(result.sampleWindow[0].time)>=180000);
+ assert.equal(result.calibratedProbability,null);
+});
+test('chronological holes and source splices do not become fabricated signals during downsampling',()=>{
+ const a=fixture({delta:500});
+ a.spot.history[8].time=a.spot.history[7].time;
+ assert.equal(evaluateProspective(a).reason,'NON_CHRONOLOGICAL_SPOT_HISTORY');
+ const b=fixture({delta:500});
+ b.spot.history[9].price=NaN;
+ assert.equal(evaluateProspective(b).reason,'INVALID_SPOT_SAMPLE');
+});
