@@ -304,3 +304,18 @@ test('forward-looking prospective Kalshi endpoint never exposes real trading per
  assert.equal((await request('/api/prospective/export','POST')).status,404);
  assert.equal((await request('/order','POST')).status,404);
 }));
+
+test('Kalshi CF Benchmarks optional feed reports read-only index health without secrets or prices',()=>withServer(async()=>{
+ const resp=await request('/api/brti-health');
+ assert.equal(resp.status,200);
+ const r=JSON.parse(resp.body);
+ assert.equal(r.indexId,'BRTI');
+ assert.equal(r.rawValueExposed,false);
+ assert.equal(r.rawHistoryExposed,false);
+ assert.equal(r.tradingPermission,false);
+ assert.equal(r.usedForForecasts,false);
+ assert.ok(['NOT_CONFIGURED','INVALID_CONFIG','NOT_CONNECTED','STALE','NOT_ENTITLED','LIVE','SOURCE_UNAVAILABLE'].includes(r.state));
+ assert.equal((await request('/api/brti-health','POST')).status,404);
+ const page=await request('/');
+ assert.match(page.body,/id="pfBrti"/);
+}));

@@ -22,6 +22,7 @@ const {assessCognition}=require('./cash-cognition');
 const {createDiagnostics}=require('./diagnostics');
 const {createProspectiveMonitor}=require('./prospective-monitor');
 const {createProspectiveStore}=require('./prospective-store');
+const {createKalshiBrtiFeed}=require('./kalshi-brti');
 const {assessLiveCheck}=require('./live-check');
 const {runStartupSmoke}=require('./startup-smoke');
 const liveCheckScript=fs.readFileSync('live-check-ui.js');
@@ -35,6 +36,7 @@ const auditJournal=createAuditJournal();
 const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver,journal:auditJournal,spot:feed});
 const prospective=createProspectiveMonitor({
  quotes:venueFeeds,spot:feed,results:resolver,store:createProspectiveStore()});
+const brtiFeed=createKalshiBrtiFeed();
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
@@ -69,6 +71,10 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/live-check-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(liveCheckScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/brti-health'){
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(brtiFeed.health()));return;
   }
   if(req.method==='GET'&&req.url==='/api/prospective'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
@@ -230,6 +236,10 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   prospective.scan().catch(()=>{});
   const prospectiveTimer=setInterval(()=>prospective.scan().catch(()=>{}),20000);
   prospectiveTimer.unref();
+  // No index network requests are made until read-only credentials exist.
+  brtiFeed.update().catch(()=>{});
+  const brtiTimer=setInterval(()=>brtiFeed.update().catch(()=>{}),15000);
+  brtiTimer.unref();
   console.log('CASH shadow baseline monitor: '+shadow.snapshot().storageMode+', '+shadow.snapshot().recoveredEvents+' recovered events, 0 qualifying forecasts');
   // Real route-level smoke test, with separate labels for app health and
   // volatile public market feeds. Runs only against this local server.

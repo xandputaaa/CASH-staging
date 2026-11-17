@@ -39,6 +39,16 @@
     'No verified pick. Experimental forecast: waiting for sufficient market evidence.';
   }catch{missing()}
   finally{clearTimeout(timeout)}
+  try{
+   const res=await fetch('/api/brti-health',{cache:'no-store'});
+   if(res.ok){
+    const b=await res.json();
+    set('pfBrti',b.state==='LIVE'?
+     'Official BRTI authenticated data: connected privately; NOT YET used in forecast model.':
+     'Official BRTI: '+String(b.state||'UNKNOWN').replaceAll('_',' ')+
+      '. CASH still uses a public exchange proxy for experimental predictions.');
+   }else{set('pfBrti','Official BRTI connection status unavailable.')}
+  }catch{set('pfBrti','Official BRTI connection status unavailable.')}
  }
  refresh();
  if(typeof setInterval==='function')setInterval(refresh,20000);
