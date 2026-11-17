@@ -47,6 +47,7 @@
   const strike=fresh&&data.target?.source==='KALSHI_FLOOR_STRIKE'
    &&Number.isFinite(data.target?.value)?data.target.value:null;
   el('simpleMarketStatus').textContent=fresh?'LIVE PUBLIC PRICES · PAPER ONLY':'MARKET DATA NOT READY';
+  if(!el('simpleCall').textContent)el('simpleCall').textContent='NO VERIFIED PICK';
   // The early settlement V3 UI independently owns the experimental
   // YES/NO/WAIT label in Simple Mode. Do not overwrite it on every
   // public quote poll, or users would see oscillating/stale statuses.
