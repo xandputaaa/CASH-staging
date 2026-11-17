@@ -264,6 +264,19 @@ const server=http.createServer(async(req,res)=>{
 });
 if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   console.log('CASH paper app listening on 0.0.0.0:'+port);
+  // Redacted startup configuration diagnostics; never log credentials, lengths,
+  // key IDs, PEM contents, authorization headers or owner tokens.
+  const privateConfig=resolvePrivateConfig();
+  const keyFormat=require('./kalshi-brti').readConfig(privateConfig.keyId,privateConfig.privateKeyPem).state;
+  const ownerValid=typeof privateConfig.ownerToken==='string'&&
+    privateConfig.ownerToken.length>=32&&privateConfig.ownerToken.length<=512;
+  const keyIdShape=typeof privateConfig.keyId==='string'&&
+    /^[-a-zA-Z0-9]{12,100}$/.test(privateConfig.keyId);
+  console.log('CASH private verifier config: keyIdFormat='+
+   (keyIdShape?'ACCEPTED':'INVALID_OR_MISSING')+
+   ', keyPair='+keyFormat+
+   ', ownerToken='+(ownerValid?'ACCEPTED':'INVALID_OR_MISSING')+
+   ', orders=DISABLED');
   // One Kalshi authenticated read-only GET, at startup, without any account
   // order content being logged or returned publicly. No order placement.
   orderVerifier.probeConnection().then(v=>{
