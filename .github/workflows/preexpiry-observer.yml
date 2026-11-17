@@ -1,0 +1,28 @@
+name: CASH pre-expiry public research observer
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '12,27,42,57 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capture-public-commitment:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Observe an existing public journal before Kalshi contract expiry
+        run: node preexpiry-observer.js
+      - name: Retain only pre-expiry public commitment evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-preexpiry-observation-${{ github.run_id }}
+          path: witness/public-preexpiry-observation.json
+          retention-days: 30
+          if-no-files-found: ignore
