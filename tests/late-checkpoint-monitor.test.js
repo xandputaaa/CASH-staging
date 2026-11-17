@@ -26,12 +26,12 @@ function verified(time,winner='YES'){
   evidenceSha256:crypto.createHash('sha256').update(JSON.stringify(raw)).digest('hex'),
   evidenceSourceUrl:'https://external-api.kalshi.com/trade-api/v2/markets/'+market};
 }
-function harness({delta=500,brti=null}={}){
+function harness({delta=500,brti=null,seriesFees=null}={}){
  let time=now,values=fixture(time,delta),result={status:'pending'},checkCalls=0;
  const m=createLateCheckpointMonitor({
   quotes:{query:async()=>values.quote},spot:{update:async()=>values.spot},
   results:{lookup:async()=>{checkCalls++;return result}},
-  brti,clock:()=>time
+  brti,feeFeed:seriesFees?{query:async()=>seriesFees}:null,clock:()=>time
  });
  return {m,setTime:x=>{time=x},setValues:x=>{values=x},
   setResult:x=>{result=x},checks:()=>checkCalls};
@@ -205,4 +205,53 @@ test('licensed official index samples remain redacted even after a published fin
  assert.doesNotMatch(JSON.stringify(h.m.exportSession()),/94751\.32/);
  assert.equal(h.m.snapshot().independentQualification,0);
  assert.equal(h.m.snapshot().canExecuteOrders,false);
+});
+
+test('paper evaluation freezes public YES/NO asks and independently verified series fee metadata once',async()=>{
+ const meta={state:'SERIES_METADATA_LIVE',source:'KALSHI_PUBLIC_SERIES_API',
+  feeType:'quadratic',feeMultiplier:1,refreshedAt:iso(now-60000)};
+ const h=harness({seriesFees:meta});
+ await h.m.scan();
+ let e=h.m.exportSession().events[0].payload;
+ assert.equal(e.publicAskAtFreeze.YES,.55);
+ assert.equal(e.publicAskAtFreeze.NO,.46);
+ assert.equal(e.publicAskQuoteFetchedAt,iso(now));
+ assert.equal(e.feeScheduleAtFreeze.multiplier,1);
+ assert.equal(e.feeScheduleAtFreeze.refreshedAt,iso(now-60000));
+ const hash=h.m.snapshot().headHash;
+ const switched=fixture(now,-800);
+ switched.quote.yesAsk=.95;switched.quote.noAsk=.06;
+ h.setValues(switched);
+ await h.m.scan();
+ assert.equal(h.m.snapshot().headHash,hash);
+ e=h.m.exportSession().events[0].payload;
+ assert.equal(e.publicAskAtFreeze.YES,.55);
+ h.setTime(now+240000);h.setResult(verified(now+240000,'YES'));
+ await h.m.scan();
+ const s=h.m.snapshot();
+ assert.equal(s.paperEconomics.pricedSettlements,1);
+ assert.equal(s.paperEconomics.paperWins,1);
+ assert.equal(s.paperEconomics.paperLosses,0);
+ assert.equal(s.paperEconomics.conservativePnlDollars,.43);
+ assert.equal(s.paperEconomics.optimisticPnlDollars,.4326);
+ assert.equal(s.latest.paperQuote.executableQuoteConfirmed,false);
+ assert.equal(s.latest.paperQuote.realOrdersEnabled,false);
+ assert.equal(s.independentQualification,0);
+});
+test('missing or stale fee metadata never turns a correct YES/NO into invented paper profit',async()=>{
+ for(const fees of [null,
+  {state:'STALE',source:'KALSHI_PUBLIC_SERIES_API',feeType:'quadratic',
+   feeMultiplier:1,refreshedAt:iso(now-1000000)}]){
+  const h=harness({seriesFees:fees});
+  await h.m.scan();
+  h.setTime(now+240000);h.setResult(verified(now+240000));
+  await h.m.scan();
+  const s=h.m.snapshot();
+  assert.equal(s.scorecard.overall.hits,1);
+  assert.equal(s.paperEconomics.pricedSettlements,0);
+  assert.equal(s.paperEconomics.unpriced,1);
+  assert.equal(s.paperEconomics.conservativePnlDollars,null);
+  assert.equal(s.latest.paperQuote.netAfterFees,null);
+  assert.equal(s.canExecuteOrders,false);
+ }
 });
