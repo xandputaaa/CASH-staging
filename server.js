@@ -264,6 +264,12 @@ const server=http.createServer(async(req,res)=>{
 });
 if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   console.log('CASH paper app listening on 0.0.0.0:'+port);
+  // One Kalshi authenticated read-only GET, at startup, without any account
+  // order content being logged or returned publicly. No order placement.
+  orderVerifier.probeConnection().then(v=>{
+    console.log('CASH Kalshi private read access: '+v.exchangeReadAuthState+
+      ', account records EXCLUDED, orders=DISABLED');
+  }).catch(()=>console.log('CASH Kalshi private read access: PROBE_UNAVAILABLE, orders=DISABLED'));
   let previous='';
   const probe=()=>feed.update().then(quote=>{
     const state=quote.status+':'+(quote.source||'none');

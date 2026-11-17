@@ -114,3 +114,43 @@ test('settlement failures never fabricate verified profit and do not erase real 
  assert.equal(out.evidence.settlementRecordLinkedByTicker,false);
  assert.equal(out.evidence.orderSpecificNetPnlVerified,false);
 });
+
+test('one-time authenticated account probe confirms read-only key without exposing orders',async()=>{
+ const kp=crypto.generateKeyPairSync('ed25519');
+ const pem=kp.privateKey.export({format:'pem',type:'pkcs8'}).toString();
+ let calls=0;
+ const verifier=createKalshiOrderVerifier({keyId:'kalshi-read-test-key-123456',
+  privateKeyPem:pem,ownerToken:'K'.repeat(44),clock:()=>at,
+  fetchImpl:async(url,opts)=>{
+   calls++;assert.equal(new URL(url).pathname,'/trade-api/v2/portfolio/orders');
+   assert.match(new URL(url).search,/limit=1/);
+   assert.equal(opts.method,'GET');
+   return {ok:true,json:async()=>({orders:[{order_id:'PRIVATE_ACCOUNT_ORDER_DO_NOT_EXPOSE'}],
+     cursor:''})};
+  }});
+ const state=await verifier.probeConnection();
+ assert.equal(calls,1);
+ assert.equal(state.exchangeReadAuthState,'AUTHENTICATED_READ_ONLY');
+ assert.equal(state.exchangeReadAuthCheckedAt,new Date(at).toISOString());
+ assert.equal(state.verifiedLiveOrders,0);
+ assert.equal(state.orderPlacementEnabled,false);
+ assert.equal(JSON.stringify(state).includes('PRIVATE_ACCOUNT_ORDER_DO_NOT_EXPOSE'),false);
+ assert.equal(JSON.stringify(state).includes('kalshi-read-test-key'),false);
+});
+test('Kalshi rejecting read credentials only reports a safe status without private content',async()=>{
+ const kp=crypto.generateKeyPairSync('ed25519');
+ const pem=kp.privateKey.export({format:'pem',type:'pkcs8'}).toString();
+ const v=createKalshiOrderVerifier({keyId:'kalshi-read-test-key-123456',
+  privateKeyPem:pem,ownerToken:'K'.repeat(44),clock:()=>at,
+  fetchImpl:async()=>({ok:false,status:401})});
+ assert.equal((await v.probeConnection()).exchangeReadAuthState,'KEY_REJECTED_OR_SCOPE_DENIED');
+ assert.equal(v.publicStatus().verifiedLiveOrders,0);
+});
+test('disconnected credentials trigger no private exchange requests even during probe',async()=>{
+ let calls=0;
+ const v=createKalshiOrderVerifier({keyId:null,privateKeyPem:null,ownerToken:null,
+  fetchImpl:async()=>{calls++;throw Error('must not run')}});
+ const result=await v.probeConnection();
+ assert.equal(result.exchangeReadAuthState,'NOT_CONNECTED');
+ assert.equal(calls,0);
+});

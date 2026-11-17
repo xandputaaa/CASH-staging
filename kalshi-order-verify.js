@@ -34,6 +34,7 @@ function ownerAuthorized(expected,bearer){
 function getHeaders(config,pathname,time){
  if(!config||config.state!=='CONFIGURED')throw Error('READ_KEY_UNAVAILABLE');
  if(!(/^\/trade-api\/v2\/portfolio\/orders\/[A-Za-z0-9_-]{8,100}$/.test(pathname)||
+   pathname===PREFIX+'/portfolio/orders'||
    pathname===PREFIX+'/portfolio/fills'||
    pathname===PREFIX+'/portfolio/settlements'))
   throw Error('NON_READ_PATH_REJECTED');
@@ -120,10 +121,13 @@ function createKalshiOrderVerifier({fetchImpl=fetch,clock=()=>Date.now(),
  const auth=readConfig(keyId,privateKeyPem);
  const configured=auth.state==='CONFIGURED'&&typeof ownerToken==='string'&&
   ownerToken.length>=32&&ownerToken.length<=512;
+ let exchangeReadAuthState='NOT_TESTED',exchangeReadAuthCheckedAt=null;
  function publicStatus(){
   return {version:'CASH_ORDER_VERIFICATION_READINESS_V1',
    state:configured?'PRIVATE_VERIFICATION_CONFIGURED':'NOT_CONNECTED',
    ownerAccessConfigured:configured,
+   exchangeReadAuthState:configured?exchangeReadAuthState:'NOT_CONNECTED',
+   exchangeReadAuthCheckedAt:configured?exchangeReadAuthCheckedAt:null,
    verifiedLiveOrders:0, // not a count: no account query occurs until authorized
    independentlyValidatedPredictions:0,
    automaticOrdersEnabled:false,orderPlacementEnabled:false,
@@ -142,6 +146,21 @@ function createKalshiOrderVerifier({fetchImpl=fetch,clock=()=>Date.now(),
    return await response.json();
   }finally{clearTimeout(timer)}
  }
+ async function probeConnection(){
+  if(!configured)return publicStatus();
+  // One authenticated GET only. Inspect response *shape*, never disclose,
+  // retain, print, or enumerate any returned private account orders.
+  try{
+   const r=await get(PREFIX+'/portfolio/orders','?limit=1');
+   exchangeReadAuthState=Array.isArray(r?.orders)?
+    'AUTHENTICATED_READ_ONLY':'UNEXPECTED_EXCHANGE_RESPONSE';
+  }catch(e){
+   exchangeReadAuthState=e?.message==='EXCHANGE_AUTH_FAILED'?
+    'KEY_REJECTED_OR_SCOPE_DENIED':'SOURCE_UNAVAILABLE';
+  }
+  exchangeReadAuthCheckedAt=new Date(clock()).toISOString();
+  return publicStatus();
+ }
  async function verify(orderId,bearer){
   if(!configured)throw Error('VERIFIER_NOT_CONFIGURED');
   if(!ownerAuthorized(ownerToken,bearer))throw Error('OWNER_NOT_AUTHORIZED');
@@ -159,6 +178,6 @@ function createKalshiOrderVerifier({fetchImpl=fetch,clock=()=>Date.now(),
    '?ticker='+encodeURIComponent(ticker)+'&limit='+MAX_ROWS)}catch{}
   return combine({orderId,orderData,fillData:fills,settlementData:settlement,at:clock()});
  }
- return {publicStatus,verify,configured};
+ return {publicStatus,probeConnection,verify,configured};
 }
 module.exports={createKalshiOrderVerifier,ownerAuthorized,getHeaders,combine};
