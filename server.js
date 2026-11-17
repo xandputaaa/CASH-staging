@@ -20,6 +20,9 @@ const {assessKalshi15}=require('./kalshi15-readiness');
 const {createKalshiFeeFeed}=require('./kalshi-fees');
 const {assessCognition}=require('./cash-cognition');
 const {createDiagnostics}=require('./diagnostics');
+const {assessLiveCheck}=require('./live-check');
+const {runStartupSmoke}=require('./startup-smoke');
+const liveCheckScript=fs.readFileSync('live-check-ui.js');
 const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
@@ -53,6 +56,30 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/view-mode.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(viewModeScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/live-check-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(liveCheckScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/live-check'){
+    try{
+      const [quote,spotQuote]=await Promise.all([venueFeeds.query('Kalshi'),feed.update()]);
+      const terminal=assessKalshi15({quote,spot:spotQuote,shadow:shadow.snapshot(),
+       fees:kalshiFeeFeed.view()});
+      const result=assessLiveCheck({kalshi:quote,spot:spotQuote,terminal,assets:{
+       page:page.includes('id="cashSimple"'),simple:simpleUiScript.length>200,
+       switcher:viewModeScript.length>200,advanced:kalshi15Script.length>200,
+       paper:livePaperScript.length>200
+      }});
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify(result));
+    }catch{
+      res.writeHead(503,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({version:'CASH_LIVE_OPERATION_CHECK_V1',
+       state:'UNAVAILABLE',paperPractice:{realOrdersEnabled:false},
+       model:{independentValidatedForecasts:0,canExecuteRealTrade:false}}));
+    }
+    return;
   }
   if(req.method==='GET'&&req.url==='/simple-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
@@ -182,5 +209,15 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   shadow.scan().catch(()=>{});
   const shadowTimer=setInterval(()=>shadow.scan().catch(()=>{}),20000);shadowTimer.unref();
   console.log('CASH shadow baseline monitor: '+shadow.snapshot().storageMode+', '+shadow.snapshot().recoveredEvents+' recovered events, 0 qualifying forecasts');
+  // Real route-level smoke test, with separate labels for app health and
+  // volatile public market feeds. Runs only against this local server.
+  runStartupSmoke({port}).then(r=>{
+    console.log('CASH HTTP startup smoke: '+r.routeChecksPassed+'/'+r.httpRoutesChecked+
+      ' routes, app='+ (r.passed?'OK':'FAIL')+
+      ', market='+r.observedDataState+', KalshiFresh='+r.kalshiQuoteFresh+
+      ', orders=DISABLED, validated=0/100'+
+      (r.failedPaths.length?' failed='+r.failedPaths.join(','):''));
+  }).catch(()=>console.log('CASH HTTP startup smoke: UNAVAILABLE, trading=DISABLED'));
+
 });
 module.exports={server};

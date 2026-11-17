@@ -249,3 +249,31 @@ test('simple and advanced modes are both served read-only and preserve no-order 
  assert.equal((await request('/view-mode.js','POST')).status,404);
  assert.equal((await request('/trade','POST')).status,404);
 }));
+
+test('public live-operation endpoint and button are reachable without enabling any order route',()=>withServer(async()=>{
+ const result=await request('/api/live-check');
+ assert.equal(result.status,200);
+ assert.match(result.headers['cache-control'],/no-store/);
+ const data=JSON.parse(result.body);
+ assert.equal(data.version,'CASH_LIVE_OPERATION_CHECK_V1');
+ assert.equal(data.site.online,true);
+ assert.equal(data.site.simpleModeAssetsReady,true);
+ assert.equal(data.site.advancedModeAssetsReady,true);
+ assert.equal(data.paperPractice.clientAvailable,true);
+ assert.equal(data.paperPractice.realOrdersEnabled,false);
+ assert.equal(data.model.independentValidatedForecasts,0);
+ assert.equal(data.model.canExecuteRealTrade,false);
+ assert.ok(['LIVE_PAPER_MONITOR','ONLINE_PARTIAL_DATA','ONLINE_QUOTES_UNAVAILABLE'].includes(data.state));
+ const js=await request('/live-check-ui.js');
+ assert.equal(js.status,200);
+ assert.match(js.headers['content-type'],/javascript/);
+ assert.match(js.body,/CASH_LIVE_OPERATION_CHECK_V1/);
+ assert.match(js.body,/connectionCheck/);
+ const home=await request('/');
+ assert.match(home.body,/CASH \/ LIVE PAPER MONITOR/);
+ assert.match(home.body,/id="connectionCheck"/);
+ assert.match(home.body,/id="connectionResult"/);
+ assert.match(home.body,/live-check-ui\.js/);
+ assert.equal((await request('/api/live-check','POST')).status,404);
+ assert.equal((await request('/trade','POST')).status,404);
+}));
