@@ -222,3 +222,30 @@ test('Kalshi fee metadata remains hypothetical, read-only and distinct from real
  const script=await request('/kalshi15-ui.js');
  assert.match(script.body,/One-contract TAKER illustration/);
 }));
+
+test('simple and advanced modes are both served read-only and preserve no-order safety gates',()=>withServer(async()=>{
+ const page=await request('/');
+ assert.equal(page.status,200);
+ assert.match(page.body,/data-cash-mode="simple"/);
+ assert.match(page.body,/id="modeSimple"/);
+ assert.match(page.body,/id="modeAdvanced"/);
+ assert.match(page.body,/id="cashSimple"/);
+ assert.match(page.body,/id="livePaperLab"/);
+ assert.match(page.body,/body\[data-cash-mode="simple"\] main>section:not/);
+ assert.match(page.body,/NO VERIFIED PICK/);
+ assert.match(page.body,/PRACTICE ONLY/);
+ assert.match(page.body,/view-mode\.js/);
+ assert.match(page.body,/simple-ui\.js/);
+ const ui=await request('/simple-ui.js');
+ assert.equal(ui.status,200);
+ assert.match(ui.headers['content-type'],/javascript/);
+ assert.match(ui.body,/NO_CALL_MODEL_NOT_VALIDATED/);
+ assert.match(ui.body,/cash-mode-change/);
+ const modes=await request('/view-mode.js');
+ assert.equal(modes.status,200);
+ assert.match(modes.body,/cash-view-mode-v1/);
+ assert.match(modes.body,/aria-pressed/);
+ assert.equal((await request('/simple-ui.js','POST')).status,404);
+ assert.equal((await request('/view-mode.js','POST')).status,404);
+ assert.equal((await request('/trade','POST')).status,404);
+}));

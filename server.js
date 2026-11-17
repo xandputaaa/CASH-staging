@@ -14,6 +14,8 @@ const diagnosticsScript=fs.readFileSync('diagnostics-ui.js');
 const evaluationScript=fs.readFileSync('evaluation-ui.js');
 const cognitionScript=fs.readFileSync('cognition-ui.js');
 const kalshi15Script=fs.readFileSync('kalshi15-ui.js');
+const viewModeScript=fs.readFileSync('view-mode.js');
+const simpleUiScript=fs.readFileSync('simple-ui.js');
 const {assessKalshi15}=require('./kalshi15-readiness');
 const {createKalshiFeeFeed}=require('./kalshi-fees');
 const {assessCognition}=require('./cash-cognition');
@@ -47,6 +49,14 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/cognition-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(cognitionScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/view-mode.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(viewModeScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/simple-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(simpleUiScript);return;
   }
   if(req.method==='GET'&&req.url==='/kalshi15-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
