@@ -22,7 +22,8 @@ const MODEL=Object.freeze({
  sigmaLeadMultiplier:1.6,
  minVariancePerSecond:1e-10
 });
-const sourceSet=new Set(['Kraken BTC/USD','Coinbase Exchange BTC-USD']);
+const officialSource='CF Benchmarks BRTI via Kalshi read-only';
+const sourceSet=new Set(['Kraken BTC/USD','Coinbase Exchange BTC-USD',officialSource]);
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const validAsks=q=>Number.isFinite(q?.yesAsk)&&q.yesAsk>0&&q.yesAsk<1&&
  Number.isFinite(q?.noAsk)&&q.noAsk>0&&q.noAsk<1;
@@ -88,12 +89,14 @@ function evaluateProspective({quote,spot,now=Date.now()}={}){
  const cutoff=Math.max(volatilityBarrier,proxyBasisBarrier);
  const side=gapLog>cutoff?'YES':gapLog< -cutoff?'NO':null;
  const sampleWindowSha256=digest(tail);
+ const officialIndexInput=spot.source===officialSource;
  return {
   model:NAME,state:side?'PROVISIONAL_DIRECTION':'WAIT',
   reason:side?'STRIKE_GAP_EXCEEDS_VOLATILITY_AND_PROXY_BUFFER':'EDGE_UNCLEAR_VS_VOLATILITY',
   side,signalZ:Math.round(gapLog/(sigma*Math.sqrt(leadMs/1000))*1000)/1000,
   calibratedProbability:null,expectedValue:null,
-  validation:'UNVALIDATED_PROXY_MODEL',realMoneyAuthorized:false,
+  validation:officialIndexInput?'UNVALIDATED_BRTI_MODEL':'UNVALIDATED_PROXY_MODEL',
+  realMoneyAuthorized:false,indexSourceType:officialIndexInput?'OFFICIAL_BRTI_LIVE':'SINGLE_EXCHANGE_PROXY',
   modelParams:MODEL,marketId:quote.marketId,
   at:new Date(now).toISOString(),endTime:quote.endTime,leadMs,
   targetPrice:quote.targetPrice,quoteFetchedAt:quote.fetchedAt,
@@ -105,7 +108,9 @@ function evaluateProspective({quote,spot,now=Date.now()}={}){
   inputSha256:digest({marketId:quote.marketId,at:new Date(now).toISOString(),
    target:quote.targetPrice,spotPrice:spot.price,side,gapBps:Math.round(gapBps*1000)/1000,
    sampleWindowSha256}),
-  warning:'Independent of Kalshi odds as a direction model, but uses a single-exchange proxy instead of official BRTI. No proven edge or calibration.'
+  warning:officialIndexInput?
+   'Based on live BRTI values, not the closing 60-second settlement average. Uncalibrated; no verified edge, legal redistribution rights, or trading authorization implied.':
+   'Independent of Kalshi odds, but uses single-exchange proxy instead of official BRTI. No proven edge or calibration.'
  };
 }
 module.exports={evaluateProspective,MODEL,NAME,digest};

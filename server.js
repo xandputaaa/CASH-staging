@@ -34,9 +34,10 @@ const kalshiFeeFeed=createKalshiFeeFeed();
 const resolver=createResolver();
 const auditJournal=createAuditJournal();
 const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver,journal:auditJournal,spot:feed});
-const prospective=createProspectiveMonitor({
- quotes:venueFeeds,spot:feed,results:resolver,store:createProspectiveStore()});
 const brtiFeed=createKalshiBrtiFeed();
+const prospective=createProspectiveMonitor({
+ quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed,
+ store:createProspectiveStore()});
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');

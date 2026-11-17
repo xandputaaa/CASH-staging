@@ -64,3 +64,22 @@ test('authorization failure discloses no token, key or raw authenticated respons
  assert.equal(s.tradingPermission,false);
  assert.equal(s.rawHistoryExposed,false);
 });
+
+test('authorized index source can supply 15-second history without exposing licensed data',async()=>{
+ const kp=crypto.generateKeyPairSync('ed25519');
+ const pem=kp.privateKey.export({format:'pem',type:'pkcs8'}).toString();
+ const points=Array.from({length:350},(_,i)=>({time:at-350000+i*1000,
+  value:String(86000+i*0.14)}));
+ const feed=createKalshiBrtiFeed({keyId:'key-id-abcdef123456',privateKeyPem:pem,
+  useForForecasts:true,clock:()=>at,fetchImpl:async()=>({
+   ok:true,json:async()=>({data:{payload:points}})})});
+ await feed.update();
+ assert.equal(feed.forecastingEnabled(),true);
+ assert.equal(feed.health().usedForForecasts,true);
+ const x=feed.internal();
+ assert.ok(x.history.length>=14);
+ assert.ok(x.history.length<=25);
+ assert.ok(Date.parse(x.history.at(-1).time)-Date.parse(x.history[0].time)>=180000);
+ assert.equal(x.source,'CF Benchmarks BRTI via Kalshi read-only');
+ assert.equal(JSON.stringify(feed.health()).includes('86000'),false);
+});

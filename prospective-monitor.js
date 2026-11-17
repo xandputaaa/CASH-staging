@@ -12,7 +12,7 @@ const MAX=320;
 const supported=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const clockISO=t=>new Date(t).toISOString();
-function createProspectiveMonitor({quotes,spot,results,clock=()=>Date.now(),
+function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.now(),
  maxRecords=MAX,store=null}={}){
  if(!quotes||!spot||!results)throw Error('Missing prospective data feeds');
  const records=[],ids=new Set(),events=[];
@@ -35,7 +35,7 @@ function createProspectiveMonitor({quotes,spot,results,clock=()=>Date.now(),
    const p=event.payload;
    if(event.type==='FORECAST'){
     if(!p||ids.has(p.marketId)||!supported.test(p.marketId)||
-      p.model!==NAME||p.validation!=='UNVALIDATED_PROXY_MODEL'||
+      p.model!==NAME||!['UNVALIDATED_PROXY_MODEL','UNVALIDATED_BRTI_MODEL'].includes(p.validation)||
       !['YES','NO',null].includes(p.side)||p.realMoneyAuthorized!==false||
       p.calibratedProbability!==null||p.expectedValue!==null||
       !Number.isFinite(Date.parse(p.at))||Date.parse(p.endTime)-Date.parse(p.at)<90000||
@@ -66,8 +66,12 @@ function createProspectiveMonitor({quotes,spot,results,clock=()=>Date.now(),
    try{
     // Quote & spot are fetched before the model freeze; future data never enter.
     const [q,s]=await Promise.all([quotes.query('Kalshi'),spot.update()]);
+    // When explicitly opted in to private index use, fail closed if that
+    // source is offline; never silently switch back to a proxy model.
+    const useIndex=brti?.forecastingEnabled?.()===true;
+    const source=useIndex?brti.internal():s;
     if(q?.marketId&&!ids.has(q.marketId)&&records.length<maxRecords){
-     const p=evaluateProspective({quote:q,spot:s,now:clock()});
+     const p=evaluateProspective({quote:q,spot:source,now:clock()});
      if(p.marketId&&p.state!=='WAIT'||
         p.marketId&&p.reason==='EDGE_UNCLEAR_VS_VOLATILITY'){
       const frozen={...p};
@@ -102,6 +106,20 @@ function createProspectiveMonitor({quotes,spot,results,clock=()=>Date.now(),
   })().finally(()=>{inflight=null});
   return inflight;
  }
+ function safeRecord(x){
+  if(!x)return null;
+  const licensed=x.indexSourceType==='OFFICIAL_BRTI_LIVE';
+  return {marketId:x.marketId,at:x.at,endTime:x.endTime,
+   side:x.side,reason:x.reason,status:x.status,winner:x.winner,
+   leadMs:x.leadMs,model:x.model,validation:x.validation,
+   indexSourceType:x.indexSourceType||'SINGLE_EXCHANGE_PROXY',
+   // Never redistribute licensed BRTI values, detailed historical points,
+   // exchange-auth credentials or settlement index-derived numeric features.
+   targetPrice:x.targetPrice,spotPrice:licensed?null:x.spotPrice,
+   signalZ:licensed?null:x.signalZ,gapBps:licensed?null:x.gapBps,
+   sampleWindowSha256:x.sampleWindowSha256,
+   realMoneyAuthorized:false};
+ }
  function snapshot(){
   const predictions=records.filter(x=>x.side==='YES'||x.side==='NO');
   const scored=predictions.filter(x=>x.status==='HIT'||x.status==='MISS');
@@ -115,6 +133,12 @@ function createProspectiveMonitor({quotes,spot,results,clock=()=>Date.now(),
    storage:store?.mode||'VOLATILE_SERVER_SESSION',headHash:lastHash,
    records:records.length,directional:predictions.length,
    waits:records.filter(x=>x.side===null).length,
+   sourceBreakdown:{
+    officialBrtiFrozen:records.filter(x=>x.indexSourceType==='OFFICIAL_BRTI_LIVE').length,
+    proxyFrozen:records.filter(x=>x.indexSourceType!=='OFFICIAL_BRTI_LIVE').length,
+    officialBrtiScored:scored.filter(x=>x.indexSourceType==='OFFICIAL_BRTI_LIVE').length,
+    proxyScored:scored.filter(x=>x.indexSourceType!=='OFFICIAL_BRTI_LIVE').length
+   },
    pending:records.filter(x=>x.status==='PENDING').length,
    officiallyScored:scored.length,hits:hit,misses:scored.length-hit,
    voids:records.filter(x=>x.status==='VOID').length,
@@ -122,16 +146,17 @@ function createProspectiveMonitor({quotes,spot,results,clock=()=>Date.now(),
    qualifiedCount:0,requiredQualified:100,
    independentlyTimeAttested:false,modelCalibrated:false,
    tradingAuthorized:false,automatedOrdersEnabled:false,
-   latest:records.length?{...records.at(-1),outcomeEvidence:undefined}:null,
-   recent:records.slice(-12).reverse().map(x=>({
-    marketId:x.marketId,at:x.at,side:x.side,reason:x.reason,
-    leadMs:x.leadMs,signalZ:x.signalZ,targetPrice:x.targetPrice,
-    spotPrice:x.spotPrice,barrierBps:x.barrierBps,status:x.status,winner:x.winner
-   })),
+   latest:safeRecord(records.at(-1)),
+   recent:records.slice(-12).reverse().map(safeRecord),
    disclaimer:'Real pre-expiry frozen decisions, but no independent time witness, durable production store, calibrated accuracy or verified edge. Never represent as actionable investment advice.'
   };
  }
  function exportSession(){
+  if(records.some(x=>x.indexSourceType==='OFFICIAL_BRTI_LIVE'))
+   return {...snapshot(),format:'CASH_PROSPECTIVE_REDACTED_COMMITMENTS_V1',
+    events:events.map(x=>({type:x.type,sequence:x.sequence,
+      recordedAt:x.recordedAt,hash:x.hash,previousHash:x.previousHash})),
+    warning:'Licensed BRTI raw data and private model inputs are not publicly exported. Commitments alone cannot reconstruct records or prove independent capture times.'};
   return {...snapshot(),format:'CASH_PROSPECTIVE_HASHED_SESSION_V1',
    events:events.map(x=>({...x})),warning:'Hashes are self-generated, not independent trusted timestamps.'};
  }

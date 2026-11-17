@@ -62,8 +62,10 @@ function parseBrtiResult(body,now){
 }
 function createKalshiBrtiFeed({fetchImpl=fetch,clock=()=>Date.now(),
  keyId=process.env.CASH_KALSHI_READ_KEY_ID,
- privateKeyPem=process.env.CASH_KALSHI_READ_KEY_PEM}={}){
+ privateKeyPem=process.env.CASH_KALSHI_READ_KEY_PEM,
+ useForForecasts=process.env.CASH_USE_AUTHORIZED_BRTI_FOR_FORECASTS==='true'}={}){
  const auth=readConfig(keyId,privateKeyPem);
+ const forecastingEnabled=()=>auth.state==='CONFIGURED'&&useForForecasts===true;
  let latest=null,lastAttempt=0,lastError=null,inflight=null;
  function health(){
   const now=clock();
@@ -77,13 +79,22 @@ function createKalshiBrtiFeed({fetchImpl=fetch,clock=()=>Date.now(),
    latestValueAt:latest?.latest.time||null,
    ageMs:ageMs===null?null:Math.max(0,ageMs),
    rawValueExposed:false,rawHistoryExposed:false,
-   tradingPermission:false,usedForForecasts:false,
-   note:'Authenticated BRTI presence check only. No licensed prices are redistributed and the current provisional prediction model remains a proxy model.'};
+   tradingPermission:false,usedForForecasts:forecastingEnabled()&&state==='LIVE',
+   forecastOptIn:forecastingEnabled(),
+   note:forecastingEnabled()?
+    'Private official index enabled for experimental forecasts; not calibrated, not settlement 60-second average, and never an order permission.':
+    'Authenticated BRTI connection status only; raw licensed prices are not publicly redistributed.'};
  }
  function internal(){
   if(!latest||health().state!=='LIVE')return null;
-  return {status:'live',source:SOURCE,price:latest.latest.price,
-   fetchedAt:latest.latest.time,history:latest.history};
+  // Reduce up to 1Hz upstream values into a reproducible 15-second past-only
+  // trail for the frozen volatility model; keep full raw data private.
+  const sampled=new Map();
+  for(const point of latest.history)
+   sampled.set(Math.floor(Date.parse(point.time)/15000),point);
+  const history=[...sampled.values()].sort((a,b)=>Date.parse(a.time)-Date.parse(b.time));
+  return {status:'live',source:SOURCE,price:history.at(-1)?.price??latest.latest.price,
+   fetchedAt:history.at(-1)?.time??latest.latest.time,history};
  }
  async function update(){
   if(auth.state!=='CONFIGURED')return health();
@@ -108,6 +119,6 @@ function createKalshiBrtiFeed({fetchImpl=fetch,clock=()=>Date.now(),
   })().finally(()=>{inflight=null});
   return inflight;
  }
- return {health,internal,update};
+ return {health,internal,update,forecastingEnabled};
 }
 module.exports={createKalshiBrtiFeed,readConfig,signedHeaders,parseBrtiResult,SOURCE};

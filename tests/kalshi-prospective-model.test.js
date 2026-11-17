@@ -73,3 +73,15 @@ test('prediction window blocks early hindsight and last-second speculative calls
   assert.equal(r.side,null);assert.equal(r.reason,'OUTSIDE_FROZEN_PREDICTION_WINDOW');
  }
 });
+
+test('explicit official BRTI history has a separate unvalidated provenance from proxy forecasts',()=>{
+ const f=fixture();
+ f.spot.source='CF Benchmarks BRTI via Kalshi read-only';
+ f.spot.history=f.spot.history.map(x=>({...x,source:f.spot.source}));
+ const r=evaluateProspective(f);
+ assert.equal(r.side,'YES');
+ assert.equal(r.validation,'UNVALIDATED_BRTI_MODEL');
+ assert.equal(r.indexSourceType,'OFFICIAL_BRTI_LIVE');
+ assert.equal(r.calibratedProbability,null);
+ assert.equal(r.realMoneyAuthorized,false);
+});

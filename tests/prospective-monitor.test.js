@@ -113,3 +113,25 @@ test('filesystem journal replay preserves previous frozen prediction but does no
   assert.throws(()=>createProspectiveStore({directory:dir}),/integrity invalid/);
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
+
+test('licensed BRTI model preserves private evidence but public APIs redact raw values',async()=>{
+ const h=harness(),brtiPoints=fixtures(t).spot;
+ brtiPoints.source='CF Benchmarks BRTI via Kalshi read-only';
+ brtiPoints.history=brtiPoints.history.map(x=>({...x,source:brtiPoints.source}));
+ const monitor=createProspectiveMonitor({...h.sources,brti:{
+  forecastingEnabled:()=>true,internal:()=>brtiPoints
+ }});
+ await monitor.scan();
+ const r=monitor.snapshot();
+ assert.equal(r.records,1);
+ assert.equal(r.sourceBreakdown.officialBrtiFrozen,1);
+ assert.equal(r.latest.indexSourceType,'OFFICIAL_BRTI_LIVE');
+ assert.equal(r.latest.spotPrice,null);
+ assert.equal(r.latest.signalZ,null);
+ assert.equal(r.latest.sampleWindow,undefined);
+ assert.equal(r.tradingAuthorized,false);
+ const exportCopy=monitor.exportSession();
+ assert.equal(exportCopy.format,'CASH_PROSPECTIVE_REDACTED_COMMITMENTS_V1');
+ assert.equal(exportCopy.events[0].payload,undefined);
+ assert.equal(JSON.stringify(exportCopy).includes(String(brtiPoints.price)),false);
+});
