@@ -8,6 +8,7 @@
 const {createHash}=require('node:crypto');
 const {evaluateProspective,NAME,digest}=require('./kalshi-prospective-model');
 const {hasVerifiedEvidence}=require('./shadow-monitor');
+const {prospectiveScorecard}=require('./prospective-scorecard');
 const MAX=320;
 const supported=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
@@ -198,6 +199,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
   const predictions=records.filter(x=>x.side==='YES'||x.side==='NO');
   const scored=predictions.filter(x=>x.status==='HIT'||x.status==='MISS');
   const hit=scored.filter(x=>x.status==='HIT').length;
+  const scorecard=prospectiveScorecard(records);
   const waiting=records.filter(x=>x.status==='PENDING');
   const expired=waiting.filter(x=>Date.parse(x.endTime)<=now);
   const overdue=expired.filter(x=>now-Date.parse(x.endTime)>=600000);
@@ -235,7 +237,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
     officialBrtiScored:scored.filter(x=>x.indexSourceType==='OFFICIAL_BRTI_LIVE').length,
     proxyScored:scored.filter(x=>x.indexSourceType!=='OFFICIAL_BRTI_LIVE').length
    },
-   pending:waiting.length,pendingResolutionDiagnostics,
+   pending:waiting.length,pendingResolutionDiagnostics,scorecard,
    officiallyScored:scored.length,hits:hit,misses:scored.length-hit,
    voids:records.filter(x=>x.status==='VOID').length,
    hitRate:scored.length?hit/scored.length:null,
