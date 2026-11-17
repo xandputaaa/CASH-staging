@@ -20,7 +20,7 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Da
  maxRecords=MAX_RECORDS}={}){
  if(!quotes||!spot||!results)throw Error('Late checkpoint requires three read-only sources');
  const bootAt=iso(clock()),records=[],events=[],seen=new Set(),missed=new Set();
- let headHash='GENESIS',inflight=null,scans=0,failures=0,lastReason='NOT_CHECKED';
+ let headHash='GENESIS',inflight=null,scans=0,failures=0,lastReason='NOT_CHECKED',pendingCursor=0;
  function append(type,payload){
   const body={sequence:events.length+1,recordedAt:iso(clock()),type,payload,previousHash:headHash};
   const e={...body,hash:sha(body)};
@@ -65,7 +65,11 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Da
  }
  async function settle(){
   const expired=records.filter(x=>x.status==='PENDING'&&Date.parse(x.endTime)<=clock());
-  for(const r of expired.slice(0,4)){
+  // Rotate pending checks so four slow/provisional markets never starve later ones.
+  const start=expired.length?pendingCursor%expired.length:0;
+  const selected=Array.from({length:Math.min(4,expired.length)},(_,i)=>expired[(start+i)%expired.length]);
+  pendingCursor=expired.length?(start+selected.length)%expired.length:0;
+  for(const r of selected){
    try{
     const x=await results.lookup({venue:'Kalshi',marketId:r.marketId,slug:null});
     r.outcomeAttempts++;
