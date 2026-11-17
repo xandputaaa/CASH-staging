@@ -39,10 +39,38 @@ jobs:
           if(r.format==='CASH_PROSPECTIVE_REDACTED_COMMITMENTS_V1'&&
              r.events.some(x=>Object.hasOwn(x,'payload')))
              throw Error('Licensed input payload encountered; refuse artifact');
+          let last='GENESIS',forecastEvents=0,resolutionEvents=0;
+          for(let i=0;i<r.events.length;i++){
+            const e=r.events[i];
+            if(!e||e.sequence!==i+1||e.previousHash!==last||
+               !['FORECAST','OUTCOME'].includes(e.type)||
+               !/^[a-f0-9]{64}$/.test(e.hash||''))
+               throw Error('Malformed or out-of-order journal event');
+            if(r.format==='CASH_PROSPECTIVE_HASHED_SESSION_V1'){
+              if(!e.payload||typeof e.payload!=='object')
+                throw Error('Missing publicly verifiable research event');
+              const {hash,...body}=e;
+              const recomputed=crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
+              if(recomputed!==hash)throw Error('Research journal checksum mismatch');
+            }
+            if(e.type==='FORECAST')forecastEvents++;
+            if(e.type==='OUTCOME')resolutionEvents++;
+            last=e.hash;
+          }
+          if(last!==r.headHash||forecastEvents!==r.records||
+             resolutionEvents+r.pending!==r.records||
+             r.directional+r.waits!==r.records||
+             r.hits+r.misses!==r.officiallyScored)
+            throw Error('Research export totals or event chain inconsistent');
           const digest=crypto.createHash('sha256').update(data).digest('hex');
           console.log('CASH_RECOVERY_MODE='+r.format);
           console.log('CASH_RECOVERY_RECORDS='+r.records);
           console.log('CASH_RECOVERY_EVENTS='+r.events.length);
+          console.log('CASH_RECOVERY_DIRECTIONAL='+r.directional);
+          console.log('CASH_RECOVERY_WAITS='+r.waits);
+          console.log('CASH_RECOVERY_RESOLVED='+resolutionEvents);
+          console.log('CASH_RECOVERY_PENDING='+r.pending);
+          console.log('CASH_RECOVERY_DIRECTIONAL_SCORED='+r.officiallyScored);
           console.log('CASH_RECOVERY_SHA256='+digest);
           console.log('CASH_RECOVERY_QUALIFIED=0');
           console.log('CASH_RECOVERY_IS_NOT_INDEPENDENT_CAPTURE_PROOF=true');
