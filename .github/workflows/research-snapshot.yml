@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   preserve-public-research:
-    if: github.head_ref == 'fix/simple-explanation-sync-20261117' && github.event.pull_request.head.repo.full_name == github.repository
+    if: (github.head_ref == 'fix/simple-explanation-sync-20261117' || github.head_ref == 'research/late-checkpoint-20261117') && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
