@@ -49,10 +49,15 @@
    const res=await fetch('/api/brti-health',{cache:'no-store'});
    if(res.ok){
     const b=await res.json();
-    set('pfBrti',b.state==='LIVE'?
-     'Official BRTI authenticated data: connected privately; NOT YET used in forecast model.':
-     'Official BRTI: '+String(b.state||'UNKNOWN').replaceAll('_',' ')+
-      '. CASH still uses a public exchange proxy for experimental predictions.');
+    const status=String(b.state||'UNKNOWN').replaceAll('_',' ');
+    if(b.state==='LIVE'&&b.usedForForecasts===true&&b.forecastOptIn===true)
+     set('pfBrti','Official BRTI: private live index OPTED IN for experimental model inputs; this is not the final 60-second settlement average or verified predictive accuracy.');
+    else if(b.state==='LIVE')
+     set('pfBrti','Official BRTI: authenticated read-only connection LIVE; separate forecast opt-in not active. Experimental settlement model uses a public BTC proxy.');
+    else if(b.forecastOptIn===true)
+     set('pfBrti','Official BRTI: '+status+'. Forecast opt-in is configured, but official data is unavailable. CASH must WAIT rather than silently substitute a public proxy.');
+    else
+     set('pfBrti','Official BRTI: '+status+'. Experimental settlement model uses a public BTC proxy when available.');
    }else{set('pfBrti','Official BRTI connection status unavailable.')}
   }catch{set('pfBrti','Official BRTI connection status unavailable.')}
  }
