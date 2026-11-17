@@ -379,3 +379,27 @@ test('recent filled-order audit requires a private token and has no GET/write en
  assert.match(script.body,/api\/private\/recent-order-verify/);
  assert.equal(status.orderPlacementEnabled,false);
 }));
+
+test('early-move lab is a read-only unvalidated spot research endpoint, visible in Simple Mode',()=>withServer(async()=>{
+ const r=await request('/api/early-move');
+ assert.equal(r.status,200);
+ const v=JSON.parse(r.body);
+ assert.equal(v.version,'CASH_SPOT_EARLY_MOVE_V1');
+ assert.equal(v.model,'BTC_SPOT_MOMENTUM_45S_V1');
+ assert.equal(v.horizonSeconds,45);
+ assert.equal(v.independentValidation,0);
+ assert.equal(v.tradingAuthorized,false);
+ assert.equal(v.modelCalibrated,false);
+ assert.equal(v.automaticOrdersEnabled,false);
+ assert.equal(v.independentlyTimeAttested,false);
+ assert.equal((await request('/api/early-move','POST')).status,404);
+ const js=await request('/early-move-ui.js');
+ assert.equal(js.status,200);
+ assert.match(js.headers['content-type'],/javascript/);
+ assert.match(js.body,/EARLY CALL FROZEN/);
+ const page=await request('/');
+ assert.match(page.body,/id="cashEarlyMove"/);
+ assert.match(page.body,/id="earlyChart"/);
+ assert.match(page.body,/early-move-ui.js/);
+ assert.match(page.body,/:not\(#cashEarlyMove\)/);
+}));

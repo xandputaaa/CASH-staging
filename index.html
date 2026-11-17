@@ -7,7 +7,7 @@
 .mode-segment button.selected{background:#81e5f4;color:#061722}
 .mode-segment button:focus-visible,.simple-actions button:focus-visible,.simple-actions a:focus-visible{outline:3px solid #c5f9ff;outline-offset:3px}
 .mode-caption strong{color:#f0fbff}
-body[data-cash-mode="simple"] main>section:not(#cashSimple):not(#livePaperLab):not(#cashOrderVerify){display:none!important}
+body[data-cash-mode="simple"] main>section:not(#cashSimple):not(#livePaperLab):not(#cashOrderVerify):not(#cashEarlyMove){display:none!important}
 body[data-cash-mode="simple"] main>nav{display:none!important}
 body[data-cash-mode="simple"] #livePaperLab .lp-market:nth-child(2){display:none!important}
 body[data-cash-mode="advanced"] #cashSimple{display:none!important}
@@ -58,7 +58,7 @@ body[data-cash-mode="simple"] #livePaperLab .notice{font-size:13px;line-height:1
  <button id="connectionCheck" type="button" style="font-size:12px;flex-shrink:0;min-height:42px">Test live feeds</button></div>
  </div><p class="tag">LIVE SPOT REFERENCE + PAPER SIMULATION · NO REAL ORDERS</p><section class="panel" id="cashSimple" aria-label="CASH Simple Mode, beginner-friendly live Kalshi Bitcoin 15-minute market">
 <div class="simple-head"><div><span class="simple-eyebrow">KALSHI · BITCOIN · 15 MINUTES</span><h2>Will Bitcoin finish higher or lower?</h2></div><span id="simpleMarketStatus" class="simple-status" aria-live="polite">Checking the live market…</span></div>
-<div class="simple-decision"><span class="simple-eyebrow">WHAT CASH RECOMMENDS RIGHT NOW</span><strong id="simpleCall">NO VERIFIED PICK</strong><p id="simpleWhy">CASH is still testing predictions. It can show real market quotes, but it has not proved that it can reliably pick a winning side.</p></div>
+<div class="simple-decision"><span class="simple-eyebrow">VERIFIED 15-MINUTE SETTLEMENT CALL</span><strong id="simpleCall">NO VERIFIED PICK</strong><p id="simpleWhy">CASH is still testing predictions. It can show real market quotes, but it has not proved that it can reliably pick a winning side.</p></div>
 <div class="simple-metrics">
 <div class="simple-metric"><small>Time left in this round</small><strong id="simpleTimer">—</strong><span>Resets when the next contract starts</span></div>
 <div class="simple-metric"><small>Official starting price to beat</small><strong id="simpleTarget">—</strong><span>From Kalshi; not the live BTC price</span></div>
@@ -70,6 +70,32 @@ body[data-cash-mode="simple"] #livePaperLab .notice{font-size:13px;line-height:1
 <div class="simple-actions"><a href="#livePaperLab" class="simple-cta">Practice with fake money</a><button id="simpleExplainToggle" type="button" aria-expanded="false" aria-controls="simpleExplainer">Explain the prices</button></div>
 <div id="simpleExplainer" class="simple-explainer" hidden><p><strong>Example:</strong> If YES costs 60¢, one YES contract costs about 60¢ before fees. If YES wins, that contract pays $1. If YES loses, the payout is $0. Neither outcome is guaranteed.</p><p><strong>Price is not a prediction:</strong> 60¢ is an asking price, not proof of a 60% chance. Fees and changes before your order fills can affect costs.</p><p><strong>Why the two Bitcoin prices differ:</strong> Kalshi settles using a CF Benchmarks Bitcoin index average. The Kraken/Coinbase Bitcoin chart elsewhere in CASH is only a rough reference, not the official settlement index.</p><p><strong>Paper money:</strong> The practice section uses a fictional balance. No money is sent to Kalshi. To see all research, select Advanced above.</p></div>
 <p class="simple-context" id="simpleForecast">Experimental CASH forecast: waiting for a frozen model observation.</p><p class="simple-warning">PRACTICE ONLY · No real trades or verified winning predictions. Quote prices may be delayed, unavailable, or change before execution. CASH has 0 / 100 independently verified prospective forecasts.</p>
+</section><section class="panel" id="cashEarlyMove" aria-label="Experimental forward 45 second Bitcoin spot trend chart">
+ <div class="row" style="flex-wrap:wrap;align-items:center">
+  <div><small style="color:#8ed4e8;letter-spacing:1px">CASH · EARLY MOVE LAB</small><h2 style="font-size:17px;color:#e2f8ff;margin:6px 0">Can BTC spot move before the next 45 seconds?</h2></div>
+  <small id="earlyState" class="tag" aria-live="polite">WARMING UP</small>
+ </div>
+ <div style="margin:12px 0;border:1px solid #315069;border-radius:12px;padding:13px;background:#081723">
+  <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center">
+   <div><small style="color:#9bb4c8">FROZEN SHORT-HORIZON RESEARCH</small><div id="earlySide" style="font-size:24px;font-weight:800;margin:6px 0">WAIT · NO EARLY CALL</div></div>
+   <small id="earlyUpdates" class="muted">CONNECTING</small>
+  </div>
+  <p id="earlyExplanation" style="font-size:13px;line-height:1.5;color:#b0c7d6;margin:6px 0">Collecting past-only BTC price samples. No proven prediction edge.</p>
+ </div>
+ <svg id="earlyChart" viewBox="0 0 600 220" role="img" aria-label="Actual public Bitcoin spot price and dashed experimental 45-second forecast direction" style="display:block;width:100%;height:auto;background:#091521;border:1px solid #253c4d;border-radius:12px">
+  <line x1="18" x2="585" y1="200" y2="200" stroke="#304e5f" stroke-width="1"/>
+  <line id="earlyCursor" x1="452" x2="452" y1="12" y2="203" stroke="#46687b" stroke-width="1" stroke-dasharray="4 5"/>
+  <polyline id="earlyActual" points="" fill="none" stroke="#78d5ed" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+  <polyline id="earlyProjected" points="" fill="none" stroke="#e8b879" stroke-width="3" stroke-linejoin="round" stroke-dasharray="7 8" stroke-linecap="round"/>
+  <text x="20" y="17" font-size="11" fill="#a8c4d5">OBSERVED · PAST ONLY</text>
+  <text x="458" y="17" font-size="11" fill="#e8b879">FUTURE?</text>
+ </svg>
+ <p id="earlyChartLabel" class="notice">Observed public BTC spot price. Dashed future movement is a speculative research projection, not Kalshi's YES/NO contract chart.</p>
+ <div class="simple-metrics" style="margin-top:12px">
+  <div class="simple-metric"><small>Observed 45-second accuracy</small><strong id="earlyAccuracy">—</strong><span>Session only · not calibrated</span></div>
+  <div class="simple-metric"><small>Frozen / graded calls</small><strong id="earlyCounts" style="font-size:13px">—</strong><span>Recorded before future prices arrive</span></div>
+ </div>
+ <p class="simple-warning" style="margin-top:12px">UNVALIDATED SPOT EXPERIMENT · A prediction about short-term Kraken/Coinbase BTC price is <strong>not</strong> a prediction of Kalshi's contract quote, official BRTI index or 15-minute YES/NO settlement. WAIT means no strong consistent past trend. No real-money trading recommendation or guaranteed advance warning.</p>
 </section><section class="panel" id="cashOrderVerify" aria-label="Private verified Kalshi real-money orders read-only">
 <div class="row"><h2>KALSHI · REAL ORDER VERIFICATION</h2><span class="shadow-state" id="orderVerifyStatus" aria-live="polite">CHECKING CONNECTION</span></div>
 <p class="notice">Separate from predictions: a placed order is not a filled order. This tool checks your Kalshi order ID and real matched fills, then looks for an account settlement for that market. It never sends or cancels orders. No real order has been verified unless Kalshi returns authentic matching records.</p>
@@ -177,4 +203,4 @@ if(typeof fetch==='function'){
   if(typeof setInterval==='function'){setInterval(refreshSpot,5000);setInterval(()=>{refreshVenue('Kalshi');refreshVenue('Polymarket')},12000);setInterval(()=>{showCountdown('Kalshi');showCountdown('Polymarket')},1000)}
   if(typeof document.addEventListener==='function')document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshSpot()});
 }
-</script><script src="/live-paper.js"></script><script src="/shadow-browser-archive.js"></script><script src="/shadow-browser-archive-ui.js"></script><script src="/evaluation-ui.js"></script><script src="/shadow-ui.js"></script><script src="/diagnostics-ui.js"></script><script src="/cognition-ui.js"></script><script src="/kalshi15-ui.js"></script><script src="/view-mode.js"></script><script src="/simple-ui.js"></script><script src="/live-check-ui.js"></script><script src="/prospective-ui.js"></script><script src="/order-verify-ui.js"></script></body></html>
+</script><script src="/live-paper.js"></script><script src="/shadow-browser-archive.js"></script><script src="/shadow-browser-archive-ui.js"></script><script src="/evaluation-ui.js"></script><script src="/shadow-ui.js"></script><script src="/diagnostics-ui.js"></script><script src="/cognition-ui.js"></script><script src="/kalshi15-ui.js"></script><script src="/view-mode.js"></script><script src="/simple-ui.js"></script><script src="/live-check-ui.js"></script><script src="/prospective-ui.js"></script><script src="/early-move-ui.js"></script><script src="/order-verify-ui.js"></script></body></html>

@@ -21,6 +21,8 @@ const {createKalshiFeeFeed}=require('./kalshi-fees');
 const {assessCognition}=require('./cash-cognition');
 const {createDiagnostics}=require('./diagnostics');
 const {createProspectiveMonitor}=require('./prospective-monitor');
+const {createEarlyMoveMonitor}=require('./early-move');
+const earlyMoveScript=fs.readFileSync('early-move-ui.js');
 const {createProspectiveStore}=require('./prospective-store');
 const {createKalshiBrtiFeed}=require('./kalshi-brti');
 const {createKalshiOrderVerifier}=require('./kalshi-order-verify');
@@ -42,6 +44,7 @@ const orderVerifier=createKalshiOrderVerifier();
 const prospective=createProspectiveMonitor({
  quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed,
  store:createProspectiveStore()});
+const earlyMove=createEarlyMoveMonitor({quotes:venueFeeds,spot:feed});
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   res.setHeader('Referrer-Policy','no-referrer');
@@ -147,6 +150,14 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/api/brti-health'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
     res.end(JSON.stringify(brtiFeed.health()));return;
+  }
+  if(req.method==='GET'&&req.url==='/early-move-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(earlyMoveScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/early-move'){
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(earlyMove.snapshot()));return;
   }
   if(req.method==='GET'&&req.url==='/api/prospective'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
@@ -343,6 +354,11 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   checkProspective();
   const prospectiveTimer=setInterval(checkProspective,20000);
   prospectiveTimer.unref();
+  // Separate 45s *spot* experiment. Frozen calls use only past spot samples.
+  // No order requests, no claims about Kalshi contract price or settlement.
+  earlyMove.scan().catch(()=>{});
+  const earlyTimer=setInterval(()=>earlyMove.scan().catch(()=>{}),5000);
+  earlyTimer.unref();
   // Owner verification keys must NOT implicitly trigger licensed BRTI
   // polling. Enable official-index reads only with separate owner opt-in.
   if(process.env.CASH_USE_AUTHORIZED_BRTI_FOR_FORECASTS==='true'){
