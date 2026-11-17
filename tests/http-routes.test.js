@@ -283,7 +283,7 @@ test('forward-looking prospective Kalshi endpoint never exposes real trading per
  assert.equal(r.status,200);
  const v=JSON.parse(r.body);
  assert.equal(v.version,'CASH_PROSPECTIVE_KALSHI_V1');
- assert.equal(v.model,'KXBTC15M_STRIKE_VOL_V1');
+ assert.equal(v.model,'KXBTC15M_STRIKE_VOL_V2');
  assert.equal(v.qualifiedCount,0);
  assert.equal(v.tradingAuthorized,false);
  assert.equal(v.automatedOrdersEnabled,false);
