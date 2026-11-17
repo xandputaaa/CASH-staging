@@ -1,4 +1,4 @@
-name: CASH public research snapshot
+name: CASH dual-model research snapshot
 on:
   pull_request:
     branches: [main]
@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   preserve-public-research:
-    if: github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.head_ref == 'research/late-checkpoint-20261117' && github.event.pull_request.head.repo.full_name == github.repository)
+    if: github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.head_ref == 'fix/dual-checkpoint-backup-20261117' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -116,8 +116,24 @@ jobs:
           if(prev!==r.headHash||frozen!==r.records||
              resolved+r.pending!==r.records)
             throw Error('Late checkpoint counts inconsistent');
+          const c=r.scorecard?.overall;
+          if(!c||c.captured!==frozen||
+             c.directional+c.waits!==frozen||
+             c.scoredDirectional!==c.hits+c.misses||
+             c.scoredDirectional+c.waitResolved+c.voids!==resolved||
+             c.pendingDirectional+c.pendingWaits!==r.pending||
+             r.scorecard?.qualifiedCount!==0||
+             r.scorecard?.independentlyTimeAttested!==false)
+            throw Error('Late checkpoint scorecard internally inconsistent');
+          const digest=crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
           console.log('CASH_LATE_BACKUP_FROZEN='+frozen);
           console.log('CASH_LATE_BACKUP_RESOLVED='+resolved);
+          console.log('CASH_LATE_BACKUP_DIRECTIONAL='+c.directional);
+          console.log('CASH_LATE_BACKUP_WAITS='+c.waits);
+          console.log('CASH_LATE_BACKUP_DIRECTIONAL_SCORED='+c.scoredDirectional);
+          console.log('CASH_LATE_BACKUP_HITS='+c.hits);
+          console.log('CASH_LATE_BACKUP_MISSES='+c.misses);
+          console.log('CASH_LATE_BACKUP_SHA256='+digest);
           console.log('CASH_LATE_BACKUP_QUALIFIED=0');
           NODE
           else
@@ -128,6 +144,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cash-public-forecast-unverified-${{ github.run_id }}
-          path: recovery/cash-public-research-unverified.json
+          path: recovery/*.json
           retention-days: 30
           if-no-files-found: error
