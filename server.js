@@ -21,6 +21,7 @@ const {createKalshiFeeFeed}=require('./kalshi-fees');
 const {assessCognition}=require('./cash-cognition');
 const {createDiagnostics}=require('./diagnostics');
 const {createProspectiveMonitor}=require('./prospective-monitor');
+const {createLateCheckpointMonitor}=require('./late-checkpoint-monitor');
 const {createEarlyMoveMonitor}=require('./early-move');
 const earlyMoveScript=fs.readFileSync('early-move-ui.js');
 const settlementCallScript=fs.readFileSync('settlement-call-ui.js');
@@ -33,6 +34,7 @@ const {assessLiveCheck}=require('./live-check');
 const {runStartupSmoke}=require('./startup-smoke');
 const liveCheckScript=fs.readFileSync('live-check-ui.js');
 const prospectiveScript=fs.readFileSync('prospective-ui.js');
+const lateCheckpointScript=fs.readFileSync('late-checkpoint-ui.js');
 const prospectiveArchiveScript=fs.readFileSync('prospective-browser-archive.js');
 const prospectiveArchiveUiScript=fs.readFileSync('prospective-browser-archive-ui.js');
 const port=3000; // Staging public domain is explicitly routed to port 3000
@@ -47,6 +49,9 @@ const orderVerifier=createKalshiOrderVerifier();
 const prospective=createProspectiveMonitor({
  quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed,
  store:createProspectiveStore()});
+const lateCheckpoint=createLateCheckpointMonitor({
+ quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed
+});
 const earlyMove=createEarlyMoveMonitor({quotes:venueFeeds,spot:feed});
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
@@ -83,6 +88,10 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/prospective-browser-archive-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(prospectiveArchiveUiScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/late-checkpoint-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(lateCheckpointScript);return;
   }
   if(req.method==='GET'&&req.url==='/prospective-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
@@ -173,6 +182,15 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/api/early-move'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
     res.end(JSON.stringify(earlyMove.snapshot()));return;
+  }
+  if(req.method==='GET'&&req.url==='/api/late-checkpoint'){
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(lateCheckpoint.snapshot()));return;
+  }
+  if(req.method==='GET'&&req.url==='/api/late-checkpoint/export'){
+    res.setHeader('Content-Disposition','attachment; filename="CASH-late-checkpoint-unverified.json"');
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(lateCheckpoint.exportSession(),null,2));return;
   }
   if(req.method==='GET'&&req.url==='/api/prospective'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
@@ -369,6 +387,25 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   checkProspective();
   const prospectiveTimer=setInterval(checkProspective,20000);
   prospectiveTimer.unref();
+  // Fixed, late pre-expiry shadow experiment. Never overwrites V3 early calls.
+  // Cache-sharing read-only feeds, separate contract IDs and denominators.
+  let lastLateLog='';
+  const checkLate=()=>lateCheckpoint.scan().then(()=>{
+    const v=lateCheckpoint.snapshot(),d=v.scorecard.overall;
+    const key=[v.records,d.scoredDirectional,d.waits,v.failures,v.lastReason].join(':');
+    if(key!==lastLateLog&&
+      (v.records>0||v.scans%12===1||v.failures>0)){
+      console.log('CASH late checkpoint: model='+v.model+
+       ', reason='+v.lastReason+', scans='+v.scans+
+       ', frozen='+v.records+', directional='+d.directional+
+       ', waits='+d.waits+', scored='+d.scoredDirectional+
+       ', qualified=0/100, orders=DISABLED');
+      lastLateLog=key;
+    }
+  }).catch(()=>console.log('CASH late checkpoint: research scan unavailable; orders=DISABLED'));
+  checkLate();
+  const lateTimer=setInterval(checkLate,20000);
+  lateTimer.unref();
   // Legacy 45s *spot* experiment is separate from Kalshi settlement V3.
   // No order requests, no claims about Kalshi contract price or settlement.
   let lastEarlyLog='';
