@@ -17,6 +17,8 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
  if(!quotes||!spot||!results)throw Error('Missing prospective data feeds');
  const records=[],ids=new Set(),events=[];
  let lastHash='GENESIS',inflight=null,scans=0,lastScanAt=null,failures=0,pendingCursor=0;
+ let liveAssessment=null;
+ const publicYesAskHistory=[];
  const readiness={lastReason:'NOT_CHECKED',lastMarketId:null,lastCheckedAt:null,
   observedWindowMs:null,checks:0,reasons:{}};
  function noteReadiness(reason,marketId=null,leadMs=null){
@@ -49,7 +51,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
       !['YES','NO',null].includes(p.side)||p.realMoneyAuthorized!==false||
       p.calibratedProbability!==null||p.expectedValue!==null||
       !Number.isFinite(Date.parse(p.at))||Date.parse(p.endTime)-Date.parse(p.at)<90000||
-      Date.parse(p.endTime)-Date.parse(p.at)>240000||
+      Date.parse(p.endTime)-Date.parse(p.at)>780000||
       !Array.isArray(p.sampleWindow)||digest(p.sampleWindow)!==p.sampleWindowSha256)
      throw Error('Prospective saved forecast invalid');
     records.push({...p,status:'PENDING',winner:null,resolvedAt:null,outcomeEvidence:null});
@@ -82,11 +84,31 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
     const source=useIndex?brti.internal():s;
     const market=q?.marketId||null;
     const lead=q?.endTime?Date.parse(q.endTime)-clock():null;
+    // Public quote history is observed-only; never imply this is a
+    // Kalshi transaction chart or a known future price movement.
+    if(q?.status==='live'&&!q.refreshFailed&&Number.isFinite(q.yesAsk)&&
+      q.yesAsk>0&&q.yesAsk<1&&typeof market==='string'){
+      const at=Date.parse(q.fetchedAt);
+      if(Number.isFinite(at)&&at<=clock()+2000&&clock()-at<=12000&&
+       !publicYesAskHistory.some(x=>x.marketId===market&&x.at===q.fetchedAt)){
+       publicYesAskHistory.push({marketId:market,at:q.fetchedAt,yesAsk:q.yesAsk});
+       if(publicYesAskHistory.length>240)publicYesAskHistory.splice(0,publicYesAskHistory.length-240);
+      }
+    }
+    // Recompute the current settlement hypothesis, independent of frozen
+    // research history. This live lean is NEVER scored or counted as
+    // a pre-committed outcome. The frozen one-per-market decision is.
+    const p=evaluateProspective({quote:q,spot:source,now:clock()});
+    liveAssessment={marketId:market,checkedAt:clockISO(clock()),side:p.side||null,
+      state:p.state,reason:p.reason,leadMs:lead,
+      sourceType:p.indexSourceType||'SINGLE_EXCHANGE_PROXY',
+      gapBps:p.indexSourceType==='OFFICIAL_BRTI_LIVE'?null:(p.gapBps??null),
+      signalZ:p.indexSourceType==='OFFICIAL_BRTI_LIVE'?null:(p.signalZ??null),
+      validation:p.validation};
     if(!market)noteReadiness('KALSHI_QUOTE_MISSING',null,lead);
     else if(ids.has(market))noteReadiness('ALREADY_FROZEN',market,lead);
     else if(records.length>=maxRecords)noteReadiness('JOURNAL_CAPACITY_REACHED',market,lead);
     else{
-     const p=evaluateProspective({quote:q,spot:source,now:clock()});
      noteReadiness(p.reason,market,lead);
      if(p.marketId&&(p.state==='PROVISIONAL_DIRECTION'||
        p.reason==='EDGE_UNCLEAR_VS_VOLATILITY')){
@@ -169,9 +191,17 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
    independentlyTimeAttested:false,modelCalibrated:false,
    tradingAuthorized:false,automatedOrdersEnabled:false,
    active:safeRecord(current),
+   // Live lean may change: display-only, not an independently frozen call.
+   liveAssessment:liveAssessment?.marketId===readiness.lastMarketId?{...liveAssessment}:null,
+   publicQuoteChart:{
+    kind:'KALSHI_PUBLIC_YES_ASK_SNAPSHOTS',
+    description:'Public observed YES ask quotes, not executed trade candles or future prices.',
+    marketId:readiness.lastMarketId,
+    points:publicYesAskHistory.filter(x=>x.marketId===readiness.lastMarketId).slice(-48)
+   },
    latest:safeRecord(records.at(-1)),
    recent:records.slice(-12).reverse().map(safeRecord),
-   disclaimer:'Real pre-expiry frozen decisions, but no independent time witness, durable production store, calibrated accuracy or verified edge. Never represent as actionable investment advice.'
+   disclaimer:'Early YES/NO calls target final official 15-minute Kalshi BRTI settlement, not spot or quote ticks. Frozen calls use past-only public BTC proxy and official market strike. Dynamic live assessment is not scored. No independent time witness, durable store, calibration or verified trading edge.'
   };
  }
  function exportSession(){

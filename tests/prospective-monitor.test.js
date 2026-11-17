@@ -44,7 +44,7 @@ function harness(){
  return {sources,setTime:x=>{now=x},setFinal:x=>{final=x},
   setValues:x=>{values=x},store};
 }
-test('frozen prospective YES/NO/WAIT forecast is immutable and recorded only once per market',async()=>{
+test('frozen pre-settlement YES/NO/WAIT forecast is immutable and once per market',async()=>{
  const h=harness(),m=createProspectiveMonitor(h.sources);
  await m.scan();
  let snap=m.snapshot();
@@ -160,4 +160,32 @@ test('readiness diagnostics explain missing targets and narrow forecast windows 
  assert.equal(m.snapshot().captureReadiness.lastReason,'OUTSIDE_FROZEN_PREDICTION_WINDOW');
  assert.equal(m.snapshot().captureReadiness.checks,2);
  assert.equal(m.snapshot().captureReadiness.reasons.OUTSIDE_FROZEN_PREDICTION_WINDOW,1);
+});
+
+test('live early Kalshi settlement lean is explicitly non-frozen while one call remains immutable',async()=>{
+ const h=harness(),m=createProspectiveMonitor(h.sources);
+ await m.scan();
+ let result=m.snapshot();
+ assert.equal(result.liveAssessment.side,'YES');
+ assert.equal(result.active.side,'YES');
+ const frozenHash=result.headHash;
+ const changed=fixtures(t);
+ changed.spot.history=changed.spot.history.map(v=>({...v,price:v.price-2500}));
+ changed.spot.price=changed.spot.history.at(-1).price;
+ h.setValues(changed);
+ await m.scan();result=m.snapshot();
+ assert.equal(result.liveAssessment.side,'NO');
+ assert.equal(result.active.side,'YES');
+ assert.equal(result.headHash,frozenHash);
+ assert.equal(result.records,1);
+ assert.equal(result.tradingAuthorized,false);
+});
+test('public YES ask history is real quotes only and cannot move frozen side',async()=>{
+ const h=harness(),m=createProspectiveMonitor(h.sources);
+ await m.scan();
+ const quote=m.snapshot().publicQuoteChart;
+ assert.equal(quote.kind,'KALSHI_PUBLIC_YES_ASK_SNAPSHOTS');
+ assert.equal(quote.points.length,1);
+ assert.equal(quote.points[0].yesAsk,.55);
+ assert.equal(m.snapshot().qualifiedCount,0);
 });

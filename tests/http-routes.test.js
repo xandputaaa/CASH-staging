@@ -398,8 +398,29 @@ test('early-move lab is a read-only unvalidated spot research endpoint, visible 
  assert.match(js.headers['content-type'],/javascript/);
  assert.match(js.body,/EARLY CALL FROZEN/);
  const page=await request('/');
- assert.match(page.body,/id="cashEarlyMove"/);
- assert.match(page.body,/id="earlyChart"/);
- assert.match(page.body,/early-move-ui.js/);
- assert.match(page.body,/:not\(#cashEarlyMove\)/);
+ assert.match(page.body,/id="cashSettlementCall"/);
+ assert.match(page.body,/id="settlementYesAskLine"/);
+ assert.match(page.body,/settlement-call-ui.js/);
+ assert.match(page.body,/:not\(#cashSettlementCall\)/);
+}));
+
+test('Kalshi early settlement forecast is visible in Simple Mode and uses only read-only public monitoring',()=>withServer(async()=>{
+ const r=await request('/api/prospective');
+ assert.equal(r.status,200);
+ const v=JSON.parse(r.body);
+ assert.equal(v.model,'KXBTC15M_SETTLEMENT_EARLY_V3');
+ assert.equal(v.modelCalibrated,false);
+ assert.equal(v.tradingAuthorized,false);
+ assert.equal(v.qualifiedCount,0);
+ assert.equal(v.publicQuoteChart.kind,'KALSHI_PUBLIC_YES_ASK_SNAPSHOTS');
+ const script=await request('/settlement-call-ui.js');
+ assert.equal(script.status,200);
+ assert.match(script.body,/KALSHI SETTLEMENT/);
+ const page=await request('/');
+ assert.match(page.body,/id="cashSettlementCall"/);
+ assert.match(page.body,/id="settlementLiveSide"/);
+ assert.match(page.body,/id="settlementYesAskLine"/);
+ assert.doesNotMatch(page.body,/id="cashEarlyMove"/);
+ assert.match(page.body,/:not\(#cashSettlementCall\)/);
+ assert.equal((await request('/api/prospective','POST')).status,404);
 }));

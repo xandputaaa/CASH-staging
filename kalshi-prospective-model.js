@@ -1,6 +1,6 @@
 'use strict';
 /*
- * FROZEN FORECAST RESEARCH MODEL -- KXBTC15M_STRIKE_VOL_V2
+ * FROZEN SETTLEMENT RESEARCH MODEL -- KXBTC15M_SETTLEMENT_EARLY_V3
  *
  * YES/NO/WAIT forecast uses public Kraken or Coinbase BTC spot history,
  * official Kalshi strike and market time remaining. It NEVER uses Kalshi asks,
@@ -9,14 +9,14 @@
  * Side classifications are NOT calibrated probabilities or real-money advice.
  */
 const {createHash}=require('node:crypto');
-const NAME='KXBTC15M_STRIKE_VOL_V2';
+const NAME='KXBTC15M_SETTLEMENT_EARLY_V3';
 const MODEL=Object.freeze({
  minHistoryMs:180000,
  minSamples:14,
  sampleBucketMs:15000,
  maxGapMs:45000,
  minLeadMs:90000,
- maxLeadMs:240000,
+ maxLeadMs:780000,
  maxSpotAgeMs:12000,
  maxQuoteAgeMs:12000,
  minBasisGapBps:8,
@@ -93,6 +93,10 @@ function evaluateProspective({quote,spot,now=Date.now()}={}){
  const sigma=Math.sqrt(Math.max(MODEL.minVariancePerSecond,sumSquares/sumSeconds));
  const gapLog=Math.log(spot.price/quote.targetPrice);
  const gapBps=gapLog*10000;
+ // This is a hypothesis about the official 15-minute YES/NO settlement,
+ // NOT a prediction of Kalshi quote ticks or next-45s spot direction.
+ // As lead increases, volatility expands the WAIT region rather than
+ // fabricating confident YES/NO settlement probabilities.
  // Explicitly cushion venue proxy basis mismatch and expected future price motion.
  const volatilityBarrier=MODEL.sigmaLeadMultiplier*sigma*Math.sqrt(leadMs/1000);
  const proxyBasisBarrier=MODEL.minBasisGapBps/10000;

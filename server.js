@@ -23,6 +23,7 @@ const {createDiagnostics}=require('./diagnostics');
 const {createProspectiveMonitor}=require('./prospective-monitor');
 const {createEarlyMoveMonitor}=require('./early-move');
 const earlyMoveScript=fs.readFileSync('early-move-ui.js');
+const settlementCallScript=fs.readFileSync('settlement-call-ui.js');
 const {createProspectiveStore}=require('./prospective-store');
 const {createKalshiBrtiFeed}=require('./kalshi-brti');
 const {createKalshiOrderVerifier}=require('./kalshi-order-verify');
@@ -150,6 +151,10 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/api/brti-health'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
     res.end(JSON.stringify(brtiFeed.health()));return;
+  }
+  if(req.method==='GET'&&req.url==='/settlement-call-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(settlementCallScript);return;
   }
   if(req.method==='GET'&&req.url==='/early-move-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
@@ -354,7 +359,7 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   checkProspective();
   const prospectiveTimer=setInterval(checkProspective,20000);
   prospectiveTimer.unref();
-  // Separate 45s *spot* experiment. Frozen calls use only past spot samples.
+  // Legacy 45s *spot* experiment is separate from Kalshi settlement V3.
   // No order requests, no claims about Kalshi contract price or settlement.
   let lastEarlyLog='';
   const scanEarly=()=>earlyMove.scan().then(report=>{

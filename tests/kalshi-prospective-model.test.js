@@ -67,8 +67,8 @@ test('missing official target, wrong series, stale quotes, mixed source or insuf
   assert.equal(b.realMoneyAuthorized,false);
  }
 });
-test('prediction window blocks early hindsight and last-second speculative calls',()=>{
- for(const lead of [60000,300000,-1000]){
+test('prediction window blocks outside-15m horizon and last-second speculative calls',()=>{
+ for(const lead of [60000,850000,-1000]){
   const r=evaluateProspective(fixture({lead}));
   assert.equal(r.side,null);assert.equal(r.reason,'OUTSIDE_FROZEN_PREDICTION_WINDOW');
  }
@@ -108,4 +108,16 @@ test('chronological holes and source splices do not become fabricated signals du
  const b=fixture({delta:500});
  b.spot.history[9].price=NaN;
  assert.equal(evaluateProspective(b).reason,'INVALID_SPOT_SAMPLE');
+});
+
+test('early settlement lean can freeze over ten minutes before Kalshi 15m settlement',()=>{
+ const a=fixture({lead:720000,delta:850});
+ const r=evaluateProspective(a);
+ assert.equal(r.model,NAME);
+ assert.equal(r.side,'YES');
+ assert.equal(r.leadMs,720000);
+ assert.equal(r.realMoneyAuthorized,false);
+ assert.equal(r.calibratedProbability,null);
+ const no=fixture({lead:720000,delta:-850});
+ assert.equal(evaluateProspective(no).side,'NO');
 });
