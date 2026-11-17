@@ -80,6 +80,22 @@
   set('settlementScored',r.hits+' hits / '+r.misses+
    ' misses · '+r.officiallyScored+' frozen directional settlements scored'+
    ' · 0/100 independently validated');
+  const pending=r.pendingResolutionDiagnostics;
+  if(pending&&Number.isInteger(pending.pendingTotal)&&
+     Number.isInteger(pending.expiredAwaitingEvidence)&&
+     Number.isInteger(pending.overdueTenMinutes)){
+   const reasons=Object.entries(pending.blockedReasons||{}).filter(([code,count])=>
+    /^[A-Z0-9_]{4,70}$/.test(code)&&Number.isInteger(count)&&count>0);
+   reasons.sort((a,b)=>b[1]-a[1]);
+   const top=reasons[0]?(reasons[0][0].replaceAll('_',' ').toLowerCase()+
+     ' ('+reasons[0][1]+')'):'none yet';
+   set('settlementPendingDiagnostics',
+    'Awaiting public outcome evidence: '+pending.pendingTotal+
+    ' forecasts; '+pending.expiredAwaitingEvidence+' past expiry; '+
+    pending.overdueTenMinutes+' overdue by 10+ minutes. Most common reason: '+
+    top+'. Pending forecasts are NOT counted as wins or losses.');
+  }else set('settlementPendingDiagnostics',
+   'Public settlement verification breakdown unavailable. No pending market is assumed a win or loss.');
   chart(r,frozen);
  }
  function unavailable(){
@@ -90,6 +106,7 @@
   set('settlementLiveReason','Live Kalshi strike, rule or public BTC proxy data not verifiable. CASH cannot issue a settlement prediction.');
   set('settlementFrozenSide','—');
   set('settlementAccuracy','—');
+  set('settlementPendingDiagnostics','Settlement evidence diagnostics unavailable.');
   el('settlementYesAskLine')?.setAttribute('points','');
   el('settlementCallMark')?.setAttribute('visibility','hidden');
  }
