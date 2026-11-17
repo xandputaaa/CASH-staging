@@ -56,6 +56,13 @@
   if(sideEl)sideEl.style.color=side==='YES'?'#72dcac':side==='NO'?'#ff8793':'#ebc48a';
   set('settlementLiveSide',label);
   set('settlementCallStatus',side?'LIVE PROVISIONAL · UNVALIDATED':'WAIT · RESEARCH ONLY');
+  // The primary Simple Mode call is the same *unvalidated* settlement
+  // hypothesis as this panel, not the deprecated 45-second spot direction.
+  set('simpleCall',side==='YES'?'EXPERIMENTAL YES · NOT VALIDATED':
+    side==='NO'?'EXPERIMENTAL NO · NOT VALIDATED':'WAIT · NO CLEAR YES/NO CALL');
+  set('simpleWhy',side?
+    'Kalshi 15m settlement hypothesis, not a verified profitable signal. This live lean may change. Only the separate frozen research call is scored later against official settlement. No automated orders.':
+    'No reliable YES/NO settlement direction from the available historical inputs. CASH is not validated for real-money predictions.');
   const reason=String(live?.reason||r.captureReadiness?.lastReason||'NOT_READY')
    .replaceAll('_',' ').toLowerCase();
   const lead=Number.isFinite(live?.leadMs)?(live.leadMs/60000).toFixed(1):'—';
@@ -78,6 +85,8 @@
  function unavailable(){
   set('settlementCallStatus','SETTLEMENT MODEL DATA UNAVAILABLE');
   set('settlementLiveSide','WAIT · NOT VERIFIED');
+  set('simpleCall','NO VERIFIED SETTLEMENT CALL');
+  set('simpleWhy','Early settlement data is missing or invalid. No real-money prediction is verified.');
   set('settlementLiveReason','Live Kalshi strike, rule or public BTC proxy data not verifiable. CASH cannot issue a settlement prediction.');
   set('settlementFrozenSide','—');
   set('settlementAccuracy','—');

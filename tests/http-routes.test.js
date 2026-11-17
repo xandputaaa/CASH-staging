@@ -424,3 +424,14 @@ test('Kalshi early settlement forecast is visible in Simple Mode and uses only r
  assert.match(page.body,/:not\(#cashSettlementCall\)/);
  assert.equal((await request('/api/prospective','POST')).status,404);
 }));
+
+test('Simple Mode header explicitly labels early Kalshi settlement prediction as unvalidated',()=>withServer(async()=>{
+ const page=await request('/');
+ assert.match(page.body,/CASH 15-MINUTE SETTLEMENT LEAN · EXPERIMENTAL/);
+ const script=await request('/settlement-call-ui.js');
+ assert.match(script.body,/EXPERIMENTAL YES · NOT VALIDATED/);
+ assert.match(script.body,/EXPERIMENTAL NO · NOT VALIDATED/);
+ assert.match(script.body,/WAIT · NO CLEAR YES\/NO CALL/);
+ const simple=await request('/simple-ui.js');
+ assert.doesNotMatch(simple.body,/el\('simpleCall'\)\.textContent='NO VERIFIED PICK';\s*el\('simpleWhy'\)\.textContent=fresh/);
+}));

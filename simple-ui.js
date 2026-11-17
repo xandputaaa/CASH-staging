@@ -47,7 +47,9 @@
   const strike=fresh&&data.target?.source==='KALSHI_FLOOR_STRIKE'
    &&Number.isFinite(data.target?.value)?data.target.value:null;
   el('simpleMarketStatus').textContent=fresh?'LIVE PUBLIC PRICES · PAPER ONLY':'MARKET DATA NOT READY';
-  el('simpleCall').textContent='NO VERIFIED PICK';
+  // The early settlement V3 UI independently owns the experimental
+  // YES/NO/WAIT label in Simple Mode. Do not overwrite it on every
+  // public quote poll, or users would see oscillating/stale statuses.
   el('simpleWhy').textContent=fresh?
    'Real Kalshi prices are available, but CASH has not proven that it can predict this round accurately. You can practice, but there is no verified YES or NO recommendation.':
    'CASH is missing current usable market information. There is no verified YES or NO recommendation.';
