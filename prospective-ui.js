@@ -39,7 +39,7 @@
     ' · expires '+new Date(v.endTime).toLocaleTimeString()+
     ' · '+mode+' · NOT an authorized live-money signal':
     'No CURRENT unexpired frozen forecast. Last scanner assessment: '+status+
-    '. Model only freezes 1.5–4 minutes before Kalshi expiry, with continuous past-only market history.');
+    '. Model can freeze 1.5–13 minutes before Kalshi expiry after at least 3 minutes of continuous past history, with continuous past-only market history.');
    if(simpleCall)simpleCall.textContent=dir?
     'Current experimental CASH direction: '+dir+' (UNVALIDATED, not a real-money recommendation).':
     'NO CURRENT EXPERIMENTAL FORECAST. Last check: '+status+'. No verified pick.';

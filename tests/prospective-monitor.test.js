@@ -109,7 +109,7 @@ test('filesystem journal replay preserves previous frozen prediction but does no
   assert.equal(second.snapshot().qualifiedCount,0);
   const filename=path.join(dir,'prospective-kalshi-events.jsonl');
   const original=fs.readFileSync(filename,'utf8');
-  fs.writeFileSync(filename,original.replace('KXBTC15M_STRIKE_VOL_V2','FORGED_MODEL'));
+  fs.writeFileSync(filename,original.replace('KXBTC15M_SETTLEMENT_EARLY_V3','FORGED_MODEL'));
   assert.throws(()=>createProspectiveStore({directory:dir}),/integrity invalid/);
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
@@ -155,7 +155,7 @@ test('readiness diagnostics explain missing targets and narrow forecast windows 
  assert.equal(m.snapshot().records,0);
  assert.equal(m.snapshot().captureReadiness.lastReason,'OFFICIAL_STRIKE_OR_RULE_NOT_VERIFIED');
  const early=fixtures(t);
- early.quote.endTime=iso(t+500000);h.setValues(early);
+ early.quote.endTime=iso(t+900000);h.setValues(early);
  await m.scan();
  assert.equal(m.snapshot().captureReadiness.lastReason,'OUTSIDE_FROZEN_PREDICTION_WINDOW');
  assert.equal(m.snapshot().captureReadiness.checks,2);
