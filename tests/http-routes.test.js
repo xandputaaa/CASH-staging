@@ -378,4 +378,4 @@ test('recent filled-order audit requires a private token and has no GET/write en
  const script=await request('/order-verify-ui.js');
  assert.match(script.body,/api\/private\/recent-order-verify/);
  assert.equal(status.orderPlacementEnabled,false);
-});
+}));
