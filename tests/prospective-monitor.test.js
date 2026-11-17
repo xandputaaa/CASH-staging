@@ -210,3 +210,15 @@ test('V3 performance summary uses only official settled directional results and 
  assert.equal(v.independentlyValidated,false);
  assert.equal(v.profitVerified,false);
 });
+
+test('stalled prospective scanner cannot show stale live YES or NO after 45 seconds',async()=>{
+ const h=harness(),m=createProspectiveMonitor(h.sources);
+ await m.scan();
+ assert.equal(m.snapshot().liveAssessment.side,'YES');
+ h.setTime(t+46000);
+ const stalled=m.snapshot();
+ assert.equal(stalled.liveAssessment,null);
+ assert.equal(stalled.active.side,'YES'); // immutable research event remains
+ assert.equal(stalled.officiallyScored,0);
+ assert.equal(stalled.tradingAuthorized,false);
+});

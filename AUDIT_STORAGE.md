@@ -157,3 +157,7 @@ The primary Simple Mode headline is now explicitly `CASH 15-MINUTE SETTLEMENT LE
 ### Partial public ask quotes must not suppress independent settlement forecast
 
 V3 settlement direction is computed independently from market asks, so it is safe to accept a **fresh, non-refresh-failed Kalshi quote with `status:'partial'` only when the official floor strike, expiry, tie rule and BRTI 60-second market rules have all been explicitly verified**. The venue feed already requires at least one actual ask to create a partial quote. Missing sides are recorded as `null` and excluded from the market-favored-ASK comparison; they must never be imputed or synthesized. Stale, unknown, failed, expired and rule/strike-incomplete quotes continue to force WAIT. This improves eligible sample coverage, not demonstrated prediction skill. Tests cover both the new eligible path and the unchanged fail-closed conditions.
+
+### Stale live lean protection
+
+The public prospective snapshot now omits `liveAssessment` when the last forecast scanner evaluation is over 45 seconds old, future dated, past expiry or not tied to the most recent known market. A frozen call remains separately visible with its original timestamp while unexpired, but it is never represented as a fresh or actionable lean. Frontend frozen-call display is keyed to the observed Kalshi market even when the live assessment is null. Test verifies stale live YES disappears without retroactively deleting the frozen research event. This closes a stale-signal risk if scan intervals stop or a feed stalls.

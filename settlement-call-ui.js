@@ -48,7 +48,9 @@
    throw Error('Settlement model state is not safe for display');
   const live=r.liveAssessment?.marketId===r.publicQuoteChart?.marketId?
    r.liveAssessment:null;
-  const frozen=r.active?.marketId===live?.marketId?r.active:null;
+  // A previously frozen YES/NO result is a historical prediction, not a
+  // continuing live lean; display it when the scanner briefly stalls.
+  const frozen=r.active?.marketId===r.publicQuoteChart?.marketId?r.active:null;
   const side=live?.side;
   const label=side==='YES'?'YES · UP AT SETTLEMENT':
    side==='NO'?'NO · DOWN AT SETTLEMENT':'WAIT · NO CLEAR SETTLEMENT EDGE';

@@ -194,7 +194,15 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
    tradingAuthorized:false,automatedOrdersEnabled:false,
    active:safeRecord(current),
    // Live lean may change: display-only, not an independently frozen call.
-   liveAssessment:liveAssessment?.marketId===readiness.lastMarketId?{...liveAssessment}:null,
+   // Never advertise a live YES/NO lean if the scanner has stopped or the
+   // market expired. The frozen, time-stamped research record remains
+   // independently visible until its own expiry, but isn't a live call.
+   liveAssessment:liveAssessment?.marketId===readiness.lastMarketId&&
+    Number.isFinite(Date.parse(liveAssessment.checkedAt))&&
+    now-Date.parse(liveAssessment.checkedAt)<=45000&&
+    Date.parse(liveAssessment.checkedAt)<=now+2000&&
+    Number.isFinite(liveAssessment.leadMs)&&liveAssessment.leadMs>0?
+     {...liveAssessment}:null,
    publicQuoteChart:{
     kind:'KALSHI_PUBLIC_YES_ASK_SNAPSHOTS',
     description:'Public observed YES ask quotes, not executed trade candles or future prices.',
