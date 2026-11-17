@@ -120,3 +120,18 @@ test('if no future source record arrives, never fabricate the scored result',asy
  assert.equal(v.hitRate,null);
  assert.equal(v.latest.status,'UNOBSERVED');
 });
+
+test('ten valid samples spaced 10s apart still yield a pre-outcome spot direction',()=>{
+ const a=fixture();
+ a.spot.history=Array.from({length:13},(_,i)=>({
+  time:iso(t-(12-i)*10000),
+  price:64000+(i-12)*12,source:'Kraken BTC/USD'
+ }));
+ a.spot.price=a.spot.history.at(-1).price;
+ a.spot.fetchedAt=a.spot.history.at(-1).time;
+ const r=evaluateEarlyMove(a);
+ assert.equal(r.model,NAME);
+ assert.equal(r.side,'UP');
+ assert.equal(r.state,'PROVISIONAL_DIRECTION');
+ assert.equal(r.calibratedProbability,null);
+});

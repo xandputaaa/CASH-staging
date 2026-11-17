@@ -356,8 +356,22 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   prospectiveTimer.unref();
   // Separate 45s *spot* experiment. Frozen calls use only past spot samples.
   // No order requests, no claims about Kalshi contract price or settlement.
-  earlyMove.scan().catch(()=>{});
-  const earlyTimer=setInterval(()=>earlyMove.scan().catch(()=>{}),5000);
+  let lastEarlyLog='';
+  const scanEarly=()=>earlyMove.scan().then(report=>{
+    const key=[report.frozen,report.scored,report.hits,report.misses,
+     report.unobserved,report.failures,report.lastReason].join(':');
+    if(key!==lastEarlyLog&&
+       (report.frozen>0||report.scans%12===1||report.failures>0)){
+      console.log('CASH early spot research: 45s, scans='+report.scans+
+       ', frozen='+report.frozen+', directional='+report.directional+
+       ', scored='+report.scored+', hits='+report.hits+', misses='+report.misses+
+       ', unobserved='+report.unobserved+', reason='+report.lastReason+
+       ', validated=0/100, orders=DISABLED');
+      lastEarlyLog=key;
+    }
+  }).catch(()=>console.log('CASH early spot research: scanner exception; orders=DISABLED'));
+  scanEarly();
+  const earlyTimer=setInterval(scanEarly,5000);
   earlyTimer.unref();
   // Owner verification keys must NOT implicitly trigger licensed BRTI
   // polling. Enable official-index reads only with separate owner opt-in.

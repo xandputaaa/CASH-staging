@@ -29,7 +29,10 @@ function evaluateEarlyMove({quote,spot,now=Date.now()}={}){
   return wait('FRESH_PUBLIC_SPOT_REQUIRED');
  const rows=spot.history.filter(x=>Number.isFinite(Date.parse(x?.time))&&
   Date.parse(x.time)<=now&&Date.parse(x.time)>=now-130000);
- if(rows.length<14||rows.some(x=>x.source!==spot.source||!valid(x.price)))
+ // Upstream cached Kraken responses may arrive 5-10s apart. Ten real
+ // samples spanning the full 90s history are enough; the dt and gap
+ // checks below still reject stale/fragmented windows.
+ if(rows.length<10||rows.some(x=>x.source!==spot.source||!valid(x.price)))
   return wait('SPOT_WINDOW_INCOMPLETE_OR_SOURCE_CHANGED');
  for(let i=1;i<rows.length;i++){
   const gap=Date.parse(rows[i].time)-Date.parse(rows[i-1].time);
