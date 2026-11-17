@@ -24,6 +24,7 @@ const {createProspectiveMonitor}=require('./prospective-monitor');
 const {createProspectiveStore}=require('./prospective-store');
 const {createKalshiBrtiFeed}=require('./kalshi-brti');
 const {createKalshiOrderVerifier}=require('./kalshi-order-verify');
+const {resolvePrivateConfig}=require('./private-key-config');
 const orderVerifyScript=fs.readFileSync('order-verify-ui.js');
 const {assessLiveCheck}=require('./live-check');
 const {runStartupSmoke}=require('./startup-smoke');
@@ -93,7 +94,7 @@ const server=http.createServer(async(req,res)=>{
     };
     if(!orderVerifier.configured){reply(503,'PRIVATE_KALSHI_CONNECTION_NOT_CONFIGURED');return}
     const {ownerAuthorized}=require('./kalshi-order-verify');
-    if(!ownerAuthorized(process.env.CASH_OWNER_VERIFY_TOKEN,req.headers.authorization)){
+    if(!ownerAuthorized(resolvePrivateConfig().ownerToken,req.headers.authorization)){
       reply(401,'PRIVATE_OWNER_AUTHORIZATION_REQUIRED');return;
     }
     if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){
@@ -299,10 +300,13 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   checkProspective();
   const prospectiveTimer=setInterval(checkProspective,20000);
   prospectiveTimer.unref();
-  // No index network requests are made until read-only credentials exist.
-  brtiFeed.update().catch(()=>{});
-  const brtiTimer=setInterval(()=>brtiFeed.update().catch(()=>{}),15000);
-  brtiTimer.unref();
+  // Owner verification keys must NOT implicitly trigger licensed BRTI
+  // polling. Enable official-index reads only with separate owner opt-in.
+  if(process.env.CASH_USE_AUTHORIZED_BRTI_FOR_FORECASTS==='true'){
+    brtiFeed.update().catch(()=>{});
+    const brtiTimer=setInterval(()=>brtiFeed.update().catch(()=>{}),15000);
+    brtiTimer.unref();
+  }
   console.log('CASH shadow baseline monitor: '+shadow.snapshot().storageMode+', '+shadow.snapshot().recoveredEvents+' recovered events, 0 qualifying forecasts');
   // Real route-level smoke test, with separate labels for app health and
   // volatile public market feeds. Runs only against this local server.

@@ -320,18 +320,18 @@ test('Kalshi CF Benchmarks optional feed reports read-only index health without 
  assert.match(page.body,/id="pfBrti"/);
 }));
 
-test('read-only private Kalshi order verifier is not connected and cannot be queried publicly',()=>withServer(async()=>{
+test('read-only private Kalshi verifier is safely gated whether Railway secrets are configured or not',()=>withServer(async()=>{
  const status=await request('/api/order-verification-status');
  assert.equal(status.status,200);
  const v=JSON.parse(status.body);
  assert.equal(v.version,'CASH_ORDER_VERIFICATION_READINESS_V1');
- assert.equal(v.state,'NOT_CONNECTED');
+ assert.ok(['NOT_CONNECTED','PRIVATE_VERIFICATION_CONFIGURED'].includes(v.state));
  assert.equal(v.orderPlacementEnabled,false);
  assert.equal(v.verifiedLiveOrders,0);
  assert.equal(v.independentlyValidatedPredictions,0);
  const privateResponse=await request('/api/private/order-verify','POST');
- assert.equal(privateResponse.status,503);
- assert.match(privateResponse.body,/NOT_CONFIGURED/);
+ assert.equal(privateResponse.status,v.state==='NOT_CONNECTED'?503:401);
+ assert.match(privateResponse.body,v.state==='NOT_CONNECTED'?/NOT_CONFIGURED/:/AUTHORIZATION_REQUIRED/);
  assert.equal((await request('/api/private/order-verify','GET')).status,404);
  assert.equal((await request('/api/order-verification-status','POST')).status,404);
  const script=await request('/order-verify-ui.js');

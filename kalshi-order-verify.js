@@ -9,6 +9,7 @@
  */
 const crypto=require('node:crypto');
 const {readConfig}=require('./kalshi-brti');
+const {resolvePrivateConfig}=require('./private-key-config');
 const HOST='https://external-api.kalshi.com';
 const PREFIX='/trade-api/v2';
 const ID=/^[A-Za-z0-9_-]{8,100}$/;
@@ -113,9 +114,9 @@ function combine({orderId,orderData,fillData,settlementData,at}){
  };
 }
 function createKalshiOrderVerifier({fetchImpl=fetch,clock=()=>Date.now(),
- keyId=process.env.CASH_KALSHI_READ_KEY_ID,
- privateKeyPem=process.env.CASH_KALSHI_READ_KEY_PEM,
- ownerToken=process.env.CASH_OWNER_VERIFY_TOKEN}={}){
+ keyId=resolvePrivateConfig().keyId,
+ privateKeyPem=resolvePrivateConfig().privateKeyPem,
+ ownerToken=resolvePrivateConfig().ownerToken}={}){
  const auth=readConfig(keyId,privateKeyPem);
  const configured=auth.state==='CONFIGURED'&&typeof ownerToken==='string'&&
   ownerToken.length>=32&&ownerToken.length<=512;

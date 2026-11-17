@@ -6,6 +6,7 @@
  * confirms index entitlement; no write or trading API is implemented.
  */
 const crypto=require('node:crypto');
+const {resolvePrivateConfig}=require('./private-key-config');
 const API='https://external-api.kalshi.com';
 const PATH='/trade-api/v2/cfbenchmarks/values';
 const SOURCE='CF Benchmarks BRTI via Kalshi read-only';
@@ -61,8 +62,8 @@ function parseBrtiResult(body,now){
  return {latest,history:list.slice(-300),ageMs};
 }
 function createKalshiBrtiFeed({fetchImpl=fetch,clock=()=>Date.now(),
- keyId=process.env.CASH_KALSHI_READ_KEY_ID,
- privateKeyPem=process.env.CASH_KALSHI_READ_KEY_PEM,
+ keyId=resolvePrivateConfig().keyId,
+ privateKeyPem=resolvePrivateConfig().privateKeyPem,
  useForForecasts=process.env.CASH_USE_AUTHORIZED_BRTI_FOR_FORECASTS==='true'}={}){
  const auth=readConfig(keyId,privateKeyPem);
  const forecastingEnabled=()=>auth.state==='CONFIGURED'&&useForForecasts===true;

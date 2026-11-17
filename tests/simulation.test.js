@@ -18,7 +18,7 @@ test('only a protected read-only verification route is allowed; no exchange orde
  const server=fs.readFileSync('server.js','utf8');
  const verifier=fs.readFileSync('kalshi-order-verify.js','utf8');
  assert.match(server,/req\.method==='POST'&&req\.url==='\/api\/private\/order-verify'/);
- assert.match(server,/ownerAuthorized\(process\.env\.CASH_OWNER_VERIFY_TOKEN/);
+ assert.match(server,/ownerAuthorized\(resolvePrivateConfig\(\)\.ownerToken/);
  assert.doesNotMatch(server,/\/api\/(?:trade|execute|buy|sell|cancel|place-order)/);
  assert.doesNotMatch(verifier,/method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/);
  assert.doesNotMatch(verifier,/\/portfolio\/events\/orders/);
