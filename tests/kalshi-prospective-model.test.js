@@ -121,3 +121,22 @@ test('early settlement lean can freeze over ten minutes before Kalshi 15m settle
  const no=fixture({lead:720000,delta:-850});
  assert.equal(evaluateProspective(no).side,'NO');
 });
+
+test('one missing public YES/NO ask does not block independently sourced settlement hypothesis',()=>{
+ const v=fixture({delta:600});
+ v.quote.noAsk=null;v.quote.status='partial';
+ const r=evaluateProspective(v);
+ assert.equal(r.side,'YES');
+ assert.equal(r.observedAsks.YES,.51);
+ assert.equal(r.observedAsks.NO,null);
+ assert.equal(r.validation,'UNVALIDATED_PROXY_MODEL');
+ assert.equal(r.calibratedProbability,null);
+ assert.equal(r.realMoneyAuthorized,false);
+ const invalid=fixture({delta:600});
+ invalid.quote.status='stale';
+ assert.equal(evaluateProspective(invalid).side,null);
+ invalid.quote.status='partial';invalid.quote.targetPrice=null;
+ assert.equal(evaluateProspective(invalid).side,null);
+ invalid.quote.targetPrice=85000;invalid.quote.contractRuleStatus='RULE_TEXT_NOT_CONFIRMED';
+ assert.equal(evaluateProspective(invalid).side,null);
+});

@@ -26,8 +26,7 @@ const MODEL=Object.freeze({
 const officialSource='CF Benchmarks BRTI via Kalshi read-only';
 const sourceSet=new Set(['Kraken BTC/USD','Coinbase Exchange BTC-USD',officialSource]);
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const validAsks=q=>Number.isFinite(q?.yesAsk)&&q.yesAsk>0&&q.yesAsk<1&&
- Number.isFinite(q?.noAsk)&&q.noAsk>0&&q.noAsk<1;
+const usableAsk=x=>Number.isFinite(x)&&x>0&&x<1;
 function evaluateProspective({quote,spot,now=Date.now()}={}){
  const why=reason=>({model:NAME,state:'WAIT',reason,
   side:null,signalZ:null,calibratedProbability:null,expectedValue:null,
@@ -38,7 +37,7 @@ function evaluateProspective({quote,spot,now=Date.now()}={}){
  const qt=Date.parse(quote.fetchedAt),expiry=Date.parse(quote.endTime),start=Date.parse(quote.openTime);
  const leadMs=expiry-now;
  if(!Number.isFinite(qt)||qt>now+2000||now-qt>MODEL.maxQuoteAgeMs||
-  quote.status!=='live'||quote.refreshFailed===true||!validAsks(quote))
+  !['live','partial'].includes(quote.status)||quote.refreshFailed===true)
   return why('STALE_OR_INCOMPLETE_KALSHI_QUOTE');
  if(!Number.isFinite(expiry)||leadMs<MODEL.minLeadMs||leadMs>MODEL.maxLeadMs||
     Number.isFinite(start)&&start>now)
@@ -114,7 +113,8 @@ function evaluateProspective({quote,spot,now=Date.now()}={}){
   modelParams:MODEL,marketId:quote.marketId,
   at:new Date(now).toISOString(),endTime:quote.endTime,leadMs,
   targetPrice:quote.targetPrice,quoteFetchedAt:quote.fetchedAt,
-  observedAsks:{YES:quote.yesAsk,NO:quote.noAsk},
+  observedAsks:{YES:usableAsk(quote.yesAsk)?quote.yesAsk:null,
+   NO:usableAsk(quote.noAsk)?quote.noAsk:null},
   spotSource:spot.source,spotPrice:spot.price,spotFetchedAt:spot.fetchedAt,
   gapBps:Math.round(gapBps*1000)/1000,
   sigmaPerSqrtSecond:sigma,barrierBps:cutoff*10000,

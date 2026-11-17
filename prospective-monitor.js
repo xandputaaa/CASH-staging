@@ -87,7 +87,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
     const lead=q?.endTime?Date.parse(q.endTime)-clock():null;
     // Public quote history is observed-only; never imply this is a
     // Kalshi transaction chart or a known future price movement.
-    if(q?.status==='live'&&!q.refreshFailed&&Number.isFinite(q.yesAsk)&&
+    if(['live','partial'].includes(q?.status)&&!q.refreshFailed&&Number.isFinite(q.yesAsk)&&
       q.yesAsk>0&&q.yesAsk<1&&typeof market==='string'){
       const at=Date.parse(q.fetchedAt);
       if(Number.isFinite(at)&&at<=clock()+2000&&clock()-at<=12000&&
