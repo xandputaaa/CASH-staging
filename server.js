@@ -86,6 +86,30 @@ const server=http.createServer(async(req,res)=>{
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
     res.end(JSON.stringify(orderVerifier.publicStatus()));return;
   }
+  if(req.method==='POST'&&req.url==='/api/private/recent-order-verify'){
+    res.setHeader('Cache-Control','no-store, private');
+    const reply=(status,obj)=>{
+      res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify(obj));
+    };
+    if(!orderVerifier.configured){reply(503,{error:'PRIVATE_KALSHI_CONNECTION_NOT_CONFIGURED'});return}
+    const {ownerAuthorized}=require('./kalshi-order-verify');
+    if(!ownerAuthorized(resolvePrivateConfig().ownerToken,req.headers.authorization)){
+      reply(401,{error:'PRIVATE_OWNER_AUTHORIZATION_REQUIRED'});return;
+    }
+    if(req.headers['transfer-encoding']||Number(req.headers['content-length']||0)>0){
+      reply(413,{error:'NO_REQUEST_BODY_ALLOWED'});return;
+    }
+    try{reply(200,await orderVerifier.verifyRecent(req.headers.authorization));}
+    catch(err){
+      const code=String(err?.message||'');
+      const allow=['FILLS_NOT_CONFIRMED','EXCHANGE_UNAVAILABLE','EXCHANGE_AUTH_FAILED',
+       'ORDER_OR_RECORD_NOT_FOUND','ORDER_NOT_CONFIRMED','FILL_INCONSISTENT',
+       'FILL_MARKET_MISMATCH','FILL_COUNT_OR_PRICE_INVALID'];
+      reply(422,{error:allow.includes(code)?code:'RECENT_ORDER_VERIFICATION_UNAVAILABLE'});
+    }
+    return;
+  }
   if(req.method==='POST'&&req.url==='/api/private/order-verify'){
     res.setHeader('Cache-Control','no-store, private');
     const reply=(status,error)=>{

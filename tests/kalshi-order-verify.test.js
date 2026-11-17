@@ -154,3 +154,52 @@ test('disconnected credentials trigger no private exchange requests even during 
  assert.equal(result.exchangeReadAuthState,'NOT_CONNECTED');
  assert.equal(calls,0);
 });
+
+test('modern Kalshi fill fields work without deprecated action or side',async()=>{
+ const modern=data();const x=modern.fills.fills[0];
+ delete x.action;delete x.side;
+ x.outcome_side='yes';x.book_side='bid';
+ const h=setup({source:modern});
+ const r=await h.verifier.verify(orderId,'Bearer '+h.token);
+ assert.equal(r.evidence.filledExecutionVerified,true);
+ assert.equal(r.evidence.fills[0].bookSide,'bid');
+ assert.equal(r.evidence.fills[0].action,'UNKNOWN');
+ assert.equal(r.prediction.afterFeeEdgeVerified,false);
+});
+test('mismatched book side fails closed instead of confirming a trade',async()=>{
+ const corrupt=data();
+ corrupt.fills.fills[0].outcome_side='yes';
+ corrupt.fills.fills[0].book_side='ask';
+ const h=setup({source:corrupt});
+ await assert.rejects(()=>h.verifier.verify(orderId,'Bearer '+h.token),/FILL_INCONSISTENT/);
+});
+test('recent fill search is owner-only, read-only and audits an actual exchange fill',async()=>{
+ const h=setup();
+ await assert.rejects(()=>h.verifier.verifyRecent('Bearer wrong'),/OWNER_NOT_AUTHORIZED/);
+ assert.equal(h.requests.length,0);
+ const r=await h.verifier.verifyRecent('Bearer '+h.token);
+ assert.equal(r.evidence.filledExecutionVerified,true);
+ assert.equal(r.selection.firstPageOnly,true);
+ assert.equal(r.selection.method,'LATEST_TIMESTAMP_IN_RETRIEVED_PAGE');
+ assert.equal(r.tradingEnabled,false);
+ assert.equal(r.prediction.afterFeeEdgeVerified,false);
+ assert.equal(h.requests.length,4);
+ assert.ok(h.requests[0].url.endsWith('/portfolio/fills?limit=100'));
+ for(const q of h.requests)assert.equal(q.opts.method,'GET');
+});
+test('recent filled order search reports empty without inventing a trade',async()=>{
+ const h=setup({source:data({executed:false,settled:false})});
+ const r=await h.verifier.verifyRecent('Bearer '+h.token);
+ assert.equal(r.version,'CASH_KALSHI_RECENT_FILL_SEARCH_V1');
+ assert.equal(r.verifiedExecution,false);
+ assert.equal(r.placedOrder,false);
+ assert.equal(r.state,'NO_KXBTC15M_FILL_IN_RETRIEVED_PAGE');
+ assert.equal(h.requests.length,1);
+});
+test('missing official fill_count_fp makes confirmation incomplete',async()=>{
+ const x=data();delete x.order.order.fill_count_fp;
+ const h=setup({source:x});
+ const r=await h.verifier.verifyRecent('Bearer '+h.token);
+ assert.equal(r.evidence.filledExecutionVerified,false);
+ assert.equal(r.evidence.fullFillHistoryVerified,false);
+});

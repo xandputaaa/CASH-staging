@@ -3,7 +3,8 @@
  const root=document.getElementById('cashOrderVerify');if(!root)return;
  const el=id=>document.getElementById(id);
  const status=el('orderVerifyStatus'),result=el('orderVerifyResult'),
-  trigger=el('orderVerifyButton'),token=el('orderVerifyToken'),orderId=el('orderVerifyId'),
+  trigger=el('orderVerifyButton'),recent=el('orderVerifyRecentButton'),
+  token=el('orderVerifyToken'),orderId=el('orderVerifyId'),
   generate=el('orderGenerateToken'),guide=el('orderTokenGuide'),
   fallback=el('orderTokenFallback'),copyArea=el('orderTokenCopy'),
   copyBtn=el('orderCopyToken'),selectBtn=el('orderSelectToken'),
@@ -91,6 +92,50 @@
   if(fallback)fallback.hidden=true;
   guide.textContent='Token hidden and cleared from this page. Generate a new one if needed. Previously copied text may remain on your device clipboard.';
  });
+ function renderAudit(data){
+  if(data?.version==='CASH_KALSHI_RECENT_FILL_SEARCH_V1'){
+   result.textContent='NO BTC 15M FILL FOUND IN RECENT PAGE · '+
+    String(data.rowsChecked||0)+' exchange fills checked. Older pages may exist: '+
+    (data.additionalPagesExist?'YES':'NOT INDICATED')+
+    '. No real execution verified and no trade placed.';
+   return;
+  }
+  if(data?.version!=='CASH_KALSHI_PRIVATE_ORDER_AUDIT_V1'||
+   data.tradingEnabled!==false||data.realTradeOrderSubmittedByCash!==false)
+   throw Error('Untrusted order verification result');
+  const ev=data.evidence||{};
+  result.textContent='Kalshi order '+data.order.orderId+
+    ' · '+(ev.filledExecutionVerified?'EXECUTION VERIFIED':'EXECUTION NOT VERIFIED')+
+    ' · '+String(ev.matchingFillCount||0)+' exchange fills'+
+    ' · '+String(ev.matchedQuantity||0)+' contracts'+
+    ' · settlement: '+(ev.settlementRecordLinkedByTicker?
+      'account-level '+ev.marketSettlementResult:'NOT VERIFIED')+
+    ' · order-level net P&L: NOT VERIFIED. CASH prediction edge: NOT VERIFIED.';
+ }
+ if(recent)recent.addEventListener('click',async()=>{
+  if(recent.disabled||trigger.disabled)return;
+  recent.disabled=true;trigger.disabled=true;
+  result.textContent='Reading recent Kalshi matched fills and verifying the specific BTC 15m order…';
+  const access=token.value,controller=new AbortController(),
+   timeout=setTimeout(()=>controller.abort(),18000);
+  try{
+   if(!access)throw Error('Enter your saved private owner token');
+   const r=await fetch('/api/private/recent-order-verify',{
+    method:'POST',cache:'no-store',credentials:'omit',
+    headers:{'Authorization':'Bearer '+access},signal:controller.signal});
+   const data=await r.json();
+   if(!r.ok)throw Error(data.error||'Recent fill verification unavailable');
+   renderAudit(data);
+  }catch(e){
+   result.textContent='NO VERIFIED EXECUTION · '+(e?.message||'Unavailable')+
+    '. CASH did not place an order.';
+  }finally{
+   recent.disabled=false;trigger.disabled=false;
+   clearTimeout(timeout);token.value='';
+   if(copyArea)copyArea.value='';
+   if(fallback)fallback.hidden=true;
+  }
+ });
  trigger.addEventListener('click',async()=>{
   if(trigger.disabled)return;
   trigger.disabled=true;result.textContent='Checking the specific exchange order and matched fills…';
@@ -104,17 +149,7 @@
    // Never display raw upstream response or any key/signature.
    const data=await response.json();
    if(!response.ok)throw Error(typeof data.error==='string'?data.error:'Verification unavailable');
-   if(data.version!=='CASH_KALSHI_PRIVATE_ORDER_AUDIT_V1'||
-      data.tradingEnabled!==false||data.realTradeOrderSubmittedByCash!==false)
-    throw Error('Untrusted order-verification result');
-   const ev=data.evidence||{};
-   result.textContent='Kalshi order '+data.order.orderId+
-    ' · '+(ev.filledExecutionVerified?'EXECUTION VERIFIED':'EXECUTION NOT VERIFIED')+
-    ' · '+String(ev.matchingFillCount||0)+' exchange fills'+
-    ' · '+String(ev.matchedQuantity||0)+' contracts'+
-    ' · settlement: '+(ev.settlementRecordLinkedByTicker?
-      'account-level '+ev.marketSettlementResult:'NOT VERIFIED')+
-    ' · order-level net P&L: NOT VERIFIED. CASH prediction edge: NOT VERIFIED.';
+   renderAudit(data);
   }catch(err){
    result.textContent='NO VERIFIED EXECUTION · '+(err?.message||'Verification unavailable')+
     '. No money was transferred or order placed.';

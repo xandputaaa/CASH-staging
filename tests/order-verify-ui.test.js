@@ -5,7 +5,7 @@ const js=fs.readFileSync(path.join(__dirname,'../order-verify-ui.js'),'utf8');
 function setup({configured=false}={}){
  const els={},listeners={};
  for(const id of ['cashOrderVerify','orderVerifyStatus','orderVerifyResult',
-  'orderVerifyButton','orderVerifyToken','orderVerifyId','orderGenerateToken','orderTokenGuide',
+  'orderVerifyButton','orderVerifyRecentButton','orderVerifyToken','orderVerifyId','orderGenerateToken','orderTokenGuide',
   'orderTokenFallback','orderTokenCopy','orderCopyToken','orderSelectToken','orderHideToken']){
   els[id]={id,textContent:'',value:'',disabled:false,hidden:id==='orderTokenFallback',
    selected:false,focused:false,
@@ -62,4 +62,12 @@ test('Kalshi authenticated read access is distinguished from merely configured c
  await new Promise(resolve=>setImmediate(resolve));
  assert.match(x.els.orderVerifyStatus.textContent,/READ ACCESS VERIFIED/);
  assert.match(x.els.orderVerifyStatus.textContent,/NO ORDER VERIFIED/);
+});
+
+test('recent verify action fails closed without private token and does not fetch private orders',async()=>{
+ const x=setup({configured:true});
+ x.listeners['orderVerifyRecentButton:click']();
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.match(x.els.orderVerifyResult.textContent,/NO VERIFIED EXECUTION/);
+ assert.deepEqual(x.readCalls.map(r=>r.url),['/api/order-verification-status']);
 });

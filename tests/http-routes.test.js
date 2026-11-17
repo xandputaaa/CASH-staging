@@ -366,3 +366,16 @@ test('owner can generate a secure token entirely on-device and sees actual Kalsh
  assert.equal(state.orderPlacementEnabled,false);
  assert.equal(state.verifiedLiveOrders,0);
 }));
+
+test('recent filled-order audit requires a private token and has no GET/write endpoint',()=>withServer(async()=>{
+ const status=JSON.parse((await request('/api/order-verification-status')).body);
+ const response=await request('/api/private/recent-order-verify','POST');
+ assert.equal(response.status,status.state==='NOT_CONNECTED'?503:401);
+ assert.equal((await request('/api/private/recent-order-verify')).status,404);
+ assert.equal((await request('/api/private/recent-order-verify','DELETE')).status,404);
+ const page=await request('/');
+ assert.match(page.body,/id="orderVerifyRecentButton"/);
+ const script=await request('/order-verify-ui.js');
+ assert.match(script.body,/api\/private\/recent-order-verify/);
+ assert.equal(status.orderPlacementEnabled,false);
+});

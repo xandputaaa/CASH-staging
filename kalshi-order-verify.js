@@ -60,25 +60,30 @@ function combine({orderId,orderData,fillData,settlementData,at}){
  const known=new Set(),seen=[];
  let quantity=0,fee=0,cost=0,allCostsPresent=true;
  for(const x of rows){
+  const side=String(x.outcome_side??x.side??'').toLowerCase();
+  const legacy=x.side===undefined?null:String(x.side).toLowerCase();
+  const action=x.action===undefined?null:String(x.action).toLowerCase();
+  const book=x.book_side===undefined?null:String(x.book_side).toLowerCase();
   if(typeof x.fill_id!=='string'||x.fill_id.length<5||known.has(x.fill_id)||
-    !['yes','no'].includes(String(x.side||x.outcome_side).toLowerCase())||
-    !['buy','sell'].includes(String(x.action).toLowerCase()))
+    !['yes','no'].includes(side)||
+    (legacy!==null&&legacy!==side)||
+    (action!==null&&!['buy','sell'].includes(action))||
+    (book!==null&&book!==(side==='yes'?'bid':'ask')))
    throw Error('FILL_INCONSISTENT');
   known.add(x.fill_id);
-  const count=amount(x.count_fp),unit=amount((x.side||x.outcome_side)==='no'?
+  const count=amount(x.count_fp),unit=amount(side==='no'?
    x.no_price_dollars:x.yes_price_dollars);
   if(count===null||count<=0||unit===null||unit>1)throw Error('FILL_COUNT_OR_PRICE_INVALID');
   const f=amount(x.fee_cost);
-  if(f===null)allCostsPresent=false;
-  else fee+=f;
+  if(f===null)allCostsPresent=false;else fee+=f;
   quantity+=count;cost+=count*unit;
-  seen.push({fillId:x.fill_id,side:x.side||x.outcome_side,
-   action:x.action,quantity:count,unitPriceDollars:unit,
+  seen.push({fillId:x.fill_id,side,bookSide:book||'UNKNOWN',
+   action:action||'UNKNOWN',quantity:count,unitPriceDollars:unit,
    feeDollars:f,executedAt:x.created_time||null});
  }
  const officialFilled=amount(o.fill_count_fp);
  const incomplete=Boolean(fillData.cursor)||rows.length>=MAX_ROWS||
-  officialFilled!==null&&Math.abs(quantity-officialFilled)>0.000001;
+  officialFilled===null||Math.abs(quantity-officialFilled)>0.000001;
  const executed=seen.length>0&&quantity>0&&!incomplete;
  const settlementRows=settlementData?.settlements;
  const row=Array.isArray(settlementRows)?
@@ -161,6 +166,31 @@ function createKalshiOrderVerifier({fetchImpl=fetch,clock=()=>Date.now(),
   exchangeReadAuthCheckedAt=new Date(clock()).toISOString();
   return publicStatus();
  }
+ async function verifyRecent(bearer){
+  if(!configured)throw Error('VERIFIER_NOT_CONFIGURED');
+  if(!ownerAuthorized(ownerToken,bearer))throw Error('OWNER_NOT_AUTHORIZED');
+  // Owner-initiated bounded search of true matched fills, not resting orders.
+  const page=await get(PREFIX+'/portfolio/fills','?limit='+MAX_ROWS);
+  if(!page||!Array.isArray(page.fills))throw Error('FILLS_NOT_CONFIRMED');
+  const rows=page.fills.filter(x=>x&&TICKER.test(x.ticker||x.market_ticker||'')&&
+   ID.test(x.order_id||'')&&amount(x.count_fp)>0);
+  if(!rows.length)return {version:'CASH_KALSHI_RECENT_FILL_SEARCH_V1',
+    state:'NO_KXBTC15M_FILL_IN_RETRIEVED_PAGE',
+    checkedAt:new Date(clock()).toISOString(),
+    rowsChecked:page.fills.length,additionalPagesExist:Boolean(page.cursor),
+    verifiedExecution:false,placedOrder:false,
+    note:'No BTC 15m fill in the first retrieved page. Older or archived fills may still exist.'};
+  const stamp=x=>{
+   const parsed=Date.parse(x.created_time);
+   return Number.isFinite(parsed)?parsed:
+    Number.isFinite(Number(x.ts))?Number(x.ts)*1000:0;
+  };
+  rows.sort((a,b)=>stamp(b)-stamp(a));
+  const audit=await verify(rows[0].order_id,bearer);
+  return {...audit,selection:{method:'LATEST_TIMESTAMP_IN_RETRIEVED_PAGE',
+   firstPageOnly:true,additionalPagesExist:Boolean(page.cursor),
+   note:'Most recent eligible fill in first fetched page; not exhaustive account history.'}};
+ }
  async function verify(orderId,bearer){
   if(!configured)throw Error('VERIFIER_NOT_CONFIGURED');
   if(!ownerAuthorized(ownerToken,bearer))throw Error('OWNER_NOT_AUTHORIZED');
@@ -178,6 +208,6 @@ function createKalshiOrderVerifier({fetchImpl=fetch,clock=()=>Date.now(),
    '?ticker='+encodeURIComponent(ticker)+'&limit='+MAX_ROWS)}catch{}
   return combine({orderId,orderData,fillData:fills,settlementData:settlement,at:clock()});
  }
- return {publicStatus,probeConnection,verify,configured};
+ return {publicStatus,probeConnection,verifyRecent,verify,configured};
 }
 module.exports={createKalshiOrderVerifier,ownerAuthorized,getHeaders,combine};
