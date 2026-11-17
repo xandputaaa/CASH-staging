@@ -58,6 +58,11 @@ function validateSettlement(forecast,outcome,kind){
  const winner=op?.winner;
  if(!raw||!['YES','NO'].includes(winner)||raw.ticker!==forecast.payload.marketId||
     raw.venue!=='Kalshi'||evidenceUrl!==expectedUrl||
+    !['settled','finalized'].includes(String(raw.status||'').toLowerCase())||
+    raw.is_provisional===true||
+    !Number.isFinite(Date.parse(raw.close_time))||
+    Date.parse(raw.close_time)!==Date.parse(forecast.payload.endTime)||
+    (raw.settlement_ts&&Date.parse(raw.settlement_ts)<Date.parse(forecast.payload.endTime))||
     !/^[a-f0-9]{64}$/.test(evidenceHash||'')||
     SHA(raw)!==evidenceHash||confirm!==2)
   return {state:'OUTCOME_EVIDENCE_REJECTED'};
