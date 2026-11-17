@@ -84,6 +84,7 @@ body[data-cash-mode="simple"] #livePaperLab .notice{font-size:13px;line-height:1
   <div class="simple-metric"><small>Frozen early call</small><strong id="settlementFrozenSide" style="font-size:16px">NOT YET CAPTURED</strong><span id="settlementFrozenTime">One time per contract</span></div>
   <div class="simple-metric"><small>Official results scored</small><strong id="settlementAccuracy">—</strong><span id="settlementScored">Exploratory; not validated</span></div>
  </div>
+ <p id="settlementPendingDiagnostics" class="notice" aria-live="polite">Checking public settlement evidence and overdue results…</p>
  <p class="notice">Model target: <strong>YES</strong> if Kalshi's final 60-second BRTI average is at or above its official starting strike, otherwise <strong>NO</strong>. CASH uses past public spot as a proxy and may choose WAIT when it cannot justify a side. The frozen call is one pre-outcome research decision per contract; only that call counts toward exploratory accuracy.</p>
  <svg viewBox="0 0 620 220" role="img" aria-label="Actually observed Kalshi YES ask quotes, with the frozen settlement call time marked; no synthetic future candlesticks" style="width:100%;height:auto;background:#091521;border:1px solid #253c4d;border-radius:12px">
   <line x1="20" x2="600" y1="200" y2="200" stroke="#3c5365" stroke-width="1"/>
