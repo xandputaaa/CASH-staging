@@ -50,7 +50,8 @@ const prospective=createProspectiveMonitor({
  quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed,
  store:createProspectiveStore()});
 const lateCheckpoint=createLateCheckpointMonitor({
- quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed
+ quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed,
+ feeFeed:kalshiFeeFeed
 });
 const earlyMove=createEarlyMoveMonitor({quotes:venueFeeds,spot:feed});
 const server=http.createServer(async(req,res)=>{
