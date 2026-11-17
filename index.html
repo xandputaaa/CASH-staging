@@ -80,6 +80,16 @@ body[data-cash-mode="simple"] #livePaperLab .notice{font-size:13px;line-height:1
   <a href="https://railway.com/project/428e583e-6443-439d-9edd-f2f90dff08f9/service/aa45be39-7f97-4a80-90a7-d7d0a5728940?environmentId=f2ba52d6-81cb-4b3a-abb2-cfe295e1ae31" target="_blank" rel="noopener noreferrer" style="padding:12px;color:#8ce5f3">Open Railway variables</a>
 </div>
 <p class="notice" id="orderTokenGuide" role="status" aria-live="polite">The owner token is a separate password, not your Kalshi API key. It must be 32+ random characters. Generate it on this device, save it to your password manager, and paste it into Railway's OWNER_VERIFY_TOKEN variable. Do not share it in chat.</p>
+<div id="orderTokenFallback" hidden style="margin:12px 0;padding:12px;border:1px solid #456271;border-radius:12px">
+ <div class="row"><strong>YOUR GENERATED OWNER TOKEN</strong><span style="font-size:11px">Only shown on this device</span></div>
+ <p class="notice">If automatic Copy does not work on iPhone, tap <strong>Select text</strong>, then touch and hold the selected token and choose <strong>Copy</strong>. Paste it into Railway's OWNER_VERIFY_TOKEN value.</p>
+ <textarea id="orderTokenCopy" readonly aria-label="Generated token, manually selectable and copyable" rows="3" autocapitalize="off" autocomplete="off" spellcheck="false" style="box-sizing:border-box;width:100%;font-family:ui-monospace,monospace;font-size:16px;line-height:1.6;overflow-wrap:anywhere;word-break:break-all;background:#091824;color:#f3fbff;border:1px solid #698a9c;border-radius:8px;padding:12px;user-select:text;-webkit-user-select:text"></textarea>
+ <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">
+  <button id="orderCopyToken" type="button" style="min-height:44px;padding:12px">Copy token</button>
+  <button id="orderSelectToken" type="button" style="min-height:44px;padding:12px">Select text</button>
+  <button id="orderHideToken" type="button" style="min-height:44px;padding:12px">Hide token</button>
+ </div>
+</div>
 <div class="row"><button id="orderVerifyButton" type="button" style="min-height:44px;padding:12px">Verify recorded exchange execution</button></div>
 <p class="notice" id="orderVerifyResult" role="status" aria-live="polite">No real money order, fill, or profit verified. Read-only private Kalshi connection required.</p>
 <p class="notice">Security: configured with a read-only Kalshi API key and separate private owner token in Railway secrets. The public site does not expose your account. Independent model validation remains 0/100.</p>

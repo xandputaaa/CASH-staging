@@ -347,6 +347,10 @@ test('owner can generate a secure token entirely on-device and sees actual Kalsh
  const page=await request('/');
  assert.equal(page.status,200);
  assert.match(page.body,/id="orderGenerateToken"/);
+ assert.match(page.body,/id="orderTokenCopy"/);
+ assert.match(page.body,/id="orderCopyToken"/);
+ assert.match(page.body,/id="orderSelectToken"/);
+ assert.match(page.body,/id="orderHideToken"/);
  assert.match(page.body,/id="orderTokenGuide"/);
  assert.match(page.body,/OWNER_VERIFY_TOKEN/);
  const script=await request('/order-verify-ui.js');
@@ -354,6 +358,8 @@ test('owner can generate a secure token entirely on-device and sees actual Kalsh
  assert.match(script.body,/cryptoApi.getRandomValues\(bytes\)/);
  assert.match(script.body,/KALSHI READ ACCESS VERIFIED/);
  assert.match(script.body,/navigator.clipboard.writeText\(secret\)/);
+ assert.match(script.body,/copyArea.setSelectionRange/);
+ assert.match(script.body,/document.execCommand\('copy'\)/);
  assert.doesNotMatch(script.body,/localStorage\.setItem/);
  const st=await request('/api/order-verification-status');
  const state=JSON.parse(st.body);

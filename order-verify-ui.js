@@ -4,7 +4,10 @@
  const el=id=>document.getElementById(id);
  const status=el('orderVerifyStatus'),result=el('orderVerifyResult'),
   trigger=el('orderVerifyButton'),token=el('orderVerifyToken'),orderId=el('orderVerifyId'),
-  generate=el('orderGenerateToken'),guide=el('orderTokenGuide');
+  generate=el('orderGenerateToken'),guide=el('orderTokenGuide'),
+  fallback=el('orderTokenFallback'),copyArea=el('orderTokenCopy'),
+  copyBtn=el('orderCopyToken'),selectBtn=el('orderSelectToken'),
+  hideBtn=el('orderHideToken');
  // Intentionally keep sensitive access code only in user input, never local
  // storage, URL query, analytics events, logs, or the DOM report.
  async function health(){
@@ -24,40 +27,70 @@
     'NOT CONNECTED · CHECK OWNER TOKEN · NO ORDER VERIFIED';
   }catch{status.textContent='VERIFIER STATUS UNAVAILABLE · NO ORDER VERIFIED'}
  }
- // Local cryptographically secure generation. The token is NEVER submitted
- // to CASH when generated and never goes into localStorage, a URL or logs.
- // It is sent only when the owner later verifies a specific order.
+ // Generate only with browser cryptographic randomness; never post a token
+ // while generating. The textarea is a manual iOS copy fallback, not storage.
+ function selectGenerated(){
+  if(!copyArea||!copyArea.value)return false;
+  if(typeof copyArea.focus==='function')copyArea.focus();
+  if(typeof copyArea.select==='function')copyArea.select();
+  if(typeof copyArea.setSelectionRange==='function')
+   copyArea.setSelectionRange(0,copyArea.value.length);
+  return true;
+ }
+ function showFallback(secret){
+  if(copyArea)copyArea.value=secret;
+  if(fallback)fallback.hidden=false;
+ }
+ function manualInstructions(){
+  guide.textContent='Copy blocked by this browser. Tap Select text, touch and hold the highlighted token, choose Copy, then paste it into Railway OWNER_VERIFY_TOKEN.';
+ }
+ async function attemptCopy(){
+  const secret=copyArea?.value||'';
+  if(!secret)return;
+  if(typeof navigator!=='undefined'&&navigator.clipboard&&
+     typeof navigator.clipboard.writeText==='function'){
+   try{
+    await navigator.clipboard.writeText(secret);
+    guide.textContent='Token copied! Save it in your password manager and paste it into the Railway OWNER_VERIFY_TOKEN variable, then apply the change.';
+    return;
+   }catch{/* iOS in-app browser may deny clipboard access */}
+  }
+  selectGenerated();
+  // execCommand is only a best-effort fallback: manual selection remains
+  // visible even on browsers that block all clipboard APIs.
+  let copied=false;
+  try{copied=typeof document.execCommand==='function'&&
+   document.execCommand('copy')===true;}catch{}
+  if(copied)guide.textContent='Token copied! Paste it into Railway OWNER_VERIFY_TOKEN and apply the change.';
+  else manualInstructions();
+ }
  if(generate&&guide){
   generate.addEventListener('click',()=>{
    const cryptoApi=globalThis.crypto;
    if(!cryptoApi||typeof cryptoApi.getRandomValues!=='function'){
-    guide.textContent='Secure browser randomness is unavailable. Generate a 32+ character random token using a trusted password manager instead.';
+    guide.textContent='Secure randomness is unavailable. Open CASH in Safari or generate a random token with your password manager.';
     return;
    }
    const bytes=new Uint8Array(32);
    cryptoApi.getRandomValues(bytes);
    const secret=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
-   token.value=secret; // 64 characters, 256 bits of randomness.
-   guide.textContent='New 64-character token generated on this device. Copy it, save it in your password manager, then replace OWNER_VERIFY_TOKEN in Railway. The verifier will be enabled after Railway deploys.';
-   if(typeof navigator!=='undefined'&&navigator.clipboard&&
-      typeof navigator.clipboard.writeText==='function'){
-    try{
-     const copyResult=navigator.clipboard.writeText(secret);
-     if(copyResult&&typeof copyResult.then==='function'){
-      copyResult.then(()=>{
-       guide.textContent='Secure token copied to your clipboard. Paste it into Railway OWNER_VERIFY_TOKEN, apply the change, then return here to check Kalshi authentication.';
-      }).catch(()=>{
-       guide.textContent='Secure token generated in the password field above, but automatic copying failed. Select and copy the field value, then paste it into Railway OWNER_VERIFY_TOKEN.';
-      });
-     }
-    }catch{
-     guide.textContent='Secure token generated in the password field, but clipboard access failed. Select and copy it manually into Railway OWNER_VERIFY_TOKEN.';
-    }
-   }else{
-    guide.textContent='Secure token generated in the password field. Select and copy its value into Railway OWNER_VERIFY_TOKEN, then apply the change.';
-   }
+   token.value=secret;
+   showFallback(secret);
+   guide.textContent='64-character token created securely on your device. Tap Copy token below, or Select text to copy manually on iPhone. Save it in your password manager.';
+   // Explicit button is the primary copy action. Do not automatically copy
+   // during generation: that can fail in iOS embedded browsers.
   });
  }
+ if(copyBtn)copyBtn.addEventListener('click',()=>{attemptCopy()});
+ if(selectBtn)selectBtn.addEventListener('click',()=>{
+  if(selectGenerated())manualInstructions();
+ });
+ if(hideBtn)hideBtn.addEventListener('click',()=>{
+  if(copyArea)copyArea.value='';
+  if(token)token.value='';
+  if(fallback)fallback.hidden=true;
+  guide.textContent='Token hidden and cleared from this page. Generate a new one if needed. Previously copied text may remain on your device clipboard.';
+ });
  trigger.addEventListener('click',async()=>{
   if(trigger.disabled)return;
   trigger.disabled=true;result.textContent='Checking the specific exchange order and matched fills…';
