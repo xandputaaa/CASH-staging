@@ -1,0 +1,56 @@
+name: CASH public research snapshot
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  preserve-public-research:
+    if: github.head_ref == 'fix/simple-explanation-sync-20261117' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Fetch current public read-only CASH forecast export
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovery
+          curl --fail --silent --show-error --location \
+            --connect-timeout 10 --max-time 30 --retry 2 \
+            --max-filesize 2621440 \
+            'https://cash-simulation-web-staging.up.railway.app/api/prospective/export' \
+            --output recovery/cash-public-research-unverified.json
+      - name: Validate paper-only export and print safe recovery marker
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs'),crypto=require('node:crypto');
+          const file='recovery/cash-public-research-unverified.json';
+          const data=fs.readFileSync(file,'utf8');
+          if(Buffer.byteLength(data)>2621440)throw Error('Research export too large');
+          const r=JSON.parse(data);
+          if(!r||r.version!=='CASH_PROSPECTIVE_KALSHI_V1'||
+             !['CASH_PROSPECTIVE_HASHED_SESSION_V1','CASH_PROSPECTIVE_REDACTED_COMMITMENTS_V1'].includes(r.format)||
+             r.tradingAuthorized!==false||r.automatedOrdersEnabled!==false||
+             r.independentlyTimeAttested!==false||r.qualifiedCount!==0||
+             r.modelCalibrated!==false||!Array.isArray(r.events)||
+             r.events.length>640||!/^[a-f0-9]{64}$/.test(r.headHash)&&r.headHash!=='GENESIS')
+             throw Error('Unrecognized or unsafe export; no artifact uploaded');
+          if(r.format==='CASH_PROSPECTIVE_REDACTED_COMMITMENTS_V1'&&
+             r.events.some(x=>Object.hasOwn(x,'payload')))
+             throw Error('Licensed input payload encountered; refuse artifact');
+          const digest=crypto.createHash('sha256').update(data).digest('hex');
+          console.log('CASH_RECOVERY_MODE='+r.format);
+          console.log('CASH_RECOVERY_RECORDS='+r.records);
+          console.log('CASH_RECOVERY_EVENTS='+r.events.length);
+          console.log('CASH_RECOVERY_SHA256='+digest);
+          console.log('CASH_RECOVERY_QUALIFIED=0');
+          console.log('CASH_RECOVERY_IS_NOT_INDEPENDENT_CAPTURE_PROOF=true');
+          NODE
+      - name: Save temporary public research ZIP in this GitHub run
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-public-forecast-unverified-${{ github.run_id }}
+          path: recovery/cash-public-research-unverified.json
+          retention-days: 30
+          if-no-files-found: error
