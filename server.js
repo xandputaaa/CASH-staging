@@ -20,9 +20,12 @@ const {assessKalshi15}=require('./kalshi15-readiness');
 const {createKalshiFeeFeed}=require('./kalshi-fees');
 const {assessCognition}=require('./cash-cognition');
 const {createDiagnostics}=require('./diagnostics');
+const {createProspectiveMonitor}=require('./prospective-monitor');
+const {createProspectiveStore}=require('./prospective-store');
 const {assessLiveCheck}=require('./live-check');
 const {runStartupSmoke}=require('./startup-smoke');
 const liveCheckScript=fs.readFileSync('live-check-ui.js');
+const prospectiveScript=fs.readFileSync('prospective-ui.js');
 const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
@@ -30,6 +33,8 @@ const kalshiFeeFeed=createKalshiFeeFeed();
 const resolver=createResolver();
 const auditJournal=createAuditJournal();
 const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver,journal:auditJournal,spot:feed});
+const prospective=createProspectiveMonitor({
+ quotes:venueFeeds,spot:feed,results:resolver,store:createProspectiveStore()});
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
@@ -57,9 +62,22 @@ const server=http.createServer(async(req,res)=>{
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(viewModeScript);return;
   }
+  if(req.method==='GET'&&req.url==='/prospective-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(prospectiveScript);return;
+  }
   if(req.method==='GET'&&req.url==='/live-check-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(liveCheckScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/prospective'){
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(prospective.snapshot()));return;
+  }
+  if(req.method==='GET'&&req.url==='/api/prospective/export'){
+    res.setHeader('Content-Disposition','attachment; filename="CASH-prospective-unverified.json"');
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(prospective.exportSession(),null,2));return;
   }
   if(req.method==='GET'&&req.url==='/api/live-check'){
     try{
@@ -208,6 +226,10 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   const venueTimer=setInterval(checkVenues,15000);venueTimer.unref();
   shadow.scan().catch(()=>{});
   const shadowTimer=setInterval(()=>shadow.scan().catch(()=>{}),20000);shadowTimer.unref();
+  // Frozen, deterministic proxy forecasts for future independent evaluation.
+  prospective.scan().catch(()=>{});
+  const prospectiveTimer=setInterval(()=>prospective.scan().catch(()=>{}),20000);
+  prospectiveTimer.unref();
   console.log('CASH shadow baseline monitor: '+shadow.snapshot().storageMode+', '+shadow.snapshot().recoveredEvents+' recovered events, 0 qualifying forecasts');
   // Real route-level smoke test, with separate labels for app health and
   // volatile public market feeds. Runs only against this local server.

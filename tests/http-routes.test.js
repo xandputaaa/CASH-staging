@@ -277,3 +277,30 @@ test('public live-operation endpoint and button are reachable without enabling a
  assert.equal((await request('/api/live-check','POST')).status,404);
  assert.equal((await request('/trade','POST')).status,404);
 }));
+
+test('forward-looking prospective Kalshi endpoint never exposes real trading permissions',()=>withServer(async()=>{
+ const r=await request('/api/prospective');
+ assert.equal(r.status,200);
+ const v=JSON.parse(r.body);
+ assert.equal(v.version,'CASH_PROSPECTIVE_KALSHI_V1');
+ assert.equal(v.model,'KXBTC15M_STRIKE_VOL_V1');
+ assert.equal(v.qualifiedCount,0);
+ assert.equal(v.tradingAuthorized,false);
+ assert.equal(v.automatedOrdersEnabled,false);
+ assert.equal(v.modelCalibrated,false);
+ const exportResponse=await request('/api/prospective/export');
+ assert.equal(exportResponse.status,200);
+ const data=JSON.parse(exportResponse.body);
+ assert.equal(data.format,'CASH_PROSPECTIVE_HASHED_SESSION_V1');
+ assert.match(data.warning,/not independent trusted timestamps/);
+ const script=await request('/prospective-ui.js');
+ assert.equal(script.status,200);
+ assert.match(script.headers['content-type'],/javascript/);
+ assert.match(script.body,/NOT verified/);
+ const page=await request('/');
+ assert.match(page.body,/FORWARD FORECAST TEST/);
+ assert.match(page.body,/simpleForecast/);
+ assert.equal((await request('/api/prospective','POST')).status,404);
+ assert.equal((await request('/api/prospective/export','POST')).status,404);
+ assert.equal((await request('/order','POST')).status,404);
+}));
