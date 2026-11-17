@@ -296,7 +296,7 @@ test('forward-looking prospective Kalshi endpoint never exposes real trading per
  const script=await request('/prospective-ui.js');
  assert.equal(script.status,200);
  assert.match(script.headers['content-type'],/javascript/);
- assert.match(script.body,/NOT verified/);
+ assert.match(script.body,/UNVALIDATED/);
  const page=await request('/');
  assert.match(page.body,/FORWARD FORECAST TEST/);
  assert.match(page.body,/simpleForecast/);
