@@ -189,3 +189,57 @@ test('public YES ask history is real quotes only and cannot move frozen side',as
  assert.equal(quote.points[0].yesAsk,.55);
  assert.equal(m.snapshot().qualifiedCount,0);
 });
+
+test('settlement diagnostics distinguish exchange not finalized, confirmation pending and overdue',async()=>{
+ const h=harness(),m=createProspectiveMonitor(h.sources);
+ await m.scan();
+ h.setFinal({status:'pending',reason:'Official market not settled'});
+ h.setTime(t+230000);
+ await m.scan();
+ let d=m.snapshot().pendingResolutionDiagnostics;
+ assert.equal(d.pendingTotal,1);assert.equal(d.notExpired,0);
+ assert.equal(d.expiredAwaitingEvidence,1);
+ assert.equal(d.overdueTenMinutes,0);
+ assert.equal(d.blockedReasons.AWAITING_OFFICIAL_FINALIZATION,1);
+ assert.equal(d.recentExpired[0].attempts,1);
+ assert.equal(d.recentExpired[0].side,'YES');
+ assert.equal(m.snapshot().latest.outcomeStatus,'AWAITING_OFFICIAL_FINALIZATION');
+ assert.equal(m.snapshot().officiallyScored,0);
+ h.setTime(t+930000);
+ h.setFinal({status:'pending',reason:'Waiting for second matching finalized public result'});
+ await m.scan();
+ d=m.snapshot().pendingResolutionDiagnostics;
+ assert.equal(d.overdueTenMinutes,1);
+ assert.equal(d.blockedReasons.SECOND_FINALIZED_READ_PENDING,1);
+ assert.equal(d.recentExpired[0].attempts,2);
+ assert.equal(m.snapshot().officiallyScored,0);
+ assert.equal(m.snapshot().qualifiedCount,0);
+});
+test('failed evidence verification is visible as rejection but never counted as a loss',async()=>{
+ const h=harness(),m=createProspectiveMonitor(h.sources);
+ await m.scan();h.setTime(t+230000);
+ const bad=outcome(t+230000,'YES');
+ bad.evidenceSnapshot.expiration_value=84000;
+ bad.evidenceSha256=crypto.createHash('sha256').update(JSON.stringify(bad.evidenceSnapshot)).digest('hex');
+ h.setFinal(bad);await m.scan();
+ let d=m.snapshot().pendingResolutionDiagnostics;
+ assert.equal(d.blockedReasons.EVIDENCE_REJECTED,1);
+ assert.equal(m.snapshot().officiallyScored,0);
+ assert.equal(m.snapshot().misses,0);
+ h.setTime(t+280000);h.setFinal(outcome(t+280000,'YES'));
+ await m.scan();
+ const scored=m.snapshot();
+ assert.equal(scored.pendingResolutionDiagnostics.expiredAwaitingEvidence,0);
+ assert.equal(scored.officiallyScored,1);
+ assert.equal(scored.hits,1);
+ assert.equal(scored.qualifiedCount,0);
+});
+test('unexpected exchange response text is not copied into public resolution diagnostics',async()=>{
+ const h=harness(),m=createProspectiveMonitor(h.sources);
+ await m.scan();h.setTime(t+230000);
+ h.setFinal({status:'pending',reason:'injected credentials=SECRET_NOT_TO_LOG'});
+ await m.scan();
+ const d=m.snapshot().pendingResolutionDiagnostics;
+ assert.equal(d.blockedReasons.UNCONFIRMED_PUBLIC_OUTCOME,1);
+ assert.doesNotMatch(JSON.stringify(m.snapshot()),/SECRET_NOT_TO_LOG/);
+});
