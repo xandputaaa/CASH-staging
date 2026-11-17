@@ -76,8 +76,8 @@ test('paper economics show quoted-only price and fee scenario, not a real trade'
  assert.match(t,/1\/2 directional calls/);
  assert.match(t,/1 without eligible prices/);
  assert.match(t,/CONDITIONAL one-contract buy-at-observed-ask/);
- assert.match(t,/conservative \$-0\.0400/);
- assert.match(t,/centicent-fee \$-0\.0375/);
+ assert.match(t,/conservative USD -0\.0400/);
+ assert.match(t,/centicent-fee USD -0\.0375/);
  assert.match(t,/No actual orders, fills or verified liquidity/);
 });
 test('unavailable paper fee evidence does not display fabricated PnL',async()=>{
