@@ -149,3 +149,17 @@ test('no observed evidence means no accuracy metric despite perfect archived mar
  assert.equal(r.groups.late.directionalVerifiedOutcomes,0);
  assert.equal(r.groups.late.descriptiveHitRate,null);
 });
+
+test('published market close timestamp mismatch or provisional result cannot certify a match',()=>{
+ for(const patch of [{close_time:'2026-11-17T23:46:00Z'},{is_provisional:true},
+  {status:'open'}]){
+  const late=journal('late'),w=witness('late',late);
+  Object.assign(late.outcome.payload.evidenceSnapshot,patch);
+  late.outcome.payload.evidenceSha256=sha(late.outcome.payload.evidenceSnapshot);
+  const {hash,...body}=late.outcome;
+  late.outcome.hash=sha(body);late.obj.headHash=late.outcome.hash;
+  const r=reconcileWitnesses({witnesses:[w],late:late.obj});
+  assert.equal(r.groups.late.hits,0);
+  assert.equal(r.matched[0].state,'OUTCOME_EVIDENCE_REJECTED');
+ }
+});
