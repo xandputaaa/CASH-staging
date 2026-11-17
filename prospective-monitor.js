@@ -8,6 +8,7 @@
 const {createHash}=require('node:crypto');
 const {evaluateProspective,NAME,digest}=require('./kalshi-prospective-model');
 const {hasVerifiedEvidence}=require('./shadow-monitor');
+const {summarizeSettlementEvaluation}=require('./settlement-evaluation');
 const MAX=320;
 const supported=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
@@ -187,6 +188,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
    officiallyScored:scored.length,hits:hit,misses:scored.length-hit,
    voids:records.filter(x=>x.status==='VOID').length,
    hitRate:scored.length?hit/scored.length:null,
+   evaluation:summarizeSettlementEvaluation(records),
    qualifiedCount:0,requiredQualified:100,
    independentlyTimeAttested:false,modelCalibrated:false,
    tradingAuthorized:false,automatedOrdersEnabled:false,

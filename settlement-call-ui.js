@@ -80,6 +80,20 @@
   set('settlementScored',r.hits+' hits / '+r.misses+
    ' misses · '+r.officiallyScored+' frozen directional settlements scored'+
    ' · 0/100 independently validated');
+  const evaluation=r.evaluation;
+  const ci=evaluation?.wilson95;
+  const p=x=>Number.isFinite(x)?(x*100).toFixed(1)+'%':'—';
+  set('settlementEvidenceRange',evaluation?.officiallyScored>0&&
+   Number.isFinite(ci?.lower)&&Number.isFinite(ci?.upper)?
+    'Exploratory 95% Wilson interval '+p(ci.lower)+'–'+p(ci.upper)+
+    ' · '+evaluation.officiallyScored+' official outcomes scored. Not calibrated.':
+    'Not enough scored official results to estimate accuracy.');
+  const base=evaluation?.comparison;
+  set('settlementMarketBaseline',base?.comparableScored>0?
+   'On '+base.comparableScored+' comparable settled rounds: CASH '+p(base.cashHitRateOnComparable)+
+    ' vs naive market-favored public ASK '+p(base.marketFavoredHitRate)+
+    '. This is not evidence of trade profitability or true forecast skill.':
+   'No verified comparable settled rounds yet to compare against the market-favored quote baseline.');
   chart(r,frozen);
  }
  function unavailable(){
@@ -90,6 +104,8 @@
   set('settlementLiveReason','Live Kalshi strike, rule or public BTC proxy data not verifiable. CASH cannot issue a settlement prediction.');
   set('settlementFrozenSide','—');
   set('settlementAccuracy','—');
+  set('settlementEvidenceRange','Accuracy interval unavailable.');
+  set('settlementMarketBaseline','Market baseline unavailable.');
   el('settlementYesAskLine')?.setAttribute('points','');
   el('settlementCallMark')?.setAttribute('visibility','hidden');
  }

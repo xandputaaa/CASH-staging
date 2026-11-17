@@ -189,3 +189,24 @@ test('public YES ask history is real quotes only and cannot move frozen side',as
  assert.equal(quote.points[0].yesAsk,.55);
  assert.equal(m.snapshot().qualifiedCount,0);
 });
+
+test('V3 performance summary uses only official settled directional results and shows naive quote baseline',async()=>{
+ const h=harness(),m=createProspectiveMonitor(h.sources);
+ await m.scan();
+ const initial=m.snapshot().evaluation;
+ assert.equal(initial.version,'CASH_SETTLEMENT_EVALUATION_V1');
+ assert.equal(initial.directionalFrozen,1);
+ assert.equal(initial.officiallyScored,0);
+ assert.equal(initial.wilson95.lower,null);
+ assert.equal(initial.comparison.comparableScored,0);
+ h.setTime(t+240000);h.setFinal(outcome(t+240000,'YES'));
+ await m.scan();
+ const v=m.snapshot().evaluation;
+ assert.equal(v.officiallyScored,1);
+ assert.equal(v.hits,1);
+ assert.equal(v.comparison.comparableScored,1);
+ assert.equal(v.comparison.marketFavoredHits,1);
+ assert.equal(v.byLead.reduce((sum,x)=>sum+x.officiallyScored,0),1);
+ assert.equal(v.independentlyValidated,false);
+ assert.equal(v.profitVerified,false);
+});

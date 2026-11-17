@@ -435,3 +435,20 @@ test('Simple Mode header explicitly labels early Kalshi settlement prediction as
  const simple=await request('/simple-ui.js');
  assert.doesNotMatch(simple.body,/el\('simpleCall'\)\.textContent='NO VERIFIED PICK';\s*el\('simpleWhy'\)\.textContent=fresh/);
 }));
+
+test('settlement evaluation shows uncertainty, market baseline and a manual journal export link',()=>withServer(async()=>{
+ const r=await request('/api/prospective');
+ assert.equal(r.status,200);
+ const x=JSON.parse(r.body);
+ assert.equal(x.evaluation.version,'CASH_SETTLEMENT_EVALUATION_V1');
+ assert.equal(x.evaluation.independentlyValidated,false);
+ assert.equal(x.evaluation.profitVerified,false);
+ assert.equal(x.qualifiedCount,0);
+ const page=await request('/');
+ assert.match(page.body,/id="settlementEvidenceRange"/);
+ assert.match(page.body,/id="settlementMarketBaseline"/);
+ assert.match(page.body,/Save frozen forecasts & official outcomes/);
+ const js=await request('/settlement-call-ui.js');
+ assert.match(js.body,/settlementMarketBaseline/);
+ assert.equal((await request('/api/prospective/export')).status,200);
+}));
