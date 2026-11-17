@@ -12,12 +12,13 @@ const {evaluateProspective}=require('./kalshi-prospective-model');
 const {hasVerifiedEvidence}=require('./shadow-monitor');
 const {checkKalshiSettlement}=require('./kalshi-settlement-check');
 const {prospectiveScorecard}=require('./prospective-scorecard');
+const {paperSummary,oneContractPaper}=require('./paper-execution-audit');
 const NAME='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1';
 const MIN_LEAD_MS=150000,MAX_LEAD_MS=210000,MAX_RECORDS=160;
 const sha=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const iso=ms=>new Date(ms).toISOString();
 const ID=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
-function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Date.now(),
+function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null,clock=()=>Date.now(),
  maxRecords=MAX_RECORDS}={}){
  if(!quotes||!spot||!results)throw Error('Late checkpoint requires three read-only sources');
  const bootAt=iso(clock()),records=[],events=[],seen=new Set(),missed=new Set();
@@ -27,7 +28,7 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Da
   const e={...body,hash:sha(body)};
   events.push(e);headHash=e.hash;return e;
  }
- function stage(quote,source){
+ function stage(quote,source,seriesFees){
   const now=clock(),marketId=quote?.marketId,expires=Date.parse(quote?.endTime);
   const lead=expires-now;
   if(!ID.test(marketId||'')){lastReason='NO_ELIGIBLE_KALSHI_MARKET';return}
@@ -59,6 +60,15 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Da
    // Immutable Kalshi public strike; never a licensed live BRTI value.
    officialStrikeAtFreeze:p.targetPrice,strikeTypeAtFreeze:quote.strikeType,
    inputCommitment:p.inputSha256,sampleCommitment:p.sampleWindowSha256,
+   // All asks are public; they are NOT order fills. Frozen with forecast
+   // so future prices and revised fees can never be backfilled.
+   publicAskAtFreeze:{YES:p.observedAsks.YES,NO:p.observedAsks.NO},
+   publicAskQuoteFetchedAt:p.quoteFetchedAt,
+   feeScheduleAtFreeze:seriesFees?.state==='SERIES_METADATA_LIVE'&&
+    ['quadratic','quadratic_with_maker_fees'].includes(seriesFees.feeType)&&
+    Number.isFinite(seriesFees.feeMultiplier)&&seriesFees.feeMultiplier>=0?
+    {source:'KALSHI_PUBLIC_SERIES_API',feeType:seriesFees.feeType,
+     multiplier:seriesFees.feeMultiplier,refreshedAt:seriesFees.refreshedAt}:null,
    validation:'UNVALIDATED_LATE_CHECKPOINT',realMoneyAuthorized:false,
    calibratedProbability:null,expectedValue:null
   };
@@ -121,9 +131,12 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Da
   inflight=(async()=>{
    scans++;
    try{
-    const [quote,reference]=await Promise.all([quotes.query('Kalshi'),spot.update()]);
+    const [quote,reference,seriesFees]=await Promise.all([
+     quotes.query('Kalshi'),spot.update(),
+     feeFeed?.query?feeFeed.query().catch(()=>null):Promise.resolve(null)
+    ]);
     const useBrti=brti?.forecastingEnabled?.()===true;
-    stage(quote,useBrti?brti.internal():reference);
+    stage(quote,useBrti?brti.internal():reference,seriesFees);
    }catch{failures++;lastReason='SOURCE_OR_COLLECTION_ERROR'}
    await settle();
    return snapshot();
@@ -131,7 +144,8 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Da
   return inflight;
  }
  function snapshot(){
-  const now=clock(),summaries=prospectiveScorecard(records);
+  const now=clock(),summaries=prospectiveScorecard(records),
+    paperEconomics=paperSummary(records);
   const pending=records.filter(r=>r.status==='PENDING');
   const latest=records.at(-1);
   return {
@@ -141,20 +155,22 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Da
    checkpointLeadWindowMs:{min:MIN_LEAD_MS,max:MAX_LEAD_MS},
    windowMissedMarketIds:missed.size,records:records.length,
    pending:pending.length,expiredPending:pending.filter(r=>Date.parse(r.endTime)<=now).length,
-   scorecard:summaries,
+   scorecard:summaries,paperEconomics,
    latest:latest?{
     marketId:latest.marketId,at:latest.at,endTime:latest.endTime,
     side:latest.side,status:latest.status,sourceType:latest.sourceType,
-    outcomeReason:latest.outcomeReason
+    outcomeReason:latest.outcomeReason,
+    paperQuote:oneContractPaper(latest)
    }:null,
    recent:records.slice(-8).reverse().map(r=>({
     marketId:r.marketId,at:r.at,side:r.side,status:r.status,
-    winner:r.winner,sourceType:r.sourceType,outcomeReason:r.outcomeReason
+    winner:r.winner,sourceType:r.sourceType,outcomeReason:r.outcomeReason,
+    paperQuote:oneContractPaper(r)
    })),
    independentQualification:0,requiredQualification:100,
    independentlyTimeAttested:false,calibrated:false,
    canExecuteOrders:false,realMoneyAuthorized:false,
-   disclaimer:'Research-only late checkpoint. One frozen outcome-blind YES/NO/WAIT per eligible market; separate from early V3. Self-hashed RAM records and public final results cannot prove independent accuracy. No model selection or trading edge established.'
+   disclaimer:'Research-only late checkpoint. Frozen YES/NO/WAIT is never altered; observed public asks and series fee multipliers support only hypothetical one-contract conditional outcomes, not verified fills, execution or market depth. Self-hashed RAM records cannot prove independent accuracy. No model selection or trading edge established.'
   };
  }
  function exportSession(){
