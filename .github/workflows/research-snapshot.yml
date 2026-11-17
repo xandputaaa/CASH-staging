@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   preserve-public-research:
-    if: github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.head_ref == 'fix/dual-checkpoint-backup-20261117' && github.event.pull_request.head.repo.full_name == github.repository)
+    if: github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.head_ref == 'fix/late-settlement-evidence-20261117' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
