@@ -52,7 +52,8 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Da
   // Keep only commitments and a source class; no licensed index prices,
   // samples, Kalshi private records, executable prices, or account identifiers.
   const captured={
-   marketId,model:NAME,referenceModel:p.model,sourceType:p.indexSourceType,
+   marketId,model:NAME,referenceModel:p.model,
+   sourceType:p.indexSourceType,indexSourceType:p.indexSourceType,
    at:p.at,endTime:p.endTime,leadMs:p.leadMs,side:p.side,
    inputCommitment:p.inputSha256,sampleCommitment:p.sampleWindowSha256,
    validation:'UNVALIDATED_LATE_CHECKPOINT',realMoneyAuthorized:false,
