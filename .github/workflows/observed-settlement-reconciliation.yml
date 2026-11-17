@@ -1,0 +1,65 @@
+name: CASH witnessed-settlement reconciliation
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '21 */4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  reconcile-witnessed-research:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Locate recent successful GitHub-runner witness artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit/witness audit/recovery
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/preexpiry-observer.yml/runs?per_page=100" > audit/witness-runs.json
+          node - <<'NODE' > audit/witness-run-ids.txt
+          const fs=require('node:fs');
+          const runs=JSON.parse(fs.readFileSync('audit/witness-runs.json','utf8')).workflow_runs||[];
+          const earliest=Date.now()-24*3600*1000;
+          for(const run of runs.filter(r=>r.conclusion==='success'&&
+           Date.parse(r.created_at)>=earliest).slice(0,24)){
+            if(/^\d{8,16}$/.test(String(run.id)))console.log(run.id);
+          }
+          NODE
+          while IFS= read -r run; do
+            if [[ "$run" =~ ^[0-9]{8,16}$ ]]; then
+              mkdir -p "audit/witness/$run"
+              if gh run download "$run" -n "cash-preexpiry-observation-$run" -D "audit/witness/$run"; then
+                echo "CASH_WITNESS_ARCHIVE_READ=$run"
+              else
+                echo "CASH_WITNESS_ARCHIVE_ABSENT=$run"
+              fi
+            fi
+          done < audit/witness-run-ids.txt
+      - name: Fetch later public-only Kalshi settlement journals
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 --retry 1 --max-filesize 2500000             'https://cash-simulation-web-staging.up.railway.app/api/prospective/export'             --output audit/recovery/early.json
+          curl --fail --silent --show-error --location --max-time 30 --retry 1 --max-filesize 2500000             'https://cash-simulation-web-staging.up.railway.app/api/late-checkpoint/export'             --output audit/recovery/late.json
+      - name: Recompute witnessed forecast and numeric Kalshi settlement evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node observed-settlement-reconcile-cli.js             audit/witness audit/witness-runs.json             audit/recovery/early.json audit/recovery/late.json             audit/report/provisional-reconciliation.json
+      - name: Retain a provisional audit report only (no raw licensed data)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-provisional-settlement-reconciliation-${{ github.run_id }}
+          path: audit/report/provisional-reconciliation.json
+          retention-days: 30
+          if-no-files-found: error
