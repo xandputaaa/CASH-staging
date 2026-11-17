@@ -2,11 +2,13 @@ name: CASH public research snapshot
 on:
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '17 */4 * * *' # UTC, best effort; default branch only
 permissions:
   contents: read
 jobs:
   preserve-public-research:
-    if: (github.head_ref == 'fix/simple-explanation-sync-20261117' || github.head_ref == 'research/late-checkpoint-20261117') && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.head_ref == 'research/late-checkpoint-20261117' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -75,6 +77,53 @@ jobs:
           console.log('CASH_RECOVERY_QUALIFIED=0');
           console.log('CASH_RECOVERY_IS_NOT_INDEPENDENT_CAPTURE_PROOF=true');
           NODE
+      - name: Capture optional separate late-checkpoint export after deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          if curl --fail --silent --show-error --location \
+            --connect-timeout 10 --max-time 30 --retry 1 \
+            --max-filesize 2621440 \
+            'https://cash-simulation-web-staging.up.railway.app/api/late-checkpoint/export' \
+            --output recovery/cash-late-checkpoint-unverified.json; then
+            node <<'NODE'
+          const fs=require('node:fs'),crypto=require('node:crypto');
+          const file='recovery/cash-late-checkpoint-unverified.json';
+          const r=JSON.parse(fs.readFileSync(file,'utf8'));
+          if(r.version!=='CASH_LATE_CHECKPOINT_SHADOW_V1'||
+             r.format!=='CASH_LATE_CHECKPOINT_UNVERIFIED_HASH_CHAIN_V1'||
+             r.independentQualification!==0||r.independentlyTimeAttested!==false||
+             r.calibrated!==false||r.realMoneyAuthorized!==false||r.canExecuteOrders!==false||
+             !Array.isArray(r.events)||r.events.length>320)
+            throw Error('Late checkpoint export invalid');
+          let prev='GENESIS',frozen=0,resolved=0;
+          for(let i=0;i<r.events.length;i++){
+            const e=r.events[i];
+            if(!e||e.sequence!==i+1||e.previousHash!==prev||
+               !['FORECAST','OUTCOME'].includes(e.type)||
+               !/^[a-f0-9]{64}$/.test(e.hash||'')||
+               !e.payload||typeof e.payload!=='object'||
+               Object.hasOwn(e.payload,'spotPrice')||
+               Object.hasOwn(e.payload,'sampleWindow')||
+               Object.hasOwn(e.payload,'price'))
+              throw Error('Late checkpoint chain malformed or contains source-sensitive data');
+            const {hash,...body}=e;
+            if(crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex')!==hash)
+              throw Error('Late checkpoint event checksum mismatch');
+            if(e.type==='FORECAST')frozen++;else resolved++;
+            prev=hash;
+          }
+          if(prev!==r.headHash||frozen!==r.records||
+             resolved+r.pending!==r.records)
+            throw Error('Late checkpoint counts inconsistent');
+          console.log('CASH_LATE_BACKUP_FROZEN='+frozen);
+          console.log('CASH_LATE_BACKUP_RESOLVED='+resolved);
+          console.log('CASH_LATE_BACKUP_QUALIFIED=0');
+          NODE
+          else
+            rm -f recovery/cash-late-checkpoint-unverified.json
+            echo 'Late-checkpoint endpoint not yet deployed or temporarily unavailable; early V3 research still backed up.'
+          fi
       - name: Save temporary public research ZIP in this GitHub run
         uses: actions/upload-artifact@v4
         with:
