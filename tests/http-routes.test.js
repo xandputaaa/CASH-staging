@@ -342,3 +342,21 @@ test('read-only private Kalshi verifier is safely gated whether Railway secrets 
  assert.match(site.body,/order-verify-ui.js/);
  assert.match(site.headers['referrer-policy'],/no-referrer/);
 }));
+
+test('owner can generate a secure token entirely on-device and sees actual Kalshi read access state',()=>withServer(async()=>{
+ const page=await request('/');
+ assert.equal(page.status,200);
+ assert.match(page.body,/id="orderGenerateToken"/);
+ assert.match(page.body,/id="orderTokenGuide"/);
+ assert.match(page.body,/OWNER_VERIFY_TOKEN/);
+ const script=await request('/order-verify-ui.js');
+ assert.equal(script.status,200);
+ assert.match(script.body,/cryptoApi.getRandomValues\(bytes\)/);
+ assert.match(script.body,/KALSHI READ ACCESS VERIFIED/);
+ assert.match(script.body,/navigator.clipboard.writeText\(secret\)/);
+ assert.doesNotMatch(script.body,/localStorage\.setItem/);
+ const st=await request('/api/order-verification-status');
+ const state=JSON.parse(st.body);
+ assert.equal(state.orderPlacementEnabled,false);
+ assert.equal(state.verifiedLiveOrders,0);
+}));
