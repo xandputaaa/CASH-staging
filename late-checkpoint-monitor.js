@@ -10,6 +10,7 @@
 const {createHash}=require('node:crypto');
 const {evaluateProspective}=require('./kalshi-prospective-model');
 const {hasVerifiedEvidence}=require('./shadow-monitor');
+const {checkKalshiSettlement}=require('./kalshi-settlement-check');
 const {prospectiveScorecard}=require('./prospective-scorecard');
 const NAME='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1';
 const MIN_LEAD_MS=150000,MAX_LEAD_MS=210000,MAX_RECORDS=160;
@@ -55,6 +56,8 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Da
    marketId,model:NAME,referenceModel:p.model,
    sourceType:p.indexSourceType,indexSourceType:p.indexSourceType,
    at:p.at,endTime:p.endTime,leadMs:p.leadMs,side:p.side,
+   // Immutable Kalshi public strike; never a licensed live BRTI value.
+   officialStrikeAtFreeze:p.targetPrice,strikeTypeAtFreeze:quote.strikeType,
    inputCommitment:p.inputSha256,sampleCommitment:p.sampleWindowSha256,
    validation:'UNVALIDATED_LATE_CHECKPOINT',realMoneyAuthorized:false,
    calibratedProbability:null,expectedValue:null
@@ -80,10 +83,29 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,clock=()=>Da
        endTime:r.endTime,targetPriceAtCapture:null})){
      r.outcomeReason='OFFICIAL_EVIDENCE_REJECTED';continue;
     }
+    // A settled label alone is insufficient: verify its published
+    // numerical payout rule AND the exact strike frozen before close.
+    // Without this, an altered strike could be scored as an easy 'hit'.
+    const numeric=checkKalshiSettlement(x.evidenceSnapshot);
+    if(x.winner!=='VOID'&&numeric.state!=='NUMERIC_MATCH'){
+     r.outcomeReason='OFFICIAL_NUMERIC_RULE_UNCONFIRMED';continue;
+    }
+    if(x.winner!=='VOID'&&
+       (!Number.isFinite(r.officialStrikeAtFreeze)||
+        numeric.strikeCents!==Math.round(r.officialStrikeAtFreeze*100)||
+        r.strikeTypeAtFreeze!=='greater_or_equal')){
+     r.outcomeReason='FROZEN_STRIKE_CHANGED_OR_MISSING';continue;
+    }
     const p={
      marketId:r.marketId,winner:x.winner,checkedAt:x.checkedAt,
      firstObservedAt:x.firstObservedAt,evidenceSha256:x.evidenceSha256,
-     evidenceSourceUrl:x.evidenceSourceUrl,confirmationCount:2
+     evidenceSourceUrl:x.evidenceSourceUrl,confirmationCount:2,
+     numericRuleStatus:numeric.state,
+     // The exchange PUBLIC settlement evidence is included for
+     // independently reproducible source checks for public-proxy research.
+     // Keep licensed live-index cohort's settlement data commitment-only.
+     ...(r.sourceType!=='OFFICIAL_BRTI_LIVE'?
+       {evidenceSnapshot:x.evidenceSnapshot}: {})
     };
     append('OUTCOME',p);
     r.winner=x.winner;r.status=x.winner==='VOID'?'VOID':r.side===null?
