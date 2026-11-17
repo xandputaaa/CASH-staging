@@ -23,6 +23,8 @@ const {createDiagnostics}=require('./diagnostics');
 const {createProspectiveMonitor}=require('./prospective-monitor');
 const {createProspectiveStore}=require('./prospective-store');
 const {createKalshiBrtiFeed}=require('./kalshi-brti');
+const {createKalshiOrderVerifier}=require('./kalshi-order-verify');
+const orderVerifyScript=fs.readFileSync('order-verify-ui.js');
 const {assessLiveCheck}=require('./live-check');
 const {runStartupSmoke}=require('./startup-smoke');
 const liveCheckScript=fs.readFileSync('live-check-ui.js');
@@ -35,11 +37,13 @@ const resolver=createResolver();
 const auditJournal=createAuditJournal();
 const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver,journal:auditJournal,spot:feed});
 const brtiFeed=createKalshiBrtiFeed();
+const orderVerifier=createKalshiOrderVerifier();
 const prospective=createProspectiveMonitor({
  quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed,
  store:createProspectiveStore()});
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
+  res.setHeader('Referrer-Policy','no-referrer');
   res.setHeader('X-Content-Type-Options','nosniff');
   res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
   if(req.method==='GET'&&(req.url==='/'||req.url==='/index.html'||req.url.startsWith('/?'))){
@@ -72,6 +76,48 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/live-check-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(liveCheckScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/order-verify-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(orderVerifyScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/order-verification-status'){
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(orderVerifier.publicStatus()));return;
+  }
+  if(req.method==='POST'&&req.url==='/api/private/order-verify'){
+    res.setHeader('Cache-Control','no-store, private');
+    const reply=(status,error)=>{
+     res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});
+     res.end(JSON.stringify({error}));
+    };
+    if(!orderVerifier.configured){reply(503,'PRIVATE_KALSHI_CONNECTION_NOT_CONFIGURED');return}
+    const {ownerAuthorized}=require('./kalshi-order-verify');
+    if(!ownerAuthorized(process.env.CASH_OWNER_VERIFY_TOKEN,req.headers.authorization)){
+      reply(401,'PRIVATE_OWNER_AUTHORIZATION_REQUIRED');return;
+    }
+    if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){
+      reply(415,'JSON_REQUIRED');return;
+    }
+    let body='';
+    try{
+      for await(const chunk of req){
+        body+=chunk;
+        if(body.length>1000){reply(413,'REQUEST_TOO_LARGE');return}
+      }
+      const parsed=JSON.parse(body);
+      const out=await orderVerifier.verify(parsed?.orderId,req.headers.authorization);
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify(out));
+    }catch(err){
+      const code=String(err.message||'');
+      const publicErrors=new Set(['INVALID_ORDER_ID','NOT_A_VERIFIABLE_KXBTC15M_ORDER',
+        'ORDER_NOT_CONFIRMED','FILLS_NOT_CONFIRMED','FILL_MARKET_MISMATCH',
+        'FILL_INCONSISTENT','FILL_COUNT_OR_PRICE_INVALID','ORDER_OR_RECORD_NOT_FOUND',
+        'EXCHANGE_AUTH_FAILED','EXCHANGE_UNAVAILABLE','OWNER_NOT_AUTHORIZED']);
+      reply(422,publicErrors.has(code)?code:'ORDER_VERIFICATION_NOT_AVAILABLE');
+    }
+    return;
   }
   if(req.method==='GET'&&req.url==='/api/brti-health'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});

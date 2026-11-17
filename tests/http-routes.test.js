@@ -319,3 +319,26 @@ test('Kalshi CF Benchmarks optional feed reports read-only index health without 
  const page=await request('/');
  assert.match(page.body,/id="pfBrti"/);
 }));
+
+test('read-only private Kalshi order verifier is not connected and cannot be queried publicly',()=>withServer(async()=>{
+ const status=await request('/api/order-verification-status');
+ assert.equal(status.status,200);
+ const v=JSON.parse(status.body);
+ assert.equal(v.version,'CASH_ORDER_VERIFICATION_READINESS_V1');
+ assert.equal(v.state,'NOT_CONNECTED');
+ assert.equal(v.orderPlacementEnabled,false);
+ assert.equal(v.verifiedLiveOrders,0);
+ assert.equal(v.independentlyValidatedPredictions,0);
+ const privateResponse=await request('/api/private/order-verify','POST');
+ assert.equal(privateResponse.status,503);
+ assert.match(privateResponse.body,/NOT_CONFIGURED/);
+ assert.equal((await request('/api/private/order-verify','GET')).status,404);
+ assert.equal((await request('/api/order-verification-status','POST')).status,404);
+ const script=await request('/order-verify-ui.js');
+ assert.equal(script.status,200);assert.match(script.body,/PRIVATE_ORDER_AUDIT_V1/);
+ const site=await request('/');
+ assert.match(site.body,/KALSHI · REAL ORDER VERIFICATION/);
+ assert.match(site.body,/id="orderVerifyToken"/);
+ assert.match(site.body,/order-verify-ui.js/);
+ assert.match(site.headers['referrer-policy'],/no-referrer/);
+}));
