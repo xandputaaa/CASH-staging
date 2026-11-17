@@ -137,3 +137,72 @@ test('licensed index price and samples never appear in public late snapshot or e
  assert.match(text,/CASH_LATE_CHECKPOINT_UNVERIFIED_HASH_CHAIN_V1/);
  assert.equal(h.m.snapshot().realMoneyAuthorized,false);
 });
+
+test('freezes the original Kalshi public strike and later emits inspectable public result evidence',async()=>{
+ const h=harness();
+ await h.m.scan();
+ const f=h.m.exportSession().events.find(e=>e.type==='FORECAST').payload;
+ assert.equal(f.officialStrikeAtFreeze,85000);
+ assert.equal(f.strikeTypeAtFreeze,'greater_or_equal');
+ assert.equal(f.side,'YES');
+ assert.equal(f.realMoneyAuthorized,false);
+ h.setTime(now+240000);h.setResult(verified(now+240000,'YES'));
+ await h.m.scan();
+ const outcome=h.m.exportSession().events.find(e=>e.type==='OUTCOME').payload;
+ assert.equal(outcome.numericRuleStatus,'NUMERIC_MATCH');
+ assert.equal(outcome.evidenceSnapshot.floor_strike,85000);
+ assert.equal(outcome.evidenceSnapshot.expiration_value,85200);
+ assert.equal(outcome.evidenceSnapshot.ticker,market);
+ assert.equal(outcome.evidenceSha256,
+  crypto.createHash('sha256').update(JSON.stringify(outcome.evidenceSnapshot)).digest('hex'));
+ assert.equal(h.m.snapshot().scorecard.overall.hits,1);
+});
+test('officially consistent final result cannot score when strike changed since frozen quote',async()=>{
+ const h=harness();await h.m.scan();h.setTime(now+240000);
+ const result=verified(now+240000,'YES');
+ result.evidenceSnapshot.floor_strike=84999.99;
+ result.evidenceSha256=crypto.createHash('sha256').update(
+  JSON.stringify(result.evidenceSnapshot)).digest('hex');
+ h.setResult(result);await h.m.scan();
+ assert.equal(h.m.snapshot().pending,1);
+ assert.equal(h.m.snapshot().scorecard.overall.scoredDirectional,0);
+ assert.equal(h.m.snapshot().latest.outcomeReason,'FROZEN_STRIKE_CHANGED_OR_MISSING');
+ assert.equal(h.m.exportSession().events.filter(x=>x.type==='OUTCOME').length,0);
+});
+test('final yes/no label alone cannot score without arithmetically checked official expiration value',async()=>{
+ const h=harness();await h.m.scan();h.setTime(now+240000);
+ const result=verified(now+240000,'YES');
+ delete result.evidenceSnapshot.expiration_value;
+ result.evidenceSha256=crypto.createHash('sha256').update(
+  JSON.stringify(result.evidenceSnapshot)).digest('hex');
+ h.setResult(result);await h.m.scan();
+ assert.equal(h.m.snapshot().pending,1);
+ assert.equal(h.m.snapshot().scorecard.overall.scoredDirectional,0);
+ assert.equal(h.m.snapshot().latest.outcomeReason,'OFFICIAL_NUMERIC_RULE_UNCONFIRMED');
+});
+test('numeric-string published strike at same cent can still pass the frozen strike check',async()=>{
+ const h=harness();await h.m.scan();h.setTime(now+240000);
+ const result=verified(now+240000,'YES');
+ result.evidenceSnapshot.floor_strike='85000.00';
+ result.evidenceSha256=crypto.createHash('sha256').update(
+  JSON.stringify(result.evidenceSnapshot)).digest('hex');
+ h.setResult(result);await h.m.scan();
+ assert.equal(h.m.snapshot().scorecard.overall.hits,1);
+ assert.equal(h.m.snapshot().pending,0);
+});
+test('licensed official index samples remain redacted even after a published final result',async()=>{
+ const confidentialValue=94751.32,brtiSource='CF Benchmarks BRTI via Kalshi read-only';
+ const h=harness({brti:{forecastingEnabled:()=>true,internal:()=>{
+  const x=fixture(now,confidentialValue-85000).spot;
+  return {...x,source:brtiSource,history:x.history.map(t=>({...t,source:brtiSource}))};
+ }}});
+ await h.m.scan();h.setTime(now+240000);h.setResult(verified(now+240000,'YES'));
+ await h.m.scan();
+ const e=h.m.exportSession().events.find(x=>x.type==='OUTCOME');
+ assert.ok(e);
+ assert.equal(Object.hasOwn(e.payload,'evidenceSnapshot'),false);
+ assert.equal(e.payload.numericRuleStatus,'NUMERIC_MATCH');
+ assert.doesNotMatch(JSON.stringify(h.m.exportSession()),/94751\.32/);
+ assert.equal(h.m.snapshot().independentQualification,0);
+ assert.equal(h.m.snapshot().canExecuteOrders,false);
+});
