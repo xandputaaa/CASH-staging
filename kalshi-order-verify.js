@@ -60,25 +60,35 @@ function combine({orderId,orderData,fillData,settlementData,at}){
  const known=new Set(),seen=[];
  let quantity=0,fee=0,cost=0,allCostsPresent=true;
  for(const x of rows){
+  // Prefer current Kalshi outcome_side. The older 'side' / 'action'
+  // fields are deprecated; their absence must not reject genuine fills.
+  // When both side aliases exist, a disagreement is suspicious.
+  const side=String(x.outcome_side??x.side??'').toLowerCase();
+  const legacySide=x.side===undefined?null:String(x.side).toLowerCase();
+  const action=x.action===undefined?null:String(x.action).toLowerCase();
+  const book=x.book_side===undefined?null:String(x.book_side).toLowerCase();
   if(typeof x.fill_id!=='string'||x.fill_id.length<5||known.has(x.fill_id)||
-    !['yes','no'].includes(String(x.side||x.outcome_side).toLowerCase())||
-    !['buy','sell'].includes(String(x.action).toLowerCase()))
+    !['yes','no'].includes(side)||
+    legacySide!==null&&legacySide!==side||
+    action!==null&&!['buy','sell'].includes(action)||
+    book!==null&&!['bid','ask'].includes(book))
    throw Error('FILL_INCONSISTENT');
   known.add(x.fill_id);
-  const count=amount(x.count_fp),unit=amount((x.side||x.outcome_side)==='no'?
+  const count=amount(x.count_fp),unit=amount(side==='no'?
    x.no_price_dollars:x.yes_price_dollars);
   if(count===null||count<=0||unit===null||unit>1)throw Error('FILL_COUNT_OR_PRICE_INVALID');
   const f=amount(x.fee_cost);
   if(f===null)allCostsPresent=false;
   else fee+=f;
   quantity+=count;cost+=count*unit;
-  seen.push({fillId:x.fill_id,side:x.side||x.outcome_side,
-   action:x.action,quantity:count,unitPriceDollars:unit,
+  seen.push({fillId:x.fill_id,side,
+   action:action||'UNKNOWN',bookSide:book||'UNKNOWN',
+   quantity:count,unitPriceDollars:unit,
    feeDollars:f,executedAt:x.created_time||null});
  }
  const officialFilled=amount(o.fill_count_fp);
  const incomplete=Boolean(fillData.cursor)||rows.length>=MAX_ROWS||
-  officialFilled!==null&&Math.abs(quantity-officialFilled)>0.000001;
+  officialFilled===null||Math.abs(quantity-officialFilled)>0.000001;
  const executed=seen.length>0&&quantity>0&&!incomplete;
  const settlementRows=settlementData?.settlements;
  const row=Array.isArray(settlementRows)?

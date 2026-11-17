@@ -154,3 +154,33 @@ test('disconnected credentials trigger no private exchange requests even during 
  assert.equal(result.exchangeReadAuthState,'NOT_CONNECTED');
  assert.equal(calls,0);
 });
+
+test('new Kalshi outcome_side/book_side fill schema verifies a matched execution without deprecated action',async()=>{
+ const modern=data();
+ const fill=modern.fills.fills[0];
+ delete fill.side;delete fill.action;
+ fill.outcome_side='yes';fill.book_side='bid';
+ const h=setup({source:modern});
+ const r=await h.verifier.verify(orderId,'Bearer '+h.token);
+ assert.equal(r.evidence.filledExecutionVerified,true);
+ assert.equal(r.evidence.matchingFillCount,1);
+ assert.equal(r.evidence.fills[0].side,'yes');
+ assert.equal(r.evidence.fills[0].action,'UNKNOWN');
+ assert.equal(r.evidence.fills[0].bookSide,'bid');
+ assert.equal(r.evidence.orderSpecificNetPnlVerified,false);
+});
+test('contradictory legacy side and official outcome side cannot pass verification',async()=>{
+ const contradictory=data();
+ contradictory.fills.fills[0].side='no';
+ contradictory.fills.fills[0].outcome_side='yes';
+ const h=setup({source:contradictory});
+ await assert.rejects(()=>h.verifier.verify(orderId,'Bearer '+h.token),/FILL_INCONSISTENT/);
+});
+test('order fill quantity missing cannot be mistaken for a complete execution audit',async()=>{
+ const partial=data();delete partial.order.order.fill_count_fp;
+ const h=setup({source:partial});
+ const r=await h.verifier.verify(orderId,'Bearer '+h.token);
+ assert.equal(r.evidence.filledExecutionVerified,false);
+ assert.equal(r.evidence.fullFillHistoryVerified,false);
+ assert.equal(r.evidence.grade,'NOT_EXECUTION_VERIFIED');
+});
