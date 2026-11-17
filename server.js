@@ -233,9 +233,25 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   const venueTimer=setInterval(checkVenues,15000);venueTimer.unref();
   shadow.scan().catch(()=>{});
   const shadowTimer=setInterval(()=>shadow.scan().catch(()=>{}),20000);shadowTimer.unref();
-  // Frozen, deterministic proxy forecasts for future independent evaluation.
-  prospective.scan().catch(()=>{});
-  const prospectiveTimer=setInterval(()=>prospective.scan().catch(()=>{}),20000);
+  // Publish LIMITED prospective pipeline diagnostics to deployment logs.
+  // No private index values, market prices, credentials or trade actions.
+  // With the live site not directly fetchable from our research environment,
+  // these records distinguish "server running" from "forecasts captured".
+  let lastProspectiveLog='';
+  const checkProspective=()=>prospective.scan().then(()=>{
+    const v=prospective.snapshot(),readiness=v.captureReadiness||{};
+    const identity=[readiness.lastReason,v.records,v.officiallyScored,v.failures].join(':');
+    if(identity!==lastProspectiveLog||v.scans%3===0){
+      console.log('CASH prospective research: model='+v.model+
+       ', reason='+readiness.lastReason+', scans='+v.scans+
+       ', frozen='+v.records+', active='+(v.active?.side||'NONE')+
+       ', scored='+v.officiallyScored+', failures='+v.failures+
+       ', audit='+v.storage+', qualified=0/100, orders=DISABLED');
+      lastProspectiveLog=identity;
+    }
+  }).catch(()=>console.log('CASH prospective research: scanner exception; no trading authorization'));
+  checkProspective();
+  const prospectiveTimer=setInterval(checkProspective,20000);
   prospectiveTimer.unref();
   // No index network requests are made until read-only credentials exist.
   brtiFeed.update().catch(()=>{});
