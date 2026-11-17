@@ -94,7 +94,21 @@ body[data-cash-mode="simple"] #livePaperLab .notice{font-size:13px;line-height:1
   <line id="settlementCallMark" x1="0" x2="0" y1="18" y2="200" stroke="#f2c37b" stroke-width="2" stroke-dasharray="5 4" visibility="hidden"/>
  </svg>
  <p id="settlementChartCaption" class="notice">Observed public Kalshi YES ask quote history only. A settlement forecast is not a guaranteed leading indicator of future quote changes.</p>
- <p class="simple-warning">EARLY RESEARCH, NOT A REAL-MONEY RECOMMENDATION. Not calibrated, independently validated, or official BRTI live data. WAIT is a legitimate outcome. Frozen predictions and results reset on redeploy until durable storage is approved.</p>
+ <div class="shadow-candidate" id="cashProspectiveArchive" aria-label="Device-only forecast research backup">
+  <div class="row" style="flex-wrap:wrap;gap:8px">
+    <strong>FORECAST RESEARCH BACKUP · THIS DEVICE</strong>
+    <small id="pfaState" class="tag" aria-live="polite">CHECKING</small>
+  </div>
+  <p id="pfaCount" class="notice">Checking saved forecast snapshots…</p>
+  <div class="row" style="flex-wrap:wrap;gap:8px">
+    <button id="pfaDownload" type="button" disabled>Download forecast backup</button>
+    <label class="file-button" for="pfaRestore">Restore backup JSON</label>
+    <input id="pfaRestore" type="file" accept="application/json,.json" aria-label="Restore CASH forecast backup" style="max-width:180px;min-width:0">
+    <button id="pfaClear" type="button" disabled>Clear local backup</button>
+  </div>
+  <p class="notice">While this page is open, CASH copies checksum-checked public-proxy forecast exports to this browser each minute. Licensed official-index exports retain <strong>redacted commitments only</strong>; their hashes cannot be independently recomputed without licensed inputs. Browser copies can survive a Railway redeploy but cannot restore the server journal or prove forecast timestamps, accuracy, trading edge or uptime. Download a backup before clearing browser data. No orders or credentials are stored.</p>
+</div>
+<p class="simple-warning">EARLY RESEARCH, NOT A REAL-MONEY RECOMMENDATION. Not calibrated, independently validated, or official BRTI live data. WAIT is a legitimate outcome. Frozen predictions and results reset on redeploy until durable storage is approved.</p>
 </section><section class="panel" id="cashOrderVerify" aria-label="Private verified Kalshi real-money orders read-only">
 <div class="row"><h2>KALSHI · REAL ORDER VERIFICATION</h2><span class="shadow-state" id="orderVerifyStatus" aria-live="polite">CHECKING CONNECTION</span></div>
 <p class="notice">Separate from predictions: a placed order is not a filled order. This tool checks your Kalshi order ID and real matched fills, then looks for an account settlement for that market. It never sends or cancels orders. No real order has been verified unless Kalshi returns authentic matching records.</p>
@@ -202,4 +216,4 @@ if(typeof fetch==='function'){
   if(typeof setInterval==='function'){setInterval(refreshSpot,5000);setInterval(()=>{refreshVenue('Kalshi');refreshVenue('Polymarket')},12000);setInterval(()=>{showCountdown('Kalshi');showCountdown('Polymarket')},1000)}
   if(typeof document.addEventListener==='function')document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshSpot()});
 }
-</script><script src="/live-paper.js"></script><script src="/shadow-browser-archive.js"></script><script src="/shadow-browser-archive-ui.js"></script><script src="/evaluation-ui.js"></script><script src="/shadow-ui.js"></script><script src="/diagnostics-ui.js"></script><script src="/cognition-ui.js"></script><script src="/kalshi15-ui.js"></script><script src="/view-mode.js"></script><script src="/simple-ui.js"></script><script src="/live-check-ui.js"></script><script src="/prospective-ui.js"></script><script src="/settlement-call-ui.js"></script><script src="/order-verify-ui.js"></script></body></html>
+</script><script src="/live-paper.js"></script><script src="/shadow-browser-archive.js"></script><script src="/shadow-browser-archive-ui.js"></script><script src="/evaluation-ui.js"></script><script src="/shadow-ui.js"></script><script src="/diagnostics-ui.js"></script><script src="/cognition-ui.js"></script><script src="/kalshi15-ui.js"></script><script src="/view-mode.js"></script><script src="/simple-ui.js"></script><script src="/live-check-ui.js"></script><script src="/prospective-ui.js"></script><script src="/prospective-browser-archive.js"></script><script src="/prospective-browser-archive-ui.js"></script><script src="/settlement-call-ui.js"></script><script src="/order-verify-ui.js"></script></body></html>
