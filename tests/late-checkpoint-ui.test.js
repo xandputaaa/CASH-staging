@@ -20,7 +20,7 @@ function score(){
 }
 function boot(report=score()){
  const ids=['cashLateCheckpoint','lcState','lcRecent','lcCoverage',
-  'lcCalls','lcWaits','lcScore'];
+  'lcCalls','lcWaits','lcScore','lcPaperEconomics'];
  const nodes=Object.fromEntries(ids.map(id=>[id,{textContent:''}]));
  const urls=[];
  vm.runInNewContext(client,{
@@ -61,4 +61,26 @@ test('CASH serves and links new late checkpoint without disturbing frozen early 
  assert.match(server,/req.url==='\/api\/prospective\/export'/);
  assert.match(server,/createLateCheckpointMonitor/);
  assert.match(server,/checkLate\(\)/);
+});
+
+test('paper economics show quoted-only price and fee scenario, not a real trade',async()=>{
+ const data=score();
+ data.paperEconomics={
+  version:'CASH_PAPER_EXECUTION_AUDIT_V1',totalFrozen:3,directional:2,waits:1,
+  quoteAndFeeObserved:1,unpriced:1,pendingResultsWithQuote:0,pricedVoids:0,
+  pricedSettlements:1,conservativePnlDollars:-.04,optimisticPnlDollars:-.0375,
+  tradingAuthorized:false,realOrdersEnabled:false,independentQualification:0
+ };
+ const h=boot(data);await h.tick();
+ const t=h.nodes.lcPaperEconomics.textContent;
+ assert.match(t,/1\/2 directional calls/);
+ assert.match(t,/1 without eligible prices/);
+ assert.match(t,/CONDITIONAL one-contract buy-at-observed-ask/);
+ assert.match(t,/conservative \$-0\.0400/);
+ assert.match(t,/centicent-fee \$-0\.0375/);
+ assert.match(t,/No actual orders, fills or verified liquidity/);
+});
+test('unavailable paper fee evidence does not display fabricated PnL',async()=>{
+ const h=boot();await h.tick();
+ assert.match(h.nodes.lcPaperEconomics.textContent,/No validated fee-aware/);
 });
