@@ -4,7 +4,7 @@ const script=fs.readFileSync(path.join(__dirname,'../settlement-call-ui.js'),'ut
 function setup(data){
  const names=['cashSettlementCall','simpleCall','simpleWhy','settlementCallStatus',
   'settlementLiveSide','settlementLiveReason','settlementFrozenSide',
-  'settlementFrozenTime','settlementAccuracy','settlementScored',
+  'settlementFrozenTime','settlementAccuracy','settlementScored','settlementPendingDiagnostics',
   'settlementYesAskLine','settlementCallMark','settlementChartCaption'];
  const nodes=Object.fromEntries(names.map(n=>[n,{
   textContent:'',style:{},attrs:{},setAttribute(k,v){this.attrs[k]=v}}]));
@@ -65,4 +65,23 @@ test('an unsafe alleged trading-enabled prediction is rejected instead of displa
  const s=sample({tradingAuthorized:true});const x=setup(s);await x.tick();
  assert.equal(x.nodes.simpleCall.textContent,'NO VERIFIED SETTLEMENT CALL');
  assert.match(x.nodes.settlementLiveSide.textContent,/WAIT · NOT VERIFIED/);
+});
+
+test('unscored Kalshi forecasts show official evidence blockers, not invented losses',async()=>{
+ const r=sample({pendingResolutionDiagnostics:{
+  pendingTotal:5,notExpired:1,expiredAwaitingEvidence:4,overdueTenMinutes:2,
+  blockedReasons:{AWAITING_OFFICIAL_FINALIZATION:3,SECOND_FINALIZED_READ_PENDING:1}
+ }});
+ const x=setup(r);await x.tick();
+ const msg=x.nodes.settlementPendingDiagnostics.textContent;
+ assert.match(msg,/5 forecasts/);
+ assert.match(msg,/4 past expiry/);
+ assert.match(msg,/2 overdue/);
+ assert.match(msg,/awaiting official finalization \(3\)/);
+ assert.match(msg,/NOT counted as wins or losses/);
+ assert.equal(x.nodes.settlementScored.textContent.includes('0 frozen'),true);
+});
+test('absence of detailed evidence telemetry never invents an outcome',async()=>{
+ const x=setup(sample());await x.tick();
+ assert.match(x.nodes.settlementPendingDiagnostics.textContent,/breakdown unavailable/);
 });

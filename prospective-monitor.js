@@ -8,10 +8,25 @@
 const {createHash}=require('node:crypto');
 const {evaluateProspective,NAME,digest}=require('./kalshi-prospective-model');
 const {hasVerifiedEvidence}=require('./shadow-monitor');
+const {prospectiveScorecard}=require('./prospective-scorecard');
 const MAX=320;
 const supported=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const clockISO=t=>new Date(t).toISOString();
+// Public snapshot exposes only fixed diagnostic codes, never raw API data.
+const OUTCOME_REASONS=Object.freeze({
+ 'Mismatched or missing market':'MARKET_LOOKUP_MISMATCH',
+ 'Provisional result is not final':'OFFICIAL_RESULT_PROVISIONAL',
+ 'Official market not settled':'AWAITING_OFFICIAL_FINALIZATION',
+ 'Official final result contradicts its published numeric settlement fields':'NUMERIC_SETTLEMENT_CONTRADICTION',
+ 'Public outcome lookup unavailable':'PUBLIC_OUTCOME_LOOKUP_UNAVAILABLE',
+ 'Official result service unavailable':'PUBLIC_RESULT_SERVICE_UNAVAILABLE',
+ 'Waiting for second matching finalized public result':'SECOND_FINALIZED_READ_PENDING'
+});
+function outcomeReason(result){
+ if(result?.status==='verified')return 'EVIDENCE_REJECTED';
+ return OUTCOME_REASONS[result?.reason]||'UNCONFIRMED_PUBLIC_OUTCOME';
+}
 function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.now(),
  maxRecords=MAX,store=null}={}){
  if(!quotes||!spot||!results)throw Error('Missing prospective data feeds');
@@ -64,6 +79,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
       !['YES','NO','VOID'].includes(p.winner)||p.winner!==p.evidence.winner)
      throw Error('Prospective saved outcome invalid');
     r.winner=p.winner;r.resolvedAt=p.evidence.checkedAt;
+    r.lastOutcomeReason='OFFICIAL_RESULT_ACCEPTED';
     r.outcomeEvidence=p.evidence;
     r.status=p.winner==='VOID'?'VOID':p.winner===r.side?'HIT':p.winner!==r.side&&r.side?'MISS':'WAIT_RESOLVED';
    }
@@ -114,7 +130,8 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
        p.reason==='EDGE_UNCLEAR_VS_VOLATILITY')){
       const frozen={...p};
       append('FORECAST',frozen);
-      records.push({...frozen,status:'PENDING',winner:null,resolvedAt:null,outcomeEvidence:null});
+      records.push({...frozen,status:'PENDING',winner:null,resolvedAt:null,outcomeEvidence:null,
+        lastOutcomeReason:'NOT_CHECKED_YET',lastOutcomeCheckAt:null,outcomeAttempts:0});
       ids.add(market);created++;if(!p.side)recordedWait++;
      }
     }
@@ -128,16 +145,31 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
    for(const record of selected){
     try{
      const result=await results.lookup({venue:'Kalshi',marketId:record.marketId,slug:null});
-     if(result.status!=='verified'||!hasVerifiedEvidence(result,{venue:'Kalshi',
+     record.outcomeAttempts=(record.outcomeAttempts||0)+1;
+     record.lastOutcomeCheckAt=clockISO(clock());
+     if(result?.status!=='verified'){
+      record.lastOutcomeReason=outcomeReason(result);
+      continue;
+     }
+     if(!hasVerifiedEvidence(result,{venue:'Kalshi',
       marketId:record.marketId,endTime:record.endTime,
-      targetPriceAtCapture:record.targetPrice}))continue;
+      targetPriceAtCapture:record.targetPrice})){
+      record.lastOutcomeReason='EVIDENCE_REJECTED';
+      continue;
+     }
      append('OUTCOME',{marketId:record.marketId,winner:result.winner,evidence:result});
+     record.lastOutcomeReason='OFFICIAL_RESULT_ACCEPTED';
      record.winner=result.winner;record.resolvedAt=result.checkedAt;
      record.outcomeEvidence=result;
      record.status=result.winner==='VOID'?'VOID':record.side===null?'WAIT_RESOLVED':
       record.side===result.winner?'HIT':'MISS';
      resolved++;
-    }catch{failures++}
+    }catch{
+     failures++;
+     record.outcomeAttempts=(record.outcomeAttempts||0)+1;
+     record.lastOutcomeCheckAt=clockISO(clock());
+     record.lastOutcomeReason='OUTCOME_CHECK_EXCEPTION';
+    }
    }
    lastScanAt=clockISO(clock());
    return {created,recordedWait,resolved};
@@ -149,6 +181,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
   const licensed=x.indexSourceType==='OFFICIAL_BRTI_LIVE';
   return {marketId:x.marketId,at:x.at,endTime:x.endTime,
    side:x.side,reason:x.reason,status:x.status,winner:x.winner,
+   outcomeStatus:x.status==='PENDING'?(x.lastOutcomeReason||'NOT_CHECKED_SINCE_RESTART'):x.status,
    leadMs:x.leadMs,model:x.model,validation:x.validation,
    indexSourceType:x.indexSourceType||'SINGLE_EXCHANGE_PROXY',
    // Never redistribute licensed BRTI values, detailed historical points,
@@ -166,6 +199,27 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
   const predictions=records.filter(x=>x.side==='YES'||x.side==='NO');
   const scored=predictions.filter(x=>x.status==='HIT'||x.status==='MISS');
   const hit=scored.filter(x=>x.status==='HIT').length;
+  const scorecard=prospectiveScorecard(records);
+  const waiting=records.filter(x=>x.status==='PENDING');
+  const expired=waiting.filter(x=>Date.parse(x.endTime)<=now);
+  const overdue=expired.filter(x=>now-Date.parse(x.endTime)>=600000);
+  const blockedReasons={};
+  for(const r of expired){
+   const code=r.lastOutcomeReason||'NOT_CHECKED_SINCE_RESTART';
+   blockedReasons[code]=(blockedReasons[code]||0)+1;
+  }
+  const pendingResolutionDiagnostics={
+   pendingTotal:waiting.length,notExpired:waiting.length-expired.length,
+   expiredAwaitingEvidence:expired.length,overdueTenMinutes:overdue.length,
+   blockedReasons,
+   warning:'Session-local diagnostics only. Pending does not imply an exchange loss or delay.',
+   recentExpired:expired.slice(-8).reverse().map(r=>({
+    marketId:r.marketId,side:r.side,expiresAt:r.endTime,
+    overdueMinutes:Math.max(0,Math.floor((now-Date.parse(r.endTime))/60000)),
+    lastCheckAt:r.lastOutcomeCheckAt||null,attempts:r.outcomeAttempts||0,
+    reason:r.lastOutcomeReason||'NOT_CHECKED_SINCE_RESTART'
+   }))
+  };
   return {
    version:'CASH_PROSPECTIVE_KALSHI_V1',
    updatedAt:clockISO(clock()),
@@ -183,7 +237,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
     officialBrtiScored:scored.filter(x=>x.indexSourceType==='OFFICIAL_BRTI_LIVE').length,
     proxyScored:scored.filter(x=>x.indexSourceType!=='OFFICIAL_BRTI_LIVE').length
    },
-   pending:records.filter(x=>x.status==='PENDING').length,
+   pending:waiting.length,pendingResolutionDiagnostics,scorecard,
    officiallyScored:scored.length,hits:hit,misses:scored.length-hit,
    voids:records.filter(x=>x.status==='VOID').length,
    hitRate:scored.length?hit/scored.length:null,

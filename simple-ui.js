@@ -51,7 +51,10 @@
   // The early settlement V3 UI independently owns the experimental
   // YES/NO/WAIT label in Simple Mode. Do not overwrite it on every
   // public quote poll, or users would see oscillating/stale statuses.
-  el('simpleWhy').textContent=fresh?
+  // Settlement-call-ui owns the live experimental YES/NO/WAIT explanation.
+  // A separate public-quote poll must not overwrite that model context.
+  const why=el('simpleWhy');
+  if(!why.textContent)why.textContent=fresh?
    'Real Kalshi prices are available, but CASH has not proven that it can predict this round accurately. You can practice, but there is no verified YES or NO recommendation.':
    'CASH is missing current usable market information. There is no verified YES or NO recommendation.';
   el('simpleTarget').textContent=dollars(strike);

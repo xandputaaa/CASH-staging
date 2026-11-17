@@ -65,3 +65,15 @@ test('invalid trading authorization payload fails closed rather than showing pri
  assert.equal(h.els.simpleCall.textContent,'NO VERIFIED PICK');
  assert.match(h.els.simpleMarketStatus.textContent,/UNAVAILABLE/);
 });
+
+test('Simple Mode quote refresh preserves a live experimental settlement explanation',async()=>{
+ const h=boot(report());await h.tick();
+ h.els.simpleCall.textContent='EXPERIMENTAL YES · NOT VALIDATED';
+ h.els.simpleWhy.textContent='Experimental frozen settlement model; unvalidated.';
+ // Independent Simple Mode quote polling must not rewrite the
+ // settlement module's live hypothesis or its explanation.
+ h.polls[0]();await h.tick();
+ assert.equal(h.els.simpleCall.textContent,'EXPERIMENTAL YES · NOT VALIDATED');
+ assert.equal(h.els.simpleWhy.textContent,'Experimental frozen settlement model; unvalidated.');
+ assert.equal(h.els.simpleYes.textContent,'62.0¢');
+});

@@ -10,6 +10,8 @@
   set('pfStatus','FORECAST DATA UNAVAILABLE');
   set('pfSide','NO FROZEN FORECAST');
   set('pfCount','—');set('pfScored','—');set('pfAccuracy','—');
+  set('pfResearchCoverage','Scorecard unavailable; no accuracy claim can be made.');
+  set('pfResearchSources','Source-separated outcomes unavailable.');
   set('pfContext','Could not verify prospective model records. No real-money signal is available.');
   if(simpleCall)simpleCall.textContent='Experimental model record unavailable. No verified pick.';
  }
@@ -27,6 +29,29 @@
    set('pfCount',r.directional+' frozen directions · '+r.waits+' waits');
    set('pfScored',r.officiallyScored+' paired official settlements');
    set('pfAccuracy',pct(r.hitRate)+' exploratory, NOT validated');
+   const card=r.scorecard;
+   if(card?.version==='CASH_PROSPECTIVE_DESCRIPTIVE_SCORECARD_V1'&&
+      card.qualifiedCount===0&&card.independentlyTimeAttested===false){
+    const v=card.overall;
+    const range=v.descriptiveWilson95;
+    const uncertainty=range&&v.scoredDirectional?
+      ' Descriptive 95% Wilson range: '+pct(range.lower)+'–'+pct(range.upper)+'.':
+      ' Too few verified-for-consistency outcomes for a descriptive range.';
+    set('pfResearchCoverage','FROZEN SAMPLE: '+v.captured+
+     ' markets; '+v.directional+' YES/NO attempts, '+v.waits+' WAITs. '+
+     v.scoredDirectional+' directional outcomes scored ('+v.hits+' hits, '+v.misses+
+     ' misses); '+v.pendingDirectional+' directional outcomes still pending; '+
+     v.pendingWaits+' WAITs pending; '+v.voids+' voids.'+uncertainty+
+     ' This is NOT independent accuracy validation. Uncaptured 15m rounds are unknown.');
+    const p=card.bySource.publicSpotProxy,b=card.bySource.officialBrtiLive;
+    set('pfResearchSources','SOURCE COHORTS: public BTC proxy '+p.scoredDirectional+
+     '/'+p.directional+' directional outcomes scored; private official BRTI '+
+     b.scoredDirectional+'/'+b.directional+
+     ' directional outcomes scored. These research groups must never be pooled to prove a trading edge.');
+   }else{
+    set('pfResearchCoverage','Validated forecast breakdown unavailable.');
+    set('pfResearchSources','Cannot confirm source-separated research cohorts.');
+   }
    const v=r.active;
    const dir=v?.side;
    set('pfSide',dir?'CURRENT PROVISIONAL '+dir:'NO ACTIVE FROZEN DIRECTION');
@@ -49,10 +74,15 @@
    const res=await fetch('/api/brti-health',{cache:'no-store'});
    if(res.ok){
     const b=await res.json();
-    set('pfBrti',b.state==='LIVE'?
-     'Official BRTI authenticated data: connected privately; NOT YET used in forecast model.':
-     'Official BRTI: '+String(b.state||'UNKNOWN').replaceAll('_',' ')+
-      '. CASH still uses a public exchange proxy for experimental predictions.');
+    const status=String(b.state||'UNKNOWN').replaceAll('_',' ');
+    if(b.state==='LIVE'&&b.usedForForecasts===true&&b.forecastOptIn===true)
+     set('pfBrti','Official BRTI: private live index OPTED IN for experimental model inputs; this is not the final 60-second settlement average or verified predictive accuracy.');
+    else if(b.state==='LIVE')
+     set('pfBrti','Official BRTI: authenticated read-only connection LIVE; separate forecast opt-in not active. Experimental settlement model uses a public BTC proxy.');
+    else if(b.forecastOptIn===true)
+     set('pfBrti','Official BRTI: '+status+'. Forecast opt-in is configured, but official data is unavailable. CASH must WAIT rather than silently substitute a public proxy.');
+    else
+     set('pfBrti','Official BRTI: '+status+'. Experimental settlement model uses a public BTC proxy when available.');
    }else{set('pfBrti','Official BRTI connection status unavailable.')}
   }catch{set('pfBrti','Official BRTI connection status unavailable.')}
  }

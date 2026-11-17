@@ -33,6 +33,8 @@ const {assessLiveCheck}=require('./live-check');
 const {runStartupSmoke}=require('./startup-smoke');
 const liveCheckScript=fs.readFileSync('live-check-ui.js');
 const prospectiveScript=fs.readFileSync('prospective-ui.js');
+const prospectiveArchiveScript=fs.readFileSync('prospective-browser-archive.js');
+const prospectiveArchiveUiScript=fs.readFileSync('prospective-browser-archive-ui.js');
 const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
@@ -73,6 +75,14 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/view-mode.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(viewModeScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/prospective-browser-archive.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(prospectiveArchiveScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/prospective-browser-archive-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(prospectiveArchiveUiScript);return;
   }
   if(req.method==='GET'&&req.url==='/prospective-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
