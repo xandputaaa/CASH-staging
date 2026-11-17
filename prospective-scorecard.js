@@ -43,8 +43,12 @@ function prospectiveScorecard(records){
  const ids=new Set(),official=[],proxy=[];
  for(const r of records){
   if(!r||typeof r.marketId!=='string'||ids.has(r.marketId)||
-   !['YES','NO',null].includes(r.side))
-   throw Error('Forecast journal contains invalid or duplicate market');
+   !['YES','NO',null].includes(r.side)||
+   !['PENDING','HIT','MISS','WAIT_RESOLVED','VOID'].includes(r.status)||
+   (['HIT','MISS'].includes(r.status)&&r.side===null)||
+   (r.status==='WAIT_RESOLVED'&&r.side!==null)||
+   ![undefined,null,'SINGLE_EXCHANGE_PROXY','OFFICIAL_BRTI_LIVE'].includes(r.indexSourceType))
+   throw Error('Forecast journal contains invalid, conflicting or duplicate market');
   ids.add(r.marketId);
   if(r.indexSourceType==='OFFICIAL_BRTI_LIVE')official.push(r);
   else proxy.push(r);
