@@ -52,6 +52,31 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --location --max-time 30 --retry 1 --max-filesize 2500000             'https://cash-simulation-web-staging.up.railway.app/api/prospective/export'             --output audit/recovery/early.json
           curl --fail --silent --show-error --location --max-time 30 --retry 1 --max-filesize 2500000             'https://cash-simulation-web-staging.up.railway.app/api/late-checkpoint/export'             --output audit/recovery/late.json
+      - name: Diagnose bounded reconciliation input sizes (metadata only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const path=require('node:path');
+          for(const [label,file,limit] of [
+            ['run-metadata','audit/witness-runs.json',1000000],
+            ['early-export','audit/recovery/early.json',2500000],
+            ['late-export','audit/recovery/late.json',2500000]
+          ]){
+            const size=fs.statSync(file).size;
+            console.log('CASH_RECON_INPUT_SIZE '+label+' bytes='+size+' limit='+limit+' withinLimit='+(size<=limit));
+          }
+          const root='audit/witness';
+          let total=0,oversized=0,max=0;
+          for(const id of fs.readdirSync(root)){
+            const file=path.join(root,id,'public-preexpiry-observation.json');
+            if(!fs.existsSync(file))continue;
+            const size=fs.statSync(file).size;
+            total++;if(size>200000)oversized++;max=Math.max(max,size);
+          }
+          console.log('CASH_RECON_WITNESS_SIZE files='+total+' oversized='+oversized+' maxBytes='+max+' limit=200000');
+          NODE
       - name: Recompute witnessed forecast and numeric Kalshi settlement evidence
         shell: bash
         run: |

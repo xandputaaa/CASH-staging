@@ -42,7 +42,10 @@ function selectWitnessRuns(pages,{nowMs=Date.now(),hours=HOURS,maxRuns=MAX_RUNS}
   selectedSuccessfulRuns:selected.length,
   cappedAt:maxRuns,
   runSelectionTruncated:valid.length>maxRuns,
-  workflow_runs:selected
+  // Retain only provenance fields used downstream; omit bulky GitHub API metadata.
+  workflow_runs:selected.map(r=>({id:r.id,conclusion:r.conclusion,
+   created_at:r.created_at,updated_at:r.updated_at,
+   event:r.event||null,head_sha:r.head_sha||null}))
  };
 }
 function writeSelectedRuns(inputPath,outputPath,idsPath,opts={}){
