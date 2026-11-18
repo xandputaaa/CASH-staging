@@ -1,0 +1,72 @@
+name: CASH Model Lab shadow public settlement recheck
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '26,56 * * * *' # UTC, best effort, two checks per hour
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cash-shadow-final-check-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate-shadow-final-audit:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Test expiry, strike, result, witnesses, abstentions and tampering
+        run: node --test tests/cash-shadow-settlement-*.test.js
+      - name: Checkout externally witnessed archive read-only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cash-shadow-public-witness
+          path: shadow-witness-store
+          persist-credentials: false
+      - name: Verify real witness branch chronology before any result check
+        run: node cash-shadow-witness-coverage.js shadow-witness-store
+      - name: Read-only live integration smoke with Railway public shadow source
+        run: node cash-shadow-settlement-runner.js
+      - name: Retain PR-only provisional integration report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-shadow-final-pr-smoke-${{ github.run_id }}
+          path: audit/shadow-public-final-recheck.json
+          retention-days: 7
+          if-no-files-found: error
+  recheck-shadow-public-final:
+    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout frozen main branch validator
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Checkout append-only observed GitHub commitments without write permission
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cash-shadow-public-witness
+          path: shadow-witness-store
+          persist-credentials: false
+      - name: Compare only hash-matched pre-expiry YES or NO to settled Kalshi public numeric fields
+        run: node cash-shadow-settlement-runner.js
+      - name: Retain provisional public-only audit, never qualified predictions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-shadow-public-final-recheck-${{ github.run_id }}
+          path: audit/shadow-public-final-recheck.json
+          retention-days: 90
+          if-no-files-found: warn
