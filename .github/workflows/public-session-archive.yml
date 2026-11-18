@@ -53,6 +53,14 @@ jobs:
           path: archive-store
           fetch-depth: 1
           persist-credentials: true
+      - name: Keep the existing archive as an immutable comparison baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p archive-before-update
+          if [[ -d archive-store/public-sessions ]]; then
+            cp -a archive-store/public-sessions archive-before-update/
+          fi
       - name: Validate source hash chains and append whitelisted public self-reports
         shell: bash
         run: |
@@ -66,6 +74,14 @@ jobs:
         run: |
           set -euo pipefail
           node public-session-archive-inspection.js archive-store
+      - name: Reject any deletion, rewrite or backdated outcome before Git push
+        shell: bash
+        run: |
+          set -euo pipefail
+          node public-session-archive-delta.js \
+            archive-before-update \
+            archive-store \
+            "$CASH_SOURCE_RUN_ID"
       - name: Commit only new unverified public-session data
         shell: bash
         working-directory: archive-store
