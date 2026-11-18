@@ -204,3 +204,22 @@ jobs:
             echo 'CASH_LEDGER_HEALTH_INDETERMINATE=public_github_api_unavailable'
           fi
           echo 'CASH_LEDGER_HEALTH_NEVER_UNLOCKS_TRADING=true'
+      - name: Inspect schedule-only public session archive health (read-only)
+        if: github.event_name == 'schedule'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p recovery/health
+          if gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/research-snapshot.yml/runs?per_page=100" > recovery/health/snapshot-runs.json && \
+             gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/public-session-archive.yml/runs?per_page=100" > recovery/health/session-archive-runs.json && \
+             gh api "repos/${GITHUB_REPOSITORY}/commits/cash-public-session-archive" > recovery/health/session-archive-commit.json; then
+            node session-archive-health.js \
+              recovery/health/snapshot-runs.json \
+              recovery/health/session-archive-runs.json \
+              recovery/health/session-archive-commit.json || echo 'CASH_SESSION_ARCHIVE_HEALTH_INDETERMINATE=validator_error'
+          else
+            echo 'CASH_SESSION_ARCHIVE_HEALTH_INDETERMINATE=public_github_api_unavailable'
+          fi
+          echo 'CASH_SESSION_ARCHIVE_HEALTH_NEVER_UNLOCKS_TRADING=true'
