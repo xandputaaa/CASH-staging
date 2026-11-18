@@ -47,6 +47,14 @@ A later successful archival workflow may produce **no new commit** if the source
 
 Neither the Git commit metadata nor this monitor proves that the server froze predictions honestly before expiry. Independent qualification remains zero, and orders remain disabled.
 
+## Safe rollover preflight — no restart authorization
+
+The schedule-only archiver now runs `research-rollover-preflight.js` after source-chain archival, independent append-only comparison and strict whole-branch inspection, but **before any Git commit**. The read-only report cross-checks every current late-model public-proxy FORECAST event hash and immutable YES/NO/WAIT/expiry against its corresponding sanitized file in the proposed archive. Source-reported OUTCOME event hashes are separately counted and missing ones explicitly listed. Older unrelated sessions cannot substitute for a current session backup.
+
+The report labels estimated remaining slots under the **assumed default 160-market journal cap** (actual live limit may be different), including a warning at 32 or fewer remaining. If the late source artifact is absent or contains a nonpublic/licensed source, complete public coverage is explicitly *unavailable*, never represented as successful. Invalid model hashes, changed forecast identities or unsafe archived fields fail visibly.
+
+**This is a backup preflight, not a recovery mechanism.** Even when every sanitized public forecast and outcome hash is backed up, the running Railway service has **no persistent volume**; these public files omit necessary spot samples, index inputs, in-process state, scheduler cursor and pending verification state. The preflight **always** reports `serverStateRestorableFromPublicArchive:false` and `safeToRestartRailway:false`. It never calls Railway, orders anything, installs a database, exports secrets, or changes the model. A controlled recovery/rollover requires a separately designed and explicitly approved state-persistence plan, plus independent first/last snapshot coverage checks.
+
 ## Important limits
 
 **This is NOT an external pre-expiry forecast witness.** GitHub may first download an old forecast *after* its market has closed. Even with a valid hash chain, it cannot independently prove the original model forecast was produced before settlement, or that a self-reported outcome matches Kalshi. Every archived file is labeled \`UNVERIFIED_RAILWAY_JOURNAL_EXPORTED_DURING_GITHUB_SCHEDULE\`, \`independentQualifiedCount:0\`, \`actualFillsVerified:0\`, \`ordersEnabled:false\`.

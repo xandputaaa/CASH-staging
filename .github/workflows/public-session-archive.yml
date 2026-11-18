@@ -82,6 +82,14 @@ jobs:
             archive-before-update \
             archive-store \
             "$CASH_SOURCE_RUN_ID"
+      - name: Report research journal rollover preflight (read-only, never restart)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node research-rollover-preflight.js \
+            source-read-only/cash-late-checkpoint-unverified.json \
+            archive-store
+          echo 'CASH_ROLLOVER_NO_RAILWAY_RESTART=true'
       - name: Commit only new unverified public-session data
         shell: bash
         working-directory: archive-store
