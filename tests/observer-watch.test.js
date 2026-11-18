@@ -57,6 +57,11 @@ test('delayed scheduled job observes early WAIT, then later original YES/NO with
  assert.equal(r.evidenceRecorded,2);
  assert.equal(r.lateDirectionalRecorded,1);
  assert.equal(r.directExchangeMatches,2);
+ assert.equal(r.validProbes,calls);
+ assert.equal(r.invalidProbes,0);
+ assert.ok(r.provisionalLateProbes>=0);
+ assert.equal(r.directLateProbes,1);
+ assert.equal(r.captureCompletenessProven,false);
  assert.equal(r.independentQualifiedCount,0);
  assert.equal(r.ordersEnabled,false);
  const saved=JSON.parse(fs.readFileSync(path.join(dir,'public-preexpiry-observation.json')));
@@ -102,6 +107,8 @@ test('missing forecasts, invalid observer response and deadline never create fal
   clock:()=>t,wait:async ms=>{t+=ms;},pollIntervalMs:40000,maxRuntimeMs:80000,
   observer:async()=>response(t,[])});
  assert.equal(r.evidenceRecorded,0);
+ assert.ok(r.emptyProbes>0);
+ assert.equal(r.validProbes,r.attempts);
  assert.equal(r.lateDirectionalRecorded,0);
  assert.equal(r.independentQualifiedCount,0);
  assert.equal(fs.existsSync(path.join(dir,'public-preexpiry-observation.json')),false);
@@ -113,6 +120,8 @@ test('missing forecasts, invalid observer response and deadline never create fal
   observer:async()=>({...response(x,[]),independentQualifiedCount:100,
     claimedIndependentlyQualifiedCount:100})});
  assert.equal(invalid.evidenceRecorded,0);
+ assert.equal(invalid.validProbes,0);
+ assert.ok(invalid.invalidProbes>0);
  assert.equal(fs.existsSync(path.join(d,'public-preexpiry-observation.json')),false);
  fs.rmSync(d,{recursive:true,force:true});
 });
