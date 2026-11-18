@@ -111,27 +111,65 @@ function createLateCheckpointStore({directory=process.env.CASH_AUDIT_DIR}={}){
  if(raw)try{events=raw.trimEnd().split('\n').map(s=>JSON.parse(s))}
  catch{throw Error('Late journal is not valid JSONL')}
  verifyLateCheckpointChain(events);
+ // Only writers honoring this lock are serialized; this is NOT a defense
+ // against a privileged operator modifying the volume or remote replicas.
+ // Never automatically remove a lock left by a crashed process.
+ const lockfile=path.join(directory,'.late-checkpoint-events.write.lock');
+ let expectedBytes=Buffer.byteLength(raw),expectedSha256=hash(raw);
  function append(event){
-  // Verify all stored + proposed records before any filesystem mutation.
+  // Check the complete proposed semantic chain before any filesystem write.
   verifyLateCheckpointChain([...events,event]);
   const buffer=Buffer.from(JSON.stringify(event)+'\n');
-  const st=fileStat();
-  if(st&&(st.isSymbolicLink()||!st.isFile()))
-   throw Error('Late journal path changed unexpectedly');
-  if((st?.size||0)+buffer.length>MAX_BYTES)
-   throw Error('Late journal size limit reached');
-  const flags=fs.constants.O_WRONLY|fs.constants.O_CREAT|
-    fs.constants.O_APPEND|(fs.constants.O_NOFOLLOW||0);
-  const fd=fs.openSync(filename,flags,0o600);
+  // O_EXCL prevents simultaneous cooperating Node processes from appending
+  // to the same volume. A stale lock means operator review, not auto-delete.
+  const lockFd=fs.openSync(lockfile,
+   fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|
+    (fs.constants.O_NOFOLLOW||0),0o600);
+  let wrote=false,newSha256=null;
   try{
-   let offset=0;
-   while(offset<buffer.length){
-    const n=fs.writeSync(fd,buffer,offset,buffer.length-offset);
-    if(n<=0)throw Error('Late journal write incomplete');
-    offset+=n;
-   }
-   fs.fsyncSync(fd);
-  }finally{fs.closeSync(fd)}
+   const st=fileStat();
+   if(st&&(st.isSymbolicLink()||!st.isFile()))
+    throw Error('Late journal path changed unexpectedly');
+   if(st&&st.size>MAX_BYTES)throw Error('Late journal size limit reached');
+   const flags=fs.constants.O_RDWR|fs.constants.O_CREAT|
+     fs.constants.O_APPEND|(fs.constants.O_NOFOLLOW||0);
+   const fd=fs.openSync(filename,flags,0o600);
+   try{
+    const state=fs.fstatSync(fd);
+    if(!state.isFile()||state.size!==expectedBytes||
+       (st&&(st.ino!==state.ino||st.dev!==state.dev)))
+     throw Error('Late journal disk state diverged since last read');
+    if(state.size+buffer.length>MAX_BYTES)
+     throw Error('Late journal size limit reached');
+    const existing=Buffer.alloc(state.size);
+    let read=0;
+    while(read<existing.length){
+     const bytes=fs.readSync(fd,existing,read,existing.length-read,read);
+     if(bytes<=0)throw Error('Late journal failed complete disk re-read');
+     read+=bytes;
+    }
+    if(hash(existing)!==expectedSha256)
+     throw Error('Late journal disk content diverged since last read');
+    newSha256=hash(Buffer.concat([existing,buffer]));
+    let offset=0;
+    while(offset<buffer.length){
+     const n=fs.writeSync(fd,buffer,offset,buffer.length-offset);
+     if(n<=0)throw Error('Late journal write incomplete');
+     offset+=n;
+    }
+    fs.fsyncSync(fd);
+    wrote=true;
+   }finally{fs.closeSync(fd)}
+   // Flush the new file's directory entry before in-RAM advancement.
+   const dirFd=fs.openSync(directory,'r');
+   try{fs.fsyncSync(dirFd)}finally{fs.closeSync(dirFd)}
+  }finally{
+   fs.closeSync(lockFd);
+   fs.unlinkSync(lockfile);
+  }
+  if(!wrote||!newSha256)throw Error('Late journal persistence incomplete');
+  expectedBytes+=buffer.length;
+  expectedSha256=newSha256;
   events.push(event);
  }
  return {mode:'FILESYSTEM_JOURNAL_UNVERIFIED',configured:true,
