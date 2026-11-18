@@ -44,6 +44,7 @@ async function watchScheduledObserver({
   throw Error('Unsafe bounded pre-expiry observer schedule');
  const start=clock(),deadline=start+maxRuntimeMs;
  let best=null,rank=0,attempts=0,lastError=null,stopReason='TIME_BUDGET_EXHAUSTED';
+ let validProbes=0,invalidProbes=0,emptyProbes=0,provisionalLateProbes=0,directLateProbes=0;
  const probeDir=path.join(outDirectory,'.probe');
  while(attempts<maxAttempts&&clock()<=deadline){
   attempts++;
@@ -52,6 +53,10 @@ async function watchScheduledObserver({
    // Revalidate every candidate using the existing external-witness
    // envelope rules. Invalid or unsafe responses cannot write artifacts.
    validObservation(r);
+   validProbes++;
+   if(!r.frozenEvidence.length)emptyProbes++;
+   if(r.frozenEvidence.some(f=>f.model===LATE)&&!isReady(r))provisionalLateProbes++;
+   if(isReady(r))directLateProbes++;
    const candidate=evidenceRank(r);
    if(candidate>rank){
     best=r;rank=candidate;
@@ -61,6 +66,7 @@ async function watchScheduledObserver({
     break;
    }
   }catch(e){
+   invalidProbes++;
    lastError=String(e?.message||e).slice(0,160);
   }
   const remaining=deadline-clock();
@@ -79,6 +85,8 @@ async function watchScheduledObserver({
  const summary={
   version:'CASH_SCHEDULED_WITNESS_WATCH_V1',
   attempts,stopReason,
+  validProbes,invalidProbes,emptyProbes,provisionalLateProbes,directLateProbes,
+  captureCompletenessProven:false,
   evidenceRecorded:best?.frozenEvidence?.length||0,
   lateDirectionalRecorded:best?.frozenEvidence?.filter(x=>
    x.model===LATE&&['YES','NO'].includes(x.frozenSide)).length||0,
@@ -88,6 +96,11 @@ async function watchScheduledObserver({
   lastError:lastError||null
  };
  console.log('CASH_WATCH_ATTEMPTS='+attempts);
+ console.log('CASH_WATCH_VALID_PROBES='+validProbes);
+ console.log('CASH_WATCH_INVALID_PROBES='+invalidProbes);
+ console.log('CASH_WATCH_EMPTY_PROBES='+emptyProbes);
+ console.log('CASH_WATCH_PROVISIONAL_LATE_PROBES='+provisionalLateProbes);
+ console.log('CASH_WATCH_DIRECT_LATE_PROBES='+directLateProbes);
  console.log('CASH_WATCH_STOP_REASON='+stopReason);
  console.log('CASH_WATCH_RECORDED='+summary.evidenceRecorded);
  console.log('CASH_WATCH_LATE_DIRECTIONAL='+summary.lateDirectionalRecorded);
