@@ -13,19 +13,50 @@ const {hasVerifiedEvidence}=require('./shadow-monitor');
 const {checkKalshiSettlement}=require('./kalshi-settlement-check');
 const {prospectiveScorecard}=require('./prospective-scorecard');
 const {paperSummary,oneContractPaper}=require('./paper-execution-audit');
+const {verifyLateCheckpointChain}=require('./late-checkpoint-store');
 const NAME='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1';
 const MIN_LEAD_MS=150000,MAX_LEAD_MS=210000,MAX_RECORDS=160;
 const sha=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const iso=ms=>new Date(ms).toISOString();
 const ID=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
 function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null,clock=()=>Date.now(),
- maxRecords=MAX_RECORDS}={}){
+ maxRecords=MAX_RECORDS,store=null}={}){
  if(!quotes||!spot||!results)throw Error('Late checkpoint requires three read-only sources');
  const bootAt=iso(clock()),records=[],events=[],seen=new Set(),missed=new Set();
  let headHash='GENESIS',inflight=null,scans=0,failures=0,lastReason='NOT_CHECKED',pendingCursor=0;
+ let replayedForecasts=0;
+ if(store){
+  if(!Array.isArray(store.events)||typeof store.append!=='function')
+   throw Error('Late checkpoint store interface invalid');
+  const replay=verifyLateCheckpointChain(store.events);
+  if(replay.forecasts>maxRecords)
+   throw Error('Stored late research already exceeds configured market cap');
+  for(const e of store.events){
+   if(e.type==='FORECAST'){
+    const p=structuredClone(e.payload);
+    records.push({...p,status:'PENDING',winner:null,
+     outcomeCheckedAt:null,outcomeReason:'RESTORED_PENDING_UNVERIFIED',
+     outcomeAttempts:0});
+    seen.add(p.marketId);
+   }else{
+    const p=e.payload,r=records.find(x=>x.marketId===p.marketId);
+    if(!r||r.status!=='PENDING')throw Error('Late saved outcome replay order invalid');
+    r.winner=p.winner;
+    r.status=p.winner==='VOID'?'VOID':r.side===null?
+     'WAIT_RESOLVED':r.side===p.winner?'HIT':'MISS';
+    r.outcomeCheckedAt=p.checkedAt;
+    r.outcomeReason='RESTORED_PREVIOUSLY_ACCEPTED_OUTCOME';
+    r.outcomeAttempts=1;
+   }
+   events.push(structuredClone(e));headHash=e.hash;
+  }
+  replayedForecasts=replay.forecasts;
+ }
+
  function append(type,payload){
   const body={sequence:events.length+1,recordedAt:iso(clock()),type,payload,previousHash:headHash};
   const e={...body,hash:sha(body)};
+  if(store)store.append(e);
   events.push(e);headHash=e.hash;return e;
  }
  function stage(quote,source,seriesFees){
@@ -151,7 +182,8 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
   return {
    version:'CASH_LATE_CHECKPOINT_SHADOW_V1',model:NAME,
    referenceModel:'KXBTC15M_SETTLEMENT_EARLY_V3',bootAt,scans,failures,
-   lastReason,storage:'VOLATILE_SERVER_SESSION',headHash,
+   lastReason,storage:store?.mode||'VOLATILE_SERVER_SESSION',headHash,
+   replayedForecasts,
    checkpointLeadWindowMs:{min:MIN_LEAD_MS,max:MAX_LEAD_MS},
    windowMissedMarketIds:missed.size,records:records.length,
    pending:pending.length,expiredPending:pending.filter(r=>Date.parse(r.endTime)<=now).length,
@@ -176,7 +208,7 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
  function exportSession(){
   return {...snapshot(),format:'CASH_LATE_CHECKPOINT_UNVERIFIED_HASH_CHAIN_V1',
    events:events.map(x=>({...x})),
-   warning:'Self-generated hashes are not independent timestamps. Private BRTI numerical inputs are not exported; history resets on service restart.'};
+   warning:'Self-generated hashes are not independent timestamps. Private BRTI numerical inputs are not exported; without an approved mounted persistent audit directory, history resets on service restart. Even mounted file replay does not reconstruct missed windows, runner witness timestamps or model calibration.'};
  }
  return {scan,snapshot,exportSession};
 }
