@@ -247,7 +247,10 @@ function archiveSources({
   status[kind]=data.state;
   candidates.push(...data.prepared);
  }
- if(!candidates.length)
+ // A verified but empty new server session is valid no-op evidence.
+ // Missing, redacted-only and malformed sources must still fail closed.
+ if(!candidates.length &&
+    !Object.values(status).includes('VERIFIED_PUBLIC_PROXY_JOURNAL'))
   throw Error('No public proxy FORECAST events to archive');
  const rootDir=path.resolve(root),pending=new Map();
  scanArchive(rootDir); // reject unsafe existing public records first
