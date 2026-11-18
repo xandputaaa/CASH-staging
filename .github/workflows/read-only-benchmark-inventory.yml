@@ -1,0 +1,38 @@
+name: CASH read-only benchmark archive inventory
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          path: source
+      - uses: actions/checkout@v4
+        with:
+          ref: cash-public-session-archive
+          persist-credentials: false
+          path: sessions
+      - uses: actions/checkout@v4
+        with:
+          ref: cash-public-evidence-ledger
+          persist-credentials: false
+          path: witnesses
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate archived inputs and build descriptive inventory
+        run: |
+          node source/public-session-archive-inspection.js sessions > /dev/null
+          node source/public-ledger-inspection.js witnesses > /dev/null
+          node source/archive-benchmark-inventory.js sessions witnesses > benchmark-inventory.json
+          node -e "const x=require('./benchmark-inventory.json');if(x.independentQualificationCount!==0||x.ordersEnabled!==false||x.eligibleMarketUniverseKnown!==false||x.benchmarkQualificationAllowed!==false)process.exit(1);console.log(JSON.stringify({version:x.version,unionArchivedMarkets:x.unionArchivedMarkets,missingForecasts:x.missingForecasts,evidenceGaps:x.evidenceGaps,independentQualificationCount:x.independentQualificationCount}))"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cash-readonly-benchmark-inventory
+          path: benchmark-inventory.json
+          retention-days: 30
