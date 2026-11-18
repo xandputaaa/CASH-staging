@@ -95,12 +95,16 @@ function createLateCheckpointStore({directory=process.env.CASH_AUDIT_DIR}={}){
  if(!dir.isDirectory()||dir.isSymbolicLink())
   throw Error('Late journal directory cannot be a symlink');
  const filename=path.join(directory,FILE);
- if(fs.existsSync(filename)){
-  const st=fs.lstatSync(filename);
-  if(!st.isFile()||st.isSymbolicLink()||st.size>MAX_BYTES)
-   throw Error('Late journal file must be an ordinary bounded file');
+ // existsSync follows the target and returns false on a DANGLING symlink.
+ // Use lstat even when the link target does not exist; fail closed.
+ function fileStat(){
+  try{return fs.lstatSync(filename)}
+  catch(e){if(e.code==='ENOENT')return null;throw e}
  }
- const raw=fs.existsSync(filename)?fs.readFileSync(filename,'utf8'):'';
+ const current=fileStat();
+ if(current&&(!current.isFile()||current.isSymbolicLink()||current.size>MAX_BYTES))
+  throw Error('Late journal file must be an ordinary bounded file');
+ const raw=current?fs.readFileSync(filename,'utf8'):'';
  if(Buffer.byteLength(raw)>MAX_BYTES||(raw&&!raw.endsWith('\n')))
   throw Error('Late journal is oversized or truncated');
  let events=[];
@@ -111,7 +115,7 @@ function createLateCheckpointStore({directory=process.env.CASH_AUDIT_DIR}={}){
   // Verify all stored + proposed records before any filesystem mutation.
   verifyLateCheckpointChain([...events,event]);
   const buffer=Buffer.from(JSON.stringify(event)+'\n');
-  const st=fs.existsSync(filename)?fs.lstatSync(filename):null;
+  const st=fileStat();
   if(st&&(st.isSymbolicLink()||!st.isFile()))
    throw Error('Late journal path changed unexpectedly');
   if((st?.size||0)+buffer.length>MAX_BYTES)
