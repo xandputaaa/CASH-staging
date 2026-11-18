@@ -34,3 +34,18 @@ test('empty cohorts do not fabricate performance or completeness',()=>{
  assert.equal(r.candidate.directionalCoverage,null);
  assert.equal(r.chronologicalOrderingVerified,false);
 });
+
+test('missing forecast is not a WAIT or a directional prediction',()=>{
+ const r=comparePrecommittedCohorts({
+  baseline:[row(1,'MISSING','YES'),row(2,'WAIT','NO')],
+  candidate:[row(1,'YES','YES'),row(2,'MISSING','NO')]
+ });
+ assert.equal(r.baseline.missingForecasts,1);
+ assert.equal(r.baseline.waits,1);
+ assert.equal(r.baseline.directional,0);
+ assert.equal(r.baseline.scoredDirectional,0);
+ assert.equal(r.baseline.actualForecastCoverage,.5);
+ assert.equal(r.candidate.missingForecasts,1);
+ assert.equal(r.candidate.waits,0);
+ assert.equal(r.candidate.hits,1);
+});
