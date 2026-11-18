@@ -29,6 +29,16 @@ Every scheduled archiver run now invokes `node public-session-archive-inspection
 
 The inspector can also be run on a checkout of the dedicated branch with `node public-session-archive-inspection.js .` while using trusted source from `main`. Zero files means `NO_SCHEDULED_SESSION_DATA_COMMIT_VERIFIED`; a passing inventory is still *not* pre-expiry witnessing, a public-exchange settlement recheck, or a qualified forecast.
 
+## Scheduled archive operational health (no new writes)
+
+Each successful scheduled research-snapshot job runs the **read-only** `session-archive-health.js` status checker near its end. It inspects GitHub's recent scheduled snapshot history, the session-archive `workflow_run` history, and the current session-archive branch HEAD commit. No extra GitHub archive commit is made by the checker, and a GitHub API health read failure is explicitly labeled `INDETERMINATE`, not silently interpreted as success.
+
+The status distinguishes a snapshot **before** the new archiver was enabled from an eligible later scheduled snapshot; it distinguishes an initialized empty branch from a real branch commit named `Archive unverified public CASH session source (run ID)`. It compares that ID to an actual successful scheduled source run. Before the first commit, a two-hour grace separates `FIRST_ARCHIVE_COMMIT_AWAITING_SCHEDULE` from `FIRST_ARCHIVE_COMMIT_NOT_OBSERVED_AFTER_GRACE`. GitHub schedules may still delay or skip runs, and these are **operational diagnostic labels**, not proof of data loss or availability.
+
+A later successful archival workflow may produce **no new commit** if the source snapshot contains no changed records. Therefore the monitor can request review of later archive job logs but never treats an older branch HEAD as proof that later history was preserved. The checker also never treats a skipped PR-triggered archive as a scheduled success. It is deliberately nonfatal to the existing public research export to avoid sacrificing source backups when GitHub's metadata API is temporarily unavailable.
+
+Neither the Git commit metadata nor this monitor proves that the server froze predictions honestly before expiry. Independent qualification remains zero, and orders remain disabled.
+
 ## Important limits
 
 **This is NOT an external pre-expiry forecast witness.** GitHub may first download an old forecast *after* its market has closed. Even with a valid hash chain, it cannot independently prove the original model forecast was produced before settlement, or that a self-reported outcome matches Kalshi. Every archived file is labeled \`UNVERIFIED_RAILWAY_JOURNAL_EXPORTED_DURING_GITHUB_SCHEDULE\`, \`independentQualifiedCount:0\`, \`actualFillsVerified:0\`, \`ordersEnabled:false\`.
