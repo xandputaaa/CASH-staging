@@ -95,6 +95,9 @@ async function watchScheduledObserver({
   independentQualifiedCount:0,ordersEnabled:false,
   lastError:lastError||null
  };
+ fs.mkdirSync(outDirectory,{recursive:true});
+ fs.writeFileSync(path.join(outDirectory,'observer-run-summary.json'),
+  JSON.stringify(summary,null,2)+'\n',{mode:0o600});
  console.log('CASH_WATCH_ATTEMPTS='+attempts);
  console.log('CASH_WATCH_VALID_PROBES='+validProbes);
  console.log('CASH_WATCH_INVALID_PROBES='+invalidProbes);
