@@ -25,16 +25,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p audit/witness audit/recovery
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/preexpiry-observer.yml/runs?per_page=100" > audit/witness-runs.json
-          node - <<'NODE' > audit/witness-run-ids.txt
-          const fs=require('node:fs');
-          const runs=JSON.parse(fs.readFileSync('audit/witness-runs.json','utf8')).workflow_runs||[];
-          const earliest=Date.now()-24*3600*1000;
-          for(const run of runs.filter(r=>r.conclusion==='success'&&
-           Date.parse(r.created_at)>=earliest).slice(0,24)){
-            if(/^\d{8,16}$/.test(String(run.id)))console.log(run.id);
-          }
-          NODE
+          # Fetch all GH API pages. Four scheduled witness runs/hour means
+          # 24 latest runs do NOT represent a full 24-hour witness window.
+          since_day="$(date -u -d '1 day ago' +%Y-%m-%d)"
+          today_day="$(date -u +%Y-%m-%d)"
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/preexpiry-observer.yml/runs?per_page=100&created=${since_day}..${today_day}" \
+            > audit/witness-runs-pages.json
+          node witness-run-window.js \
+            audit/witness-runs-pages.json \
+            audit/witness-runs.json \
+            audit/witness-run-ids.txt
           while IFS= read -r run; do
             if [[ "$run" =~ ^[0-9]{8,16}$ ]]; then
               mkdir -p "audit/witness/$run"
