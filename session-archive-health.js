@@ -48,11 +48,12 @@ function inspectSessionArchiveHealth({
   .exec(typeof msg==='string'?msg:'');
  const committedSourceRunId=m?m[1]:null;
  const commitHasData=Boolean(m&&SHA.test(branchCommit?.sha||''));
- const linkedSource=committedSourceRunId?successful.find(r=>
+ const linkedSource=commitHasData?successful.find(r=>
    String(r.id)===committedSourceRunId&&
    Number.isFinite(ms(r.updated_at))&&
    Number.isFinite(ms(branchCommit?.commit?.author?.date))&&
-   ms(branchCommit.commit.author.date)>=ms(r.updated_at)-300000):null;
+   ms(branchCommit.commit.author.date)>=ms(r.updated_at)&&
+   ms(branchCommit.commit.author.date)<=nowMs+300000):null;
  // Archive workflow run metadata does not carry the originating snapshot
  // ID in this list. Later success can be reported, NOT attributed to that
  // exact source or used to certify an unmodified archive.
