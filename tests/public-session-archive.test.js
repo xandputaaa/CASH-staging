@@ -8,7 +8,7 @@ const EARLY='KXBTC15M_SETTLEMENT_EARLY_V3',
  LATE='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1';
 function event(type,p,sequence,prev){
  const e={sequence,recordedAt:type==='FORECAST'?p.at:
-  '2026-11-18T14:05:00.000Z',type,payload:p,previousHash:prev};
+  '2026-11-18T13:52:00.000Z',type,payload:p,previousHash:prev};
  e.hash=hash(e);return e;
 }
 function journal(kind,{side='NO',outcome=null,marker='a',publicSource=true}={}){
@@ -187,5 +187,17 @@ test('empty invalid or missing source cannot be misrepresented as independent ar
   assert.throws(()=>sourceMeta({...meta(),headSha:'fake'}),/successful scheduled/);
   assert.equal(scanArchive(d).independentQualifiedCount,0);
   assert.equal(scanArchive(d).actualFillsVerified,0);
+ }finally{fs.rmSync(d,{recursive:true,force:true})}
+});
+
+test('self-reported outcome after actual GH backup completion is never silently backfilled',()=>{
+ const d=temp();
+ try{
+  const late=journal('late',{outcome:'YES'});
+  late.events[1].recordedAt='2026-11-18T14:05:00.000Z';
+  late.events[1].hash=hash((({hash,...body})=>body)(late.events[1]));
+  late.headHash=late.events[1].hash;
+  assert.throws(()=>apply(d,{late}),/future self-reported outcome/);
+  assert.equal(fs.existsSync(path.join(d,'public-sessions')),false);
  }finally{fs.rmSync(d,{recursive:true,force:true})}
 });
