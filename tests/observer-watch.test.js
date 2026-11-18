@@ -11,14 +11,14 @@ const close='2026-11-18T02:15:00Z';
 const at=Date.parse('2026-11-18T02:08:00Z');
 const hash='a'.repeat(64);
 const marketId='KXBTC15M-26NOV172015-15';
-function e(model,atMs,side='WAIT',direct=false){
+function e(model,atMs,side='WAIT',direct=false,observedMs=atMs+1000){
  return {model,marketId,frozenSide:side,
   frozenAt:new Date(atMs).toISOString(),contractClosesAt:close,
   journalSequence:model===LATE?2:1,frozenEventHash:hash,
   headHashSeen:hash,publicProxyOnly:true,
   exchangeAtWitness:direct?{
    state:'MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET',independentValidation:false,
-   observedAtRunner:new Date(atMs+1000).toISOString(),
+   observedAtRunner:new Date(observedMs).toISOString(),
    publishedCloseTime:close,publicStrikeAtObserver:65231.51,
    publicStrikeType:'greater_or_equal',publicMarketStatusAtObserver:'active',
    exchangePublicFieldsSha256:'b'.repeat(64),
@@ -47,9 +47,9 @@ test('delayed scheduled job observes early WAIT, then later original YES/NO with
   observer:async()=>{
    calls++;
    const early=e(EARLY,Date.parse('2026-11-18T02:03:00Z'),
-    'WAIT',true);
+    'WAIT',true,t+1000);
    const late=t>=Date.parse('2026-11-18T02:11:40Z')?
-    e(LATE,Date.parse('2026-11-18T02:11:32Z'),'NO',true):null;
+    e(LATE,Date.parse('2026-11-18T02:11:32Z'),'NO',true,t+1000):null;
    return response(t,[early,...(late?[late]:[])]);
   }});
  assert.ok(calls>=5&&calls<15);
