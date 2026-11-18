@@ -29,6 +29,16 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
   if(!Array.isArray(store.events)||typeof store.append!=='function')
    throw Error('Late checkpoint store interface invalid');
   const replay=verifyLateCheckpointChain(store.events);
+  if(store.priorMarketIds!==undefined){
+   if(!Array.isArray(store.priorMarketIds)||store.priorMarketIds.length>10240||
+      new Set(store.priorMarketIds).size!==store.priorMarketIds.length||
+      store.priorMarketIds.some(id=>!ID.test(id)))
+    throw Error('Malformed completed late segment market index');
+   for(const id of store.priorMarketIds){
+    if(replay.records.has(id))throw Error('Replayed late forecast also in completed segment');
+    seen.add(id);
+   }
+  }
   if(replay.forecasts>maxRecords)
    throw Error('Stored late research already exceeds configured market cap');
   for(const e of store.events){
@@ -184,6 +194,8 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
    referenceModel:'KXBTC15M_SETTLEMENT_EARLY_V3',bootAt,scans,failures,
    lastReason,storage:store?.mode||'VOLATILE_SERVER_SESSION',headHash,
    replayedForecasts,
+   priorCompletedSegments:store?.priorCompletedSegments||0,
+   priorCompletedMarketCount:store?.priorMarketIds?.length||0,
    checkpointLeadWindowMs:{min:MIN_LEAD_MS,max:MAX_LEAD_MS},
    windowMissedMarketIds:missed.size,records:records.length,
    pending:pending.length,expiredPending:pending.filter(r=>Date.parse(r.endTime)<=now).length,
