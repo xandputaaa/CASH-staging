@@ -107,9 +107,13 @@ test('corrupted final winner, outcome event hash or original event hash is rejec
   apply(d,{early:journal('early',{outcome:'NO'}),
    late:journal('late',{outcome:'NO'})});
   const prior=fs.readFileSync(file(d),'utf8');
+  const alteredMetadata=journal('late',{outcome:'NO'});
+  alteredMetadata.events[1].payload.publishedSource='ALTERED_FINAL_SOURCE';
+  alteredMetadata.events[1].hash=hash((({hash,...body})=>body)(alteredMetadata.events[1]));
+  alteredMetadata.headHash=alteredMetadata.events[1].hash;
   for(const altered of [
    journal('late',{outcome:'YES'}),
-   journal('late',{outcome:'NO',marker:'b'})
+   alteredMetadata
   ]){
    assert.throws(()=>apply(d,{
     early:journal('early',{outcome:'NO'}),late:altered,
