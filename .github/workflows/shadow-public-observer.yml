@@ -1,0 +1,108 @@
+name: CASH Model Lab public shadow pre-expiry witness
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cash-shadow-witness-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  review-shadow-witness:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Test isolated shadow journal, live feed and observer
+        run: node --test tests/cash-shadow-*.test.js
+  capture-shadow-public:
+    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CASH_RUN_ID: ${{ github.run_id }}
+    steps:
+      - name: Checkout trusted default-branch observer
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Observe public shadow journal using runner UTC after fetch
+        run: node cash-shadow-public-observer-runner.js
+      - name: Retain observable run diagnostics even if endpoint is unavailable
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-shadow-public-observation-${{ github.run_id }}
+          path: witness/shadow-public-observation.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Checkout separate append-only public shadow witness branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cash-shadow-public-witness
+          path: witness-store
+          persist-credentials: true
+      - name: Archive first-party GitHub observation only, not source timestamps
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const o=JSON.parse(fs.readFileSync('witness/shadow-public-observation.json','utf8'));
+          const run=process.env.CASH_RUN_ID;
+          if(!/^\d{8,16}$/.test(run))throw Error('Invalid GitHub run identity');
+          if(o.version!=='CASH_SHADOW_GITHUB_PUBLIC_OBSERVATION_V1'||
+             o.githubRunId!==run||
+             o.independentlyQualifiedCount!==0||
+             o.realMoneyOrdersAllowed!==false||
+             !Array.isArray(o.observedForecasts)||
+             o.observedBeforeExpiryCount!==o.observedForecasts.length)
+             throw Error('Unsafe or inconsistent public shadow observation');
+          if(o.status!=='OBSERVED_PREEXPIRY'){
+            console.log('CASH_SHADOW_ARCHIVE_SKIP='+o.status);
+            process.exit(0);
+          }
+          if(!o.observedForecasts.length||o.observedForecasts.length>1500||
+             !/^[a-f0-9]{64}$/.test(o.sourceSha256||''))
+             throw Error('Invalid witness evidence');
+          for(const r of o.observedForecasts){
+            if(r.independentQualification!==false||
+               r.source!=='UNVERIFIED_PUBLIC_SHADOW_JOURNAL'||
+               typeof r.marketId!=='string'||
+               !/^KXBTC15M-[A-Za-z0-9-]{6,70}$/.test(r.marketId)||
+               !Number.isFinite(r.contractClosesAtMs)||
+               !Number.isFinite(r.observedAtRunnerMs)||
+               r.contractClosesAtMs-r.observedAtRunnerMs<=15000)
+              throw Error('Witness was not observed safely before expiry');
+          }
+          const target='witness-store/public-shadow-witness/'+run+'.json';
+          fs.mkdirSync('witness-store/public-shadow-witness',{recursive:true});
+          if(fs.existsSync(target))throw Error('Append-only public witness file already exists');
+          fs.copyFileSync('witness/shadow-public-observation.json',target);
+          console.log('CASH_SHADOW_ARCHIVE_PREEXPIRY_RECORDS='+o.observedForecasts.length);
+          NODE
+          cd witness-store
+          if [[ -z "$(git status --porcelain -- public-shadow-witness)" ]]; then
+            echo 'CASH_SHADOW_NO_PREEXPIRY_EVIDENCE_TO_COMMIT=true'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- public-shadow-witness/
+          git commit -m "Archive GitHub-observed public shadow pre-expiry evidence (run $CASH_RUN_ID)"
+          git push origin HEAD:cash-shadow-public-witness
+          echo 'CASH_SHADOW_PUBLIC_WITNESS_ARCHIVED=true'
