@@ -1,0 +1,52 @@
+name: CASH public ledger coverage cross-check
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare-ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout audited source code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          path: source
+      - name: Checkout public witness archive
+        uses: actions/checkout@v4
+        with:
+          ref: cash-public-evidence-ledger
+          persist-credentials: false
+          path: ledger
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compare independent counters across auditors
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const {audit}=require('./source/chronological-ledger-coverage');
+          const {scanPublicLedger}=require('./source/public-ledger-inspection');
+          const {auditWitnessedPaperEconomics}=require('./source/witnessed-paper-economics');
+          const root='./ledger';
+          const a=audit(root),b=scanPublicLedger(root),c=auditWitnessedPaperEconomics(root);
+          assert.equal(a.archivedRecords,b.fileCount);
+          assert.equal(a.models.early.records,b.earlyCount);
+          assert.equal(a.models.late.records,b.lateCount);
+          assert.equal(a.models.early.wait+a.models.late.wait,b.waitCount);
+          assert.equal(a.models.early.directional+a.models.late.directional,b.directionalCount);
+          assert.equal(a.models.early.directFinal+a.models.late.directFinal,b.directFinalCount);
+          assert.equal(a.models.early.hits+a.models.late.hits,b.directionalFinalHits);
+          assert.equal(a.models.early.misses+a.models.late.misses,b.directionalFinalMisses);
+          assert.equal(a.models.late.directional,c.lateDirectionalWitnessed);
+          assert.equal(a.models.late.directFinal,c.lateDirectionalDirectFinals);
+          assert.equal(a.models.late.hits,c.lateDirectionalDirectHits);
+          assert.equal(a.models.late.misses,c.lateDirectionalDirectMisses);
+          assert.equal(a.independentlyQualifiedCount,0);
+          assert.equal(a.ordersEnabled,false);
+          console.log(JSON.stringify(a,null,2));
+          console.log('CASH_PUBLIC_LEDGER_CROSSCHECK=PASS');
+          NODE
