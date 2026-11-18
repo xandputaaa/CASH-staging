@@ -61,6 +61,7 @@ jobs:
             audit-recovery/provisional-reconciliation.json \
             ledger-store
           node public-ledger-inspection.js ledger-store
+          node witnessed-paper-economics.js ledger-store
       - name: Push only new public evidence on the dedicated branch
         shell: bash
         working-directory: ledger-store
