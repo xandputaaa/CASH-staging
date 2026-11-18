@@ -6,6 +6,7 @@ on:
     - cron: '17,47 * * * *' # UTC, twice hourly, best effort; default branch only
 permissions:
   contents: read
+  actions: read # read-only archive health inspection
 jobs:
   preserve-public-research:
     if: github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
@@ -153,3 +154,22 @@ jobs:
           path: recovery/*.json
           retention-days: 30
           if-no-files-found: error
+      - name: Observe scheduled reconciliation and ledger archival health (read-only)
+        if: github.event_name == 'schedule'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p recovery/health
+          if gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/observed-settlement-reconciliation.yml/runs?per_page=100" > recovery/health/reconcile-runs.json && \
+             gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/public-evidence-ledger.yml/runs?per_page=100" > recovery/health/ledger-runs.json && \
+             gh api "repos/${GITHUB_REPOSITORY}/commits/cash-public-evidence-ledger" > recovery/health/ledger-commit.json; then
+            node ledger-archive-health.js \
+              recovery/health/reconcile-runs.json \
+              recovery/health/ledger-runs.json \
+              recovery/health/ledger-commit.json || echo 'CASH_LEDGER_HEALTH_INDETERMINATE=validator_error'
+          else
+            echo 'CASH_LEDGER_HEALTH_INDETERMINATE=public_github_api_unavailable'
+          fi
+          echo 'CASH_LEDGER_HEALTH_NEVER_UNLOCKS_TRADING=true'
