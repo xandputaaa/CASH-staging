@@ -36,7 +36,7 @@ function analyzeLatePreseed({late,archiveRoot}){
   sourceForecasts:0,sourceOutcomes:0,sourcePending:0,
   sourceHeadHash:null,archiveForecastsMatched:0,
   archiveOutcomesMatched:0,
-  exportHashChainVerified:false,archivePublicCoverageVerified:false,
+  exportHashChainVerified:false,localArchiveCopyConsistent:false,
   preseedCandidate:false,
   safeToRestartRunningRailway:false,
   existingVolatileProcessMigrated:false,
@@ -72,9 +72,9 @@ function analyzeLatePreseed({late,archiveRoot}){
   sourcePending:late.pending,sourceHeadHash:history.headHash,
   archiveForecastsMatched:covered.archivedCurrentSessionForecasts,
   archiveOutcomesMatched:covered.archivedCurrentSessionSelfReportedOutcomes,
-  exportHashChainVerified:true,archivePublicCoverageVerified:actualFull,
-  status:actualFull?'SOURCE_AND_PUBLIC_GIT_ARCHIVE_MATCH_OFFLINE_PRESEED_ONLY':
-    'INCOMPLETE_GIT_ARCHIVE_COVERAGE_NO_PRESEED',
+  exportHashChainVerified:true,localArchiveCopyConsistent:actualFull,
+  status:actualFull?'SOURCE_AND_LOCAL_ARCHIVE_COPY_MATCH_NOT_GIT_PROOF':
+    'INCOMPLETE_LOCAL_ARCHIVE_COVERAGE_NO_PRESEED',
   preseedCandidate:actualFull};
 }
 function lstatMaybe(file){
@@ -147,7 +147,7 @@ if(require.main===module){
  console.log('CASH_PRESEED_STATUS='+result.status);
  console.log('CASH_PRESEED_SOURCE_FORECASTS='+result.sourceForecasts);
  console.log('CASH_PRESEED_SOURCE_OUTCOMES='+result.sourceOutcomes);
- console.log('CASH_PRESEED_GIT_ARCHIVE_COVERAGE='+result.archivePublicCoverageVerified);
+ console.log('CASH_PRESEED_LOCAL_ARCHIVE_COPY_CONSISTENT='+result.localArchiveCopyConsistent);
  console.log('CASH_PRESEED_RAILWAY_RESTART_AUTHORIZED=false');
  console.log('CASH_PRESEED_ORDERS_ENABLED=false');
  console.log('CASH_PRESEED_INDEPENDENT_QUALIFIED=0');
