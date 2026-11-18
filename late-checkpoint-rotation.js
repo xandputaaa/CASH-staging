@@ -180,5 +180,26 @@ function rotateCompletedLateJournal({directory,late,archiveRoot,approval}){
   safeToRestartRunningRailway:false,existingVolatileProcessMigrated:false,
   ordersEnabled:false,independentlyQualifiedCount:0};
 }
+if(require.main===module){
+ const [mode,sourceJson,archiveRoot,directory]=process.argv.slice(2);
+ if(!['--dry-run','--explicit-offline-rotation'].includes(mode)||
+    !sourceJson||!archiveRoot||!directory)
+  throw Error('Usage: node late-checkpoint-rotation.js --dry-run LATE_EXPORT_JSON PUBLIC_ARCHIVE_ROOT EXISTING_DISK_DIRECTORY | --explicit-offline-rotation LATE_EXPORT_JSON PUBLIC_ARCHIVE_ROOT EXISTING_DISK_DIRECTORY');
+ const raw=fs.readFileSync(sourceJson);
+ if(raw.length>MAX_BYTES)throw Error('Late source export exceeds allowed bound');
+ const late=JSON.parse(raw.toString('utf8'));
+ const result=mode==='--dry-run'?
+  checkOfflineLateRotation({directory,late,archiveRoot}):
+  rotateCompletedLateJournal({directory,late,archiveRoot,
+   approval:process.env.CASH_ONE_TIME_OFFLINE_ROTATION_APPROVAL});
+ console.log('CASH_LATE_ROTATION_STATUS='+result.reason);
+ console.log('CASH_LATE_ROTATION_READY='+String(result.ready));
+ console.log('CASH_LATE_ROTATION_PREVIOUS_SEGMENTS='+result.completeSegments);
+ console.log('CASH_LATE_ROTATION_FROZEN='+result.frozenInActive);
+ console.log('CASH_LATE_ROTATION_SETTLED='+result.settledInActive);
+ console.log('CASH_LATE_ROTATION_RAILWAY_RESTART_ALLOWED=false');
+ console.log('CASH_LATE_ROTATION_TRADING_ALLOWED=false');
+ console.log('CASH_LATE_ROTATION_INDEPENDENT_QUALIFIED=0');
+}
 module.exports={inspectCompletedLateSegments,checkOfflineLateRotation,
  rotateCompletedLateJournal,APPROVAL,MAX_SEGMENTS,SEGMENT_DIR};
