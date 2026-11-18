@@ -51,7 +51,7 @@ function archiveBenchmarkInventory(sessionRoot,ledgerRoot){
   for(const kind of ['early','late']){
    const src=sources[kind].get(marketId),wit=witnesses[kind].get(marketId);
    if(!src&&!wit)missingForecasts[kind]++;
-   rows[kind].push({marketId,side:src?.side||wit?.prediction.side||'WAIT',
+   rows[kind].push({marketId,side:src?.side||wit?.prediction.side||'MISSING',
     winner,sourcePresent:!!src,witnessPresent:!!wit,
     sourceFrozenHash:src?.selfHashedForecastEventSha256||null,
     witnessFrozenHash:wit?.prediction.frozenEventSha256||null,
@@ -70,12 +70,12 @@ function archiveBenchmarkInventory(sessionRoot,ledgerRoot){
    !witnesses.early.has(m)||!witnesses.late.has(m)).length,
   missingBothModels,conflictingSettlement,
   missingForecasts,
-  placeholderWaitsAreNotModelAbstentions:true,
-  descriptiveWaitCountsIncludeMissingForecastPlaceholders:true,
+  missingForecastsExcludedFromWaitCounts:true,
+  missingForecastsReportedAsMissingSide:true,
   sourceRecordCounts:{early:sources.early.size,late:sources.late.size},
   witnessedRecordCounts:{early:witnesses.early.size,late:witnesses.late.size},
   eligibleMarketUniverseKnown:false,benchmarkQualificationAllowed:false,
-  note:'Union of archived records only, NOT complete chronological eligible markets. A paired settlement is reported only when BOTH witnessed models have matching directly rechecked finals. Missing model forecasts are represented as WAIT placeholders solely for denominator visibility, never as actual model abstentions.'};
+  note:'Union of archived records only, NOT complete chronological eligible markets. A paired settlement is reported only when BOTH witnessed models have matching directly rechecked finals. Missing model forecasts are represented as MISSING, not WAIT, and remain in the archived-union denominator.'};
 }
 if(require.main===module){
  if(process.argv.length!==4)throw Error('Usage: node archive-benchmark-inventory.js SESSION_ROOT LEDGER_ROOT');
