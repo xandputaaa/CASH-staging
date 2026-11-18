@@ -27,3 +27,12 @@ All research stats remain \`independentQualification:0\`, \`ordersEnabled:false\
 Use GitHub Actions to examine the first **scheduled** post-merge reconciliation and the subsequent \`CASH public research evidence ledger\` workflow. Verify the workflow was not skipped, its \`CASH_LEDGER_PUBLIC_SCHEDULED_WITNESSES\` count is sourced from scheduled observer runs, and the resulting dedicated branch contains only the expected public JSON fields. Check the Git commit SHA, any rejected conflicting winner, and whether the action used a write-enabled GitHub token from the existing repo settings.
 
 A ledger branch created in GitHub is not a promise that automation can write to it. If a scheduled job fails with GitHub token permissions or branch protection, keep the working read-only research collector and report the failure rather than bypass security policy or inserting personal credentials. The original Railway process must remain untouched while those permission questions are resolved.
+
+
+## Complete ledger integrity check (November 17, 2026 update)
+
+A read-only \`public-ledger-inspection.js\` now checks the **entire** dedicated ledger tree before and after each proposed privileged write. It rejects unexpected files, symlinks, oversized JSON, unknown/private fields, altered frozen model/market/side/hash/expiry, after-close or nonscheduled witness origins, inconsistent public payout evidence, or any hint of actual order execution or qualification. The archival workflow fails without pushing new public records if existing files fail structural validation.
+
+A separate pull-request reconciliation step runs the same inspection against the **real sanitized output** of \`public-evidence-ledger.js\` with no branch writes or privileged token. Counters distinguish scheduled early and late witnesses, WAIT vs directional, two-read direct public settlement results, observed hits vs misses, and correct predictions with non-positive conservative *hypothetical* net after fee assumptions. Counters are **not** independently qualified trading performance.
+
+This is a schema/provenance consistency check, not cryptographic notarization or proof that an already-committed Git ledger was never changed by a trusted repository writer. Its first fully automatic scheduled-run archive commit still needs to be verified separately. Until then, the ledger branch may contain just its initialization README. The Railway in-memory forecast collector is unaffected, and real orders remain disabled.

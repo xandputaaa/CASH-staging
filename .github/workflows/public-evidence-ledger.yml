@@ -52,13 +52,15 @@ jobs:
           path: ledger-store
           fetch-depth: 1
           persist-credentials: true
-      - name: Validate the limited public fields and monotonic provenance
+      - name: Audit entire existing public ledger, add evidence and audit again
         shell: bash
         run: |
           set -euo pipefail
+          node public-ledger-inspection.js ledger-store
           node public-evidence-ledger.js \
             audit-recovery/provisional-reconciliation.json \
             ledger-store
+          node public-ledger-inspection.js ledger-store
       - name: Push only new public evidence on the dedicated branch
         shell: bash
         working-directory: ledger-store
