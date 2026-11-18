@@ -55,6 +55,11 @@ function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath}){
  console.log('CASH_WITNESS_RECONCILED_LATE_MISSES='+result.groups.late.misses);
  console.log('CASH_WITNESS_RECONCILED_EARLY_WAITS='+result.groups.early.waitsResolved);
  console.log('CASH_WITNESS_RECONCILED_LATE_WAITS='+result.groups.late.waitsResolved);
+ console.log('CASH_WITNESSED_LATE_PAPER_PRICED='+result.groups.late.witnessedPaper.pricedSettlements);
+ console.log('CASH_WITNESSED_LATE_PAPER_CONSERVATIVE_NET_USD='+
+  (result.groups.late.witnessedPaper.totalConservativeNetUSD??'NOT_AVAILABLE'));
+ console.log('CASH_WITNESSED_LATE_PAPER_BETTER_FEE_NET_USD='+
+  (result.groups.late.witnessedPaper.totalCentiCentFeeNetUSD??'NOT_AVAILABLE'));
  console.log('CASH_WITNESS_UNRESOLVED_OR_REJECTED='+
   (result.groups.early.unresolvedOrRejected+result.groups.late.unresolvedOrRejected));
  console.log('CASH_WITNESS_INDEPENDENTLY_QUALIFIED=0');

@@ -9,6 +9,7 @@ const {createHash}=require('node:crypto');
 const {verifiedJournal}=require('./preexpiry-observer');
 const {checkKalshiSettlement}=require('./kalshi-settlement-check');
 const {wilson95}=require('./prospective-scorecard');
+const {oneContractPaper}=require('./paper-execution-audit');
 const SHA=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const EXPECTED_REPO='xandputaaa/CASH-staging';
 const MODELS={
@@ -121,9 +122,35 @@ function reconcileOne(witness,kind,journal){
   const state=result.state!=='NUMERIC_RESULT_RECHECKED'?result.state:
     evidence.frozenSide==='WAIT'?'OBSERVED_WAIT_RESOLVED':
     evidence.frozenSide===result.winner?'OBSERVED_DIRECTIONAL_HIT':'OBSERVED_DIRECTIONAL_MISS';
+  // Price economics is attached ONLY to a hash-matched pre-expiry witness
+  // paired with a checked final exchange result. No later quote backfills.
+  // A missing original ask/fee yields NO PAPER PNL.
+  const paper=(kind==='late'&&['YES','NO'].includes(evidence.frozenSide)&&
+    result.state==='NUMERIC_RESULT_RECHECKED')?
+    oneContractPaper({...frozen.payload,
+      status:evidence.frozenSide===result.winner?'HIT':'MISS',
+      winner:result.winner}):null;
+  const witnessedPaper=paper?.state==='SETTLED_COUNTERFACTUAL_ONLY'&&
+     paper.eligible===true&&paper.payoutVerified===true?
+    {
+     state:'WITNESSED_QUOTED_COUNTERFACTUAL_ONLY',
+     observedAsk:paper.observedAsk,
+     observedAt:paper.observedAt,
+     selectedSide:paper.selectedSide,
+     feeCentiCent:paper.takerFeeCentiCent,
+     conservativeFeeCent:paper.takerFeeConservativeCent,
+     breakEvenHitRateHigh:paper.breakEvenHitRateHigh,
+     netAfterFees:paper.netAfterFees,
+     executableQuoteConfirmed:false,
+     actualFillConfirmed:false,
+     actualProfitVerified:false
+    }:null;
   results.push({
    model:evidence.model,marketId:evidence.marketId,
    witnessedSide:evidence.frozenSide,
+   paperStatus:paper?(witnessedPaper?'PAPER_PNL_POSSIBLE':
+     'UNPRICED_'+String(paper.state).replace(/[^A-Z0-9_]/g,'')):'NO_PAPER_EVALUATION',
+   ...(witnessedPaper?{witnessedPaper}:{}),
    observedAtRunner:witness.observedAtRunner,
    witnessGitHubRunId:witness.githubRunId,
    observedCommitmentHash:frozen.hash,
@@ -160,6 +187,9 @@ function reconcileWitnesses({witnesses,early,late}){
   const entries=results.filter(x=>x.model===model);
   const hits=entries.filter(x=>x.state==='OBSERVED_DIRECTIONAL_HIT').length,
    misses=entries.filter(x=>x.state==='OBSERVED_DIRECTIONAL_MISS').length;
+  const priced=entries.filter(x=>x.witnessedPaper?.state==='WITNESSED_QUOTED_COUNTERFACTUAL_ONLY');
+  const pricedLower=priced.reduce((sum,x)=>sum+x.witnessedPaper.netAfterFees.lower,0);
+  const pricedUpper=priced.reduce((sum,x)=>sum+x.witnessedPaper.netAfterFees.upper,0);
   groups[kind]={
    witnessedMarkets:entries.length,
    directionalWitnessed:entries.filter(x=>['YES','NO'].includes(x.witnessedSide)).length,
@@ -169,13 +199,25 @@ function reconcileWitnesses({witnesses,early,late}){
    unresolvedOrRejected:entries.filter(x=>!['OBSERVED_DIRECTIONAL_HIT',
     'OBSERVED_DIRECTIONAL_MISS','OBSERVED_WAIT_RESOLVED'].includes(x.state)).length,
    descriptiveHitRate:hits+misses?hits/(hits+misses):null,
-   descriptiveWilson95:wilson95(hits,hits+misses)
+   descriptiveWilson95:wilson95(hits,hits+misses),
+   witnessedPaper:{
+    version:'CASH_WITNESSED_PAPER_COUNTERFACTUAL_V1',
+    pricedSettlements:priced.length,
+    directionalSettlementsWithoutPricedQuote:hits+misses-priced.length,
+    totalConservativeNetUSD:priced.length?
+      Math.round(pricedLower*10000)/10000:null,
+    totalCentiCentFeeNetUSD:priced.length?
+      Math.round(pricedUpper*10000)/10000:null,
+    ordersPlaced:0,actualFillsConfirmed:0,profitVerified:false,
+    note:'Only post-settlement counterfactual one-contract buys with hash-matched early observed public ask plus series fee metadata; no actual fill, market depth, slippage or member fee verification. Missing quotes are not assigned a zero-dollar trade.'
+   }
   };
  }
  return {version:'CASH_PROVISIONAL_EXTERNAL_WITNESS_RECONCILIATION_V1',
   groups,matched:results,blocked,
   independentQualifiedCount:0,
   executionVerified:false,ordersEnabled:false,
+  pricesReconstructedFromLaterQuotes:false,
   note:'Only compare already-external-observed public-proxy forecasts to self-reported later official-public settlement snapshots. Need independently check GitHub run timestamps, external public exchange records and whether the prediction was recorded prospectively. Not a statistically validated accuracy claim, trading recommendation, executable trade, or certified attestation.'};
 }
 module.exports={validObservation,validateSettlement,reconcileOne,reconcileWitnesses};

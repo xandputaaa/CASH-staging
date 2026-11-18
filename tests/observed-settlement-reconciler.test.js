@@ -163,3 +163,77 @@ test('published market close timestamp mismatch or provisional result cannot cer
   assert.equal(r.matched[0].state,'OUTCOME_EVIDENCE_REJECTED');
  }
 });
+
+test('witnessed NO settled NO at an expensive public ask yields small contingent paper profit',()=>{
+ const late=journal('late','NO','NO');
+ Object.assign(late.forecast.payload,{
+  publicAskAtFreeze:{YES:.074,NO:.927},
+  publicAskQuoteFetchedAt:'2026-11-17T23:41:30.000Z',
+  feeScheduleAtFreeze:{
+   source:'KALSHI_PUBLIC_SERIES_API',feeType:'quadratic',
+   multiplier:1,refreshedAt:'2026-11-17T23:40:00.000Z'
+  }
+ });
+ const {hash:unused,...base}=late.forecast;
+ late.forecast.hash=sha(base);
+ late.outcome.previousHash=late.forecast.hash;
+ const {hash:outHash,...outBody}=late.outcome;
+ late.outcome.hash=sha(outBody);
+ late.obj.headHash=late.outcome.hash;
+ const r=reconcileWitnesses({witnesses:[witness('late',late,'NO')],late:late.obj});
+ assert.equal(r.groups.late.hits,1);
+ assert.equal(r.groups.late.witnessedPaper.pricedSettlements,1);
+ assert.equal(r.groups.late.witnessedPaper.totalConservativeNetUSD,.063);
+ assert.equal(r.groups.late.witnessedPaper.totalCentiCentFeeNetUSD,.0682);
+ const p=r.matched[0].witnessedPaper;
+ assert.equal(p.observedAsk,.927);
+ assert.equal(p.breakEvenHitRateHigh,.937);
+ assert.equal(p.actualFillConfirmed,false);
+ assert.equal(p.actualProfitVerified,false);
+ assert.equal(r.independentQualifiedCount,0);
+ assert.equal(r.ordersEnabled,false);
+});
+test('same witnessed high-priced NO against YES settlement counts a miss and full assumed loss',()=>{
+ const late=journal('late','NO','YES');
+ Object.assign(late.forecast.payload,{
+  publicAskAtFreeze:{YES:.074,NO:.927},
+  publicAskQuoteFetchedAt:'2026-11-17T23:41:30.000Z',
+  feeScheduleAtFreeze:{
+   source:'KALSHI_PUBLIC_SERIES_API',feeType:'quadratic',
+   multiplier:1,refreshedAt:'2026-11-17T23:40:00.000Z'
+  }
+ });
+ const {hash:unused,...base}=late.forecast;
+ late.forecast.hash=sha(base);
+ late.outcome.previousHash=late.forecast.hash;
+ const {hash:outHash,...outBody}=late.outcome;
+ late.outcome.hash=sha(outBody);
+ late.obj.headHash=late.outcome.hash;
+ const r=reconcileWitnesses({witnesses:[witness('late',late,'NO')],late:late.obj});
+ assert.equal(r.groups.late.misses,1);
+ assert.equal(r.groups.late.witnessedPaper.pricedSettlements,1);
+ assert.equal(r.groups.late.witnessedPaper.totalConservativeNetUSD,-.937);
+ assert.equal(r.groups.late.witnessedPaper.totalCentiCentFeeNetUSD,-.9318);
+ assert.equal(r.executionVerified,false);
+});
+test('old witnessed directional calls without price and fee cannot be assigned profit',()=>{
+ const late=journal('late','YES','YES');
+ const r=reconcileWitnesses({witnesses:[witness('late',late)],late:late.obj});
+ assert.equal(r.groups.late.hits,1);
+ assert.equal(r.groups.late.witnessedPaper.pricedSettlements,0);
+ assert.equal(r.groups.late.witnessedPaper.directionalSettlementsWithoutPricedQuote,1);
+ assert.equal(r.groups.late.witnessedPaper.totalConservativeNetUSD,null);
+ assert.match(r.matched[0].paperStatus,/UNPRICED_/);
+ assert.equal(r.matched[0].witnessedPaper,undefined);
+});
+test('WITNESSED WAIT is not assigned any transaction economics',()=>{
+ const early=journal('early','WAIT','YES'),late=journal('late','WAIT','YES');
+ const w=witness('early',early,'WAIT');
+ w.frozenEvidence.push(witness('late',late,'WAIT').frozenEvidence[0]);
+ w.evidenceWitnessedBeforeExpiry=2;
+ const r=reconcileWitnesses({witnesses:[w],early:early.obj,late:late.obj});
+ assert.equal(r.groups.early.witnessedPaper.pricedSettlements,0);
+ assert.equal(r.groups.late.witnessedPaper.pricedSettlements,0);
+ assert.equal(r.groups.late.witnessedPaper.totalConservativeNetUSD,null);
+ assert.equal(r.groups.late.hits,0);
+});
