@@ -154,6 +154,19 @@ jobs:
           path: recovery/*.json
           retention-days: 30
           if-no-files-found: error
+      - name: Audit public freeze-time input chronology after research artifact is safely saved
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -s recovery/cash-public-research-unverified.json &&
+                -s recovery/cash-late-checkpoint-unverified.json ]]; then
+            node forecast-time-integrity.js \
+              recovery/cash-public-research-unverified.json \
+              recovery/cash-late-checkpoint-unverified.json
+          else
+            echo 'CASH_TIME_AUDIT_STATUS=UNAVAILABLE_MODEL_JOURNAL_CANNOT_CERTIFY'
+            echo 'CASH_TIME_AUDIT_QUALIFIED=0'
+          fi
       - name: Observe scheduled reconciliation and ledger archival health (read-only)
         if: github.event_name == 'schedule'
         shell: bash
