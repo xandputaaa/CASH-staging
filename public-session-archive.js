@@ -148,6 +148,11 @@ function mergeEntry(old,newValue){
       {...newValue.outcome,firstSeenBackupRunId:null}))
   throw Error('Self-reported outcome hash or winner conflict, manual review required');
  if(old.outcome||!newValue.outcome)return old;
+ // The first source-reported outcome cannot be attributed to a GH run
+ // predating the run that first preserved this frozen forecast.
+ if(BigInt(newValue.outcome.firstSeenBackupRunId)<
+    BigInt(old.firstReadOnlyBackup.runId))
+  throw Error('Backdated first outcome snapshot conflicts with archived forecast origin');
  return {...old,outcome:newValue.outcome};
 }
 function sourceJournal(j,kind){
