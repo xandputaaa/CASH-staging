@@ -92,13 +92,28 @@ async function auditDirectFinal(report,{
   ['YES','NO'].includes(x.publicWinner)&&
   HASH.test(x.settlementEvidenceSha256||''));
  const ordered=eligible.slice().sort((a,b)=>time(b.contractClosesAt)-time(a.contractClosesAt));
- const unique=[...new Map(ordered.map(x=>[x.marketId,x])).values()].slice(0,maxMarkets);
+ // Same market may occur in BOTH models, with contradictory internal
+ // reported winners. Never let Map replacement decide which result gets
+ // checked. Keep every cohort and select a matching prior claim using the
+ // DIRECT first API observation; then independently compare all peers.
+ const cohorts=new Map();
+ for(const item of ordered){
+  if(!cohorts.has(item.marketId))cohorts.set(item.marketId,[]);
+  cohorts.get(item.marketId).push(item);
+ }
+ const unique=[...cohorts].slice(0,maxMarkets).map(([marketId,entries])=>({
+  marketId,entries
+ }));
  const read=async marketId=>{
   try{return await fetchExchangeMarket(marketId,{fetchImpl,clock})}
   catch{return {market:null,receivedMs:clock()}}
  };
  const first=await Promise.all(unique.map(x=>read(x.marketId)));
- const provisional=unique.map((x,i)=>checkDirectFinal(x,first[i].market,first[i].receivedMs));
+ const chosen=unique.map((group,i)=>group.entries.find(item=>
+  checkDirectFinal(item,first[i].market,first[i].receivedMs).state===
+   'DIRECT_FINAL_NUMERIC_MATCH')||group.entries[0]);
+ const provisional=unique.map((x,i)=>checkDirectFinal(
+  chosen[i],first[i].market,first[i].receivedMs));
  const valid=provisional.map((x,i)=>x.state==='DIRECT_FINAL_NUMERIC_MATCH'?i:-1).filter(i=>i>=0);
  const direct=new Map();
  for(let i=0;i<unique.length;i++){
@@ -114,7 +129,7 @@ async function auditDirectFinal(report,{
   const second=await Promise.all(valid.map(i=>read(unique[i].marketId)));
   for(let j=0;j<valid.length;j++){
    const i=valid[j],old=provisional[i],
-    current=checkDirectFinal(unique[i],second[j].market,second[j].receivedMs),
+    current=checkDirectFinal(chosen[i],second[j].market,second[j].receivedMs),
     separation=second[j].receivedMs-first[i].receivedMs;
    let finished;
    if(!Number.isFinite(separation)||separation<MIN_SEPARATION_MS){
