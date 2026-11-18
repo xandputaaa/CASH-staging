@@ -18,3 +18,16 @@ This observer is **not** part of the prediction model, cannot issue orders, and 
 The standard GitHub-hosted Linux runner is currently free on public repositories under GitHub's published billing rules. This is a lightweight, ~four-runs-per-hour read-only job with no purchases and no third-party paid service. If the repository becomes private or fee rules change, disable or reassess the workflow before running it. GitHub scheduling is best-effort, not real-time, and exact quote availability is not guaranteed.
 
 The previous four-hour dual-model research export remains separate. It catches more accumulated events but **does not** serve as pre-expiry witnessing when captured after the contract closed.
+
+
+## Direct Kalshi pre-close market corroboration (November 17, 2026 addition)
+
+For future eligible forecasts already observed before expiry, the GitHub-hosted observer makes a **separate unauthenticated GET directly to Kalshi** for the published market record: \`https://external-api.kalshi.com/trade-api/v2/markets/{ticker}\`. This is the officially documented public Get Market endpoint. It returns the selected public market's ticker, status, published close time, strike, strike type and optional public YES/NO asks and quantities. CASH's service does **not** relay these responses.
+
+The observer independently compares the direct exchange record with the previously captured model payload: same exact ticker, same close time, published strike equal to the frozen public strike to cents, same \`greater_or_equal\` rule, active/open and no final result. GitHub runner must finish that direct lookup at least 15 seconds **before** the close. The observer saves its own receipt timestamp, a SHA-256 digest of the selected public fields, public strike/close metadata, and optional public asks and displayed quantities from **the witness observation time**.
+
+Direct verification is opportunistic and may fail because of rate limits, network errors, API cache lag, publication differences, or GitHub scheduling delays. Failure or mismatch is explicitly reported as \`EXCHANGE_MARKET_UNAVAILABLE\`, \`EXCHANGE_READ_TOO_LATE\`, \`EXCHANGE_STRIKE_OR_RULE_MISMATCH\`, etc. None of these are silently recoded as matched. Earlier observation artifacts with no direct market check remain usable as **provisional uncorroborated** witnesses, not retrospectively upgraded.
+
+The exchange quotes and sizes are recorded at the **later witness check time**, not at the original prediction freeze, and **cannot be used as the purchase ask** in CASH's price/fee paper performance calculations. An API quote does not establish that a one-contract buy was fillable. The public endpoint itself can be briefly cached and is not independently signed market attestation. The additional direct market check is a second source sanity check, not proof the forecast was genuinely generated with the claimed original past-only data, not independent qualification, and never trading authorization.
+
+Reconciliation reports will separately expose \`directExchangeCorroborated\` and \`directionalOutcomesWithDirectExchange\`, while **always retaining \`independentQualifiedCount: 0\`**. The old self-hashed 20/20 pilot remains outside any externally witnessed denominator.

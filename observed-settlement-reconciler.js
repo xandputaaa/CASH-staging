@@ -43,6 +43,24 @@ function validObservation(w){
   if(!Number.isFinite(frozen)||!Number.isFinite(close)||
     frozen>observed||close-observed<=15000||frozen>=close)
     throw Error('Forecast not witnessed before expiry');
+  const direct=e.exchangeAtWitness;
+  if(direct!==undefined){
+   if(!direct||typeof direct.state!=='string'||
+      direct.independentValidation!==false)
+    throw Error('Malformed direct-exchange corroboration');
+   if(direct.state==='MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET'){
+    const exchangeSeen=Date.parse(direct.observedAtRunner);
+    if(!Number.isFinite(exchangeSeen)||exchangeSeen<observed||
+       close-exchangeSeen<=15000||
+       Date.parse(direct.publishedCloseTime)!==close||
+       direct.publicStrikeType!=='greater_or_equal'||
+       !Number.isFinite(direct.publicStrikeAtObserver)||
+       !['active','open'].includes(String(direct.publicMarketStatusAtObserver).toLowerCase())||
+       !/^[a-f0-9]{64}$/.test(direct.exchangePublicFieldsSha256||'')||
+       direct.quoteWasNotFrozenAtPrediction!==true||direct.isFill!==false)
+      throw Error('Invalid direct-exchange timing or field claim');
+   }
+  }
  }
  return true;
 }
@@ -112,6 +130,17 @@ function reconcileOne(witness,kind,journal){
     witnessedSide:evidence.frozenSide,state:'FORECAST_COMMITMENT_NOT_RECONCILED'});
    continue;
   }
+  const direct=evidence.exchangeAtWitness;
+  if(direct?.state==='MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET'){
+   const frozenStrike=kind==='early'?frozen.payload.targetPrice:
+      frozen.payload.officialStrikeAtFreeze;
+   if(!Number.isFinite(frozenStrike)||
+      Math.round(frozenStrike*100)!==Math.round(direct.publicStrikeAtObserver*100)){
+    results.push({model:evidence.model,marketId:evidence.marketId,
+     witnessedSide:evidence.frozenSide,state:'DIRECT_EXCHANGE_FROZEN_STRIKE_CONFLICT'});
+    continue;
+   }
+  }
   const settled=outcomes.get(evidence.marketId)||[];
   if(settled.length>1){
    results.push({model:evidence.model,marketId:evidence.marketId,
@@ -148,6 +177,8 @@ function reconcileOne(witness,kind,journal){
   results.push({
    model:evidence.model,marketId:evidence.marketId,
    witnessedSide:evidence.frozenSide,
+   directExchangeAtWitness:direct?.state||'NOT_SEPARATELY_OBSERVED',
+   directlyCheckedPublicMarket:direct?.state==='MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET',
    paperStatus:paper?(witnessedPaper?'PAPER_PNL_POSSIBLE':
      'UNPRICED_'+String(paper.state).replace(/[^A-Z0-9_]/g,'')):'NO_PAPER_EVALUATION',
    ...(witnessedPaper?{witnessedPaper}:{}),
@@ -192,6 +223,10 @@ function reconcileWitnesses({witnesses,early,late}){
   const pricedUpper=priced.reduce((sum,x)=>sum+x.witnessedPaper.netAfterFees.upper,0);
   groups[kind]={
    witnessedMarkets:entries.length,
+   directExchangeCorroborated:entries.filter(x=>x.directlyCheckedPublicMarket===true).length,
+   directionalOutcomesWithDirectExchange:entries.filter(x=>
+      x.directlyCheckedPublicMarket===true&&['OBSERVED_DIRECTIONAL_HIT',
+       'OBSERVED_DIRECTIONAL_MISS'].includes(x.state)).length,
    directionalWitnessed:entries.filter(x=>['YES','NO'].includes(x.witnessedSide)).length,
    directionalVerifiedOutcomes:hits+misses,
    hits,misses,

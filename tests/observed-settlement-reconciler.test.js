@@ -237,3 +237,67 @@ test('WITNESSED WAIT is not assigned any transaction economics',()=>{
  assert.equal(r.groups.late.witnessedPaper.totalConservativeNetUSD,null);
  assert.equal(r.groups.late.hits,0);
 });
+
+test('direct Kalshi public strike and expiry observation is separately counted for a witnessed YES result',()=>{
+ const late=journal('late'),w=witness('late',late);
+ w.frozenEvidence[0].exchangeAtWitness={
+  state:'MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET',
+  observedAtRunner:'2026-11-17T23:42:31Z',
+  publicStrikeAtObserver:65000,
+  publishedCloseTime:close,
+  publicStrikeType:'greater_or_equal',
+  publicMarketStatusAtObserver:'active',
+  exchangePublicFieldsSha256:'a'.repeat(64),
+  quoteWasNotFrozenAtPrediction:true,
+  isFill:false,independentValidation:false
+ };
+ const r=reconcileWitnesses({witnesses:[w],late:late.obj});
+ assert.equal(r.groups.late.hits,1);
+ assert.equal(r.groups.late.directExchangeCorroborated,1);
+ assert.equal(r.groups.late.directionalOutcomesWithDirectExchange,1);
+ assert.equal(r.matched[0].directlyCheckedPublicMarket,true);
+ assert.equal(r.independentQualifiedCount,0);
+ assert.equal(r.executionVerified,false);
+});
+test('direct pre-close public strike mismatch cannot be counted as a settlement hit',()=>{
+ const late=journal('late'),w=witness('late',late);
+ w.frozenEvidence[0].exchangeAtWitness={
+  state:'MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET',
+  observedAtRunner:'2026-11-17T23:42:31Z',
+  publicStrikeAtObserver:65000.01,
+  publishedCloseTime:close,publicStrikeType:'greater_or_equal',
+  publicMarketStatusAtObserver:'active',
+  exchangePublicFieldsSha256:'a'.repeat(64),
+  quoteWasNotFrozenAtPrediction:true,isFill:false,independentValidation:false
+ };
+ const r=reconcileWitnesses({witnesses:[w],late:late.obj});
+ assert.equal(r.groups.late.hits,0);
+ assert.equal(r.groups.late.directionalVerifiedOutcomes,0);
+ assert.equal(r.matched[0].state,'DIRECT_EXCHANGE_FROZEN_STRIKE_CONFLICT');
+});
+test('direct exchange observation that arrived after the deadline is invalid witness evidence',()=>{
+ const late=journal('late'),w=witness('late',late);
+ w.frozenEvidence[0].exchangeAtWitness={
+  state:'MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET',
+  observedAtRunner:'2026-11-17T23:14:55Z',
+  publicStrikeAtObserver:65000,
+  publishedCloseTime:close,publicStrikeType:'greater_or_equal',
+  publicMarketStatusAtObserver:'active',
+  exchangePublicFieldsSha256:'a'.repeat(64),
+  quoteWasNotFrozenAtPrediction:true,isFill:false,independentValidation:false
+ };
+ assert.throws(()=>validObservation(w),/Invalid direct-exchange/);
+});
+test('unavailable direct exchange remains visible as unconfirmed, without fabricated corroboration',()=>{
+ const late=journal('late'),w=witness('late',late);
+ w.frozenEvidence[0].exchangeAtWitness={
+  state:'EXCHANGE_MARKET_UNAVAILABLE',
+  independentValidation:false
+ };
+ const r=reconcileWitnesses({witnesses:[w],late:late.obj});
+ assert.equal(r.groups.late.hits,1);
+ assert.equal(r.groups.late.directExchangeCorroborated,0);
+ assert.equal(r.groups.late.directionalOutcomesWithDirectExchange,0);
+ assert.equal(r.matched[0].directExchangeAtWitness,'EXCHANGE_MARKET_UNAVAILABLE');
+ assert.equal(r.independentQualifiedCount,0);
+});

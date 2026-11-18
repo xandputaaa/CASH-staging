@@ -51,6 +51,8 @@ function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath}){
  fs.writeFileSync(outputPath,JSON.stringify(report,null,2)+'\n',{mode:0o600});
  console.log('CASH_WITNESS_RECONCILED_EARLY_DIRECTIONAL='+result.groups.early.directionalVerifiedOutcomes);
  console.log('CASH_WITNESS_RECONCILED_LATE_DIRECTIONAL='+result.groups.late.directionalVerifiedOutcomes);
+ console.log('CASH_WITNESS_LATE_DIRECT_KALSHI_MATCHES='+result.groups.late.directExchangeCorroborated);
+ console.log('CASH_WITNESS_LATE_DIRECTIONAL_DIRECT_KALSHI='+result.groups.late.directionalOutcomesWithDirectExchange);
  console.log('CASH_WITNESS_RECONCILED_LATE_HITS='+result.groups.late.hits);
  console.log('CASH_WITNESS_RECONCILED_LATE_MISSES='+result.groups.late.misses);
  console.log('CASH_WITNESS_RECONCILED_EARLY_WAITS='+result.groups.early.waitsResolved);
