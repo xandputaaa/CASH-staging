@@ -168,3 +168,11 @@ For a future separately approved maintenance procedure, `--explicit-offline-pres
 
 **Not ready for an actual cutover:** Current Railway still runs entirely in volatile RAM, without a mount. Obtaining an export then redeploying can miss freezes between the copy and process stop. Mounting a volume to a running service and changing code/env generally involves a restart/deployment. Even a complete offline preseed is **not** a lossless live cutover protocol or a guarantee of zero missed market windows. No paid storage, environment change, imports, deployment or restart should occur until those risks are separately reviewed and explicitly approved.
 
+## Optional late disk writer concurrency and stale-handle safeguards
+
+Before this optional journal may be enabled on a mounted Railway volume, it now uses a local per-directory **exclusive append lock** (`.late-checkpoint-events.write.lock`, created with exclusive/no-follow flags) and independently verifies the original file size, complete SHA-256 of all already-written bytes, original inode, and new event-chain semantics **before every append**. Each entry is written and fsynced along with its parent directory before advancing the in-memory forecast/outcome state. A second stale process or a tampered/truncated file fails closed and cannot silently append conflicting frozen decisions or payouts. Empty, valid and previously committed records remain replayable in the single-process simulation.
+
+A crashed writer can leave a stale `.write.lock` or partial journal bytes. **Never delete the lock or trim/repair the file automatically.** Pause the old process, preserve the entire mounted directory, inspect existing Git-archived self-report commitments and the current disk snapshot, and only then use an explicitly reviewed recovery procedure. Do not equate SHA-256 consistency with pre-expiry independent timestamps.
+
+This is cooperative per-volume filesystem protection, not an authentication service or a robust distributed lock for shared remote replicas. The optional server integration, actual volume, cold restart and rollover beyond 160 frozen markets are still **not enabled**. No extra Railway resource, credential, deployment, fee, restart or order permission is introduced by this GitHub-only change.
+

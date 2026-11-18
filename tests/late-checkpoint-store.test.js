@@ -177,3 +177,93 @@ test('event sequence, replay cap, duplicate market and future timestamp mismatch
   assert.throws(()=>verifyLateCheckpointChain(mutated),/source or timing invalid/);
  }finally{close(d)}
 });
+
+test('stale second process refuses to append an obsolete event sequence or rewrite frozen market',async()=>{
+ const d=root();try{
+  const one=createLateCheckpointStore({directory:d});
+  const stale=createLateCheckpointStore({directory:d});
+  const first=harness(one),second=harness(stale);
+  await first.m.scan();
+  assert.equal(first.m.snapshot().records,1);
+  await second.m.scan();
+  assert.equal(second.m.snapshot().records,0);
+  assert.equal(second.m.snapshot().failures>0,true);
+  assert.equal(stale.events.length,0);
+  const fresh=createLateCheckpointStore({directory:d});
+  assert.equal(fresh.events.length,1);
+  assert.deepEqual(fresh.events,first.m.exportSession().events);
+  assert.equal(harness(fresh).m.snapshot().replayedForecasts,1);
+ }finally{close(d)}
+});
+test('existing write lock blocks a new settlement without mutating memory or disk',async()=>{
+ const d=root();try{
+  const s=createLateCheckpointStore({directory:d}),h=harness(s);
+  await h.m.scan();
+  const before=fs.readFileSync(s.path,'utf8');
+  const lock=path.join(d,'.late-checkpoint-events.write.lock');
+  fs.writeFileSync(lock,'intentional test lock',{mode:0o600});
+  h.setTime(now+240000);h.setResult(verified(now+240000));
+  await h.m.scan();
+  assert.equal(h.m.snapshot().pending,1);
+  assert.equal(h.m.snapshot().failures>0,true);
+  assert.equal(fs.readFileSync(s.path,'utf8'),before);
+  assert.equal(h.m.exportSession().events.length,1);
+  assert.equal(fs.readFileSync(lock,'utf8'),'intentional test lock');
+  fs.unlinkSync(lock);
+  await h.m.scan();
+  assert.equal(h.m.snapshot().pending,0);
+  assert.equal(h.m.exportSession().events.length,2);
+  assert.equal(fs.existsSync(lock),false);
+ }finally{close(d)}
+});
+test('same-length disk mutation after a store opens cannot be silently appended over',async()=>{
+ const d=root();try{
+  const s=createLateCheckpointStore({directory:d}),h=harness(s);
+  await h.m.scan();
+  const before=fs.readFileSync(s.path,'utf8');
+  const original=JSON.parse(before.trimEnd());
+  original.payload.marketId=original.payload.marketId.replace('-15','-16');
+  const {hash:old,...body}=original;
+  original.hash=sha(body);
+  const forged=JSON.stringify(original)+'\n';
+  assert.equal(Buffer.byteLength(forged),Buffer.byteLength(before));
+  fs.writeFileSync(s.path,forged);
+  h.setTime(now+240000);h.setResult(verified(now+240000));
+  await h.m.scan();
+  assert.equal(h.m.snapshot().pending,1);
+  assert.equal(h.m.snapshot().failures>0,true);
+  assert.equal(fs.readFileSync(s.path,'utf8'),forged);
+  assert.equal(h.m.exportSession().events.length,1);
+  assert.equal(fs.existsSync(path.join(d,'.late-checkpoint-events.write.lock')),false);
+  // Even though the forged JSON is syntactically complete, a future startup
+  // will only be able to replay the changed (self-hashed) source, not
+  // silently claim it preserves the original frozen commitment.
+  assert.notEqual(original.hash,JSON.parse(before).hash);
+ }finally{close(d)}
+});
+test('truncated journal after opening must not be repaired by appending an outcome',async()=>{
+ const d=root();try{
+  const s=createLateCheckpointStore({directory:d}),h=harness(s);
+  await h.m.scan();
+  const orig=fs.readFileSync(s.path,'utf8');
+  fs.truncateSync(s.path,Math.floor(Buffer.byteLength(orig)/2));
+  h.setTime(now+240000);h.setResult(verified(now+240000));
+  await h.m.scan();
+  assert.equal(h.m.snapshot().pending,1);
+  assert.equal(h.m.exportSession().events.length,1);
+  assert.throws(()=>createLateCheckpointStore({directory:d}),/truncated/);
+ }finally{close(d)}
+});
+test('stale lock is never auto-cleared on store opening or append',async()=>{
+ const d=root();try{
+  const file=path.join(d,'.late-checkpoint-events.write.lock');
+  fs.writeFileSync(file,'crashed lock',{mode:0o600});
+  const s=createLateCheckpointStore({directory:d});
+  const h=harness(s);
+  await h.m.scan();
+  assert.equal(h.m.snapshot().records,0);
+  assert.equal(h.m.snapshot().failures>0,true);
+  assert.equal(fs.readFileSync(file,'utf8'),'crashed lock');
+  assert.equal(fs.existsSync(s.path),false);
+ }finally{close(d)}
+});
