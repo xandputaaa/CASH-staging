@@ -106,3 +106,5 @@ jobs:
           git commit -m "Archive GitHub-observed public shadow pre-expiry evidence (run $CASH_RUN_ID)"
           git push origin HEAD:cash-shadow-public-witness
           echo 'CASH_SHADOW_PUBLIC_WITNESS_ARCHIVED=true'
+      - name: Audit unique public shadow contract coverage (no scoring)
+        run: node cash-shadow-witness-coverage.js witness-store
