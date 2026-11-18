@@ -53,6 +53,19 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
  const report={...checked,witnessCoverage,githubRunCrossCheck:{
   witnessArtifactsReviewed:collected.witnesses.length,
   rejectedArtifacts:collected.excluded,
+  searchWindowStartedAt:runs.windowStartedAt||null,
+  searchWindowEndedAt:runs.windowEndedAt||null,
+  githubRunQueryPages:Number.isInteger(runs.queriedPageCount)?
+    runs.queriedPageCount:null,
+  successfulRunsFound:Number.isInteger(runs.recentSuccessfulRunsFound)?
+    runs.recentSuccessfulRunsFound:null,
+  successfulRunsSelected:runs.workflow_runs.length,
+  runSelectionTruncated:typeof runs.runSelectionTruncated==='boolean'?
+    runs.runSelectionTruncated:null,
+  selectedRunsWithNoReadableWitnessArtifact:Math.max(0,
+    runs.workflow_runs.length-collected.witnesses.length-
+     collected.excluded.length),
+  archivalCompletenessProven:false,
   witnessRunMetadataSource:'GitHub Actions API workflow runs; runner job creation/completion timestamps',
   reportProducedBy:'CASH_GITHUB_RECONCILIATION_WORKFLOW',
   note:'Runner times checked against GitHub API run metadata for internal consistency only. Runner time and server hash remain neither a cryptographically trusted third-party notary nor an independent qualified accuracy result.'
@@ -98,6 +111,10 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
   witnessCoverage.groups.late.witnessedScoredDirectionalWithoutPaperPrice);
  console.log('CASH_COVERAGE_LATE_WAIT_NO_VALID_WITNESS='+
   witnessCoverage.groups.late.publicProxyWaitWithoutMatchedWitness);
+ console.log('CASH_WITNESS_QUERY_PAGES='+report.githubRunCrossCheck.githubRunQueryPages);
+ console.log('CASH_WITNESS_QUERY_SELECTED_RUNS='+report.githubRunCrossCheck.successfulRunsSelected);
+ console.log('CASH_WITNESS_QUERY_TRUNCATED='+report.githubRunCrossCheck.runSelectionTruncated);
+ console.log('CASH_WITNESS_ARTIFACTS_READ='+report.githubRunCrossCheck.witnessArtifactsReviewed);
  console.log('CASH_WITNESS_INDEPENDENTLY_QUALIFIED=0');
  return report;
 }
