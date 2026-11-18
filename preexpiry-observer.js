@@ -7,6 +7,7 @@
  * Do not increment any independent-validation score.
  */
 const crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:path');
+const {augmentObservationWithExchange}=require('./exchange-preexpiry-check');
 const BASE='https://cash-simulation-web-staging.up.railway.app';
 const SHA=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const VALID_ID=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
@@ -137,9 +138,15 @@ async function runObserver({
   fetchPublic(BASE+'/api/late-checkpoint/export',fetchImpl).catch(()=>null)
  ]);
  const observedAt=new Date(clock()).toISOString();
- const result=buildObservation({early,late,observedAt,
+ const initial=buildObservation({early,late,observedAt,
   runId:env.GITHUB_RUN_ID,repository:env.GITHUB_REPOSITORY,commitSha:env.GITHUB_SHA});
+ // A second, independent read-only network request made DIRECTLY by
+ // GitHub to Kalshi. Failure must be reported, not silently considered
+ // a verified public strike or proof that a trade could execute.
+ const result=await augmentObservationWithExchange(initial,{early,late},{fetchImpl,clock});
  console.log('CASH_OBSERVER_SEEN_PREEXPIRY='+result.frozenEvidence.length);
+ console.log('CASH_OBSERVER_DIRECT_EXCHANGE_MATCHES='+result.directExchangeMatches);
+ console.log('CASH_OBSERVER_DIRECT_EXCHANGE_UNCONFIRMED='+result.directExchangeMismatchesOrUnavailable);
  console.log('CASH_OBSERVER_SOURCE_ERRORS='+result.sourcesUnavailableOrInvalid.length);
  console.log('CASH_OBSERVER_INDEPENDENTLY_QUALIFIED=0');
  if(result.frozenEvidence.length){
