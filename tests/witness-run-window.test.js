@@ -59,3 +59,19 @@ test('rejects incomplete paginated API payloads and unbounded searches',()=>{
  assert.throws(()=>selectWitnessRuns([{message:'api error'}],{nowMs:NOW}),/GitHub paginated/);
  assert.throws(()=>selectWitnessRuns([{workflow_runs:[]}],{nowMs:NOW,maxRuns:999}),/Invalid bounded/);
 });
+
+test('retains necessary provenance while dropping oversized GitHub API payload fields',()=>{
+ const huge=run(44260000001,3);
+ huge.head_sha='a'.repeat(40);
+ huge.extra_payload='x'.repeat(200000);
+ const result=selectWitnessRuns([{workflow_runs:[huge]}],{nowMs:NOW});
+ const compact=result.workflow_runs[0];
+ assert.equal(compact.id,huge.id);
+ assert.equal(compact.created_at,huge.created_at);
+ assert.equal(compact.updated_at,huge.updated_at);
+ assert.equal(compact.event,'schedule');
+ assert.equal(compact.head_sha,huge.head_sha);
+ assert.equal(compact.conclusion,'success');
+ assert.equal(Object.hasOwn(compact,'extra_payload'),false);
+ assert.ok(Buffer.byteLength(JSON.stringify(result))<2000);
+});
