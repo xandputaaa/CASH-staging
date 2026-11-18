@@ -179,6 +179,26 @@ test('license-redacted early is skipped and unredacted late source is preserved'
   assert.equal(scanArchive(d).fileCount,1);
  }finally{fs.rmSync(d,{recursive:true,force:true})}
 });
+test('verified zero-record restart sources are safe archival no-ops, never qualified',()=>{
+ const d=temp();
+ try{
+  const early=journal('early'),late=journal('late');
+  for(const j of [early,late]){
+   j.events=[];j.headHash='GENESIS';j.records=0;j.pending=0;
+  }
+  const r=apply(d,{early,late});
+  assert.equal(r.originalSessionForecastsSeen,0);
+  assert.equal(r.newOrUpdatedRecordFiles,0);
+  assert.equal(r.totalUnverifiedRecordsInRepository,0);
+  assert.equal(r.independentlyQualifiedCount,0);
+  assert.equal(r.ordersEnabled,false);
+  assert.equal(scanArchive(d).fileCount,0);
+  const tampered={...late,headHash:'a'.repeat(64)};
+  assert.throws(()=>apply(d,{early,late:tampered}),/head|chain|mismatch/);
+  assert.equal(scanArchive(d).fileCount,0);
+ }finally{fs.rmSync(d,{recursive:true,force:true})}
+});
+
 test('empty invalid or missing source cannot be misrepresented as independent archival success',()=>{
  const d=temp();
  try{
