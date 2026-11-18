@@ -11,14 +11,21 @@ jobs:
   capture-public-commitment:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Observe an existing public journal before Kalshi contract expiry
-        run: node preexpiry-observer.js
+      - name: Observe existing public journal; watch next checkpoint when schedule starts late
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            node observer-watch.js
+          else
+            node preexpiry-observer.js
+          fi
       - name: Retain only pre-expiry public commitment evidence
         uses: actions/upload-artifact@v4
         with:
