@@ -90,6 +90,12 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
   witnessCoverage.groups.late.publicProxyDirectionalWithoutMatchedWitness);
  console.log('CASH_COVERAGE_LATE_DIRECTLY_RECHECKED_FINAL_DIRECTIONAL='+
   witnessCoverage.groups.late.directlyRecheckedFinalDirectional);
+ console.log('CASH_COVERAGE_LATE_WITNESSED_CORRECT_BUT_NONPOSITIVE_CONSERVATIVE_PAPER='+
+  witnessCoverage.groups.late.witnessedCorrectPaperNonpositiveConservative);
+ console.log('CASH_COVERAGE_LATE_WITNESSED_PRICE_BREAK_EVEN_AT_LEAST_100_PERCENT='+
+  witnessCoverage.groups.late.witnessedPaperBreakEvenAtOrAbove100Pct);
+ console.log('CASH_COVERAGE_LATE_WITNESSED_UNPRICED_DIRECTIONAL='+
+  witnessCoverage.groups.late.witnessedScoredDirectionalWithoutPaperPrice);
  console.log('CASH_COVERAGE_LATE_WAIT_NO_VALID_WITNESS='+
   witnessCoverage.groups.late.publicProxyWaitWithoutMatchedWitness);
  console.log('CASH_WITNESS_INDEPENDENTLY_QUALIFIED=0');
