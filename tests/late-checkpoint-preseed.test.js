@@ -57,7 +57,7 @@ test('pending late forecast gets public archive coverage, but dry-run never writ
   const h=monitor();await h.m.scan();const late=h.m.exportSession();
   archive(late,a);
   const audit=analyzeLatePreseed({late,archiveRoot:a});
-  assert.equal(audit.status,'SOURCE_AND_PUBLIC_GIT_ARCHIVE_MATCH_OFFLINE_PRESEED_ONLY');
+  assert.equal(audit.status,'SOURCE_AND_LOCAL_ARCHIVE_COPY_MATCH_NOT_GIT_PROOF');
   assert.equal(audit.sourceForecasts,1);
   assert.equal(audit.sourceOutcomes,0);
   assert.equal(audit.sourcePending,1);
@@ -119,7 +119,7 @@ test('stale branch with pending outcome cannot be used to seed a newer resolved 
   h.time(NOW+240000);h.result(settlement());await h.m.scan();
   const resolved=h.m.exportSession();
   const audit=analyzeLatePreseed({late:resolved,archiveRoot:a});
-  assert.equal(audit.status,'INCOMPLETE_GIT_ARCHIVE_COVERAGE_NO_PRESEED');
+  assert.equal(audit.status,'INCOMPLETE_LOCAL_ARCHIVE_COVERAGE_NO_PRESEED');
   assert.equal(audit.preseedCandidate,false);
   assert.equal(audit.sourceOutcomes,1);
   assert.throws(()=>preseedOfflineLateDirectory({
@@ -174,7 +174,7 @@ test('licensed/nonpublic cohorts cannot be imported using a public-proxy archive
   altered.events[0].hash=hash(body);altered.headHash=altered.events[0].hash;
   const audit=analyzeLatePreseed({late:altered,archiveRoot:a});
   assert.equal(audit.preseedCandidate,false);
-  assert.equal(audit.archivePublicCoverageVerified,false);
+  assert.equal(audit.localArchiveCopyConsistent,false);
   assert.equal(audit.safeToRestartRunningRailway,false);
   assert.deepEqual(fs.readdirSync(d),[]);
  }finally{rm(a);rm(d)}
