@@ -174,12 +174,15 @@ jobs:
           node research-rollover-preflight.js \
             recovery/cash-late-checkpoint-unverified.json \
             recovery/public-session-dry-run
-          if [[ -s recovery/cash-late-checkpoint-unverified.json ]]; then
+          # Empty but verified freshly started journals have no seed candidate.
+          if [[ -s recovery/cash-late-checkpoint-unverified.json ]] && \
+             node -e 'const x=JSON.parse(require("node:fs").readFileSync(process.argv[1]));process.exit(x.records>0?0:1)' \
+               recovery/cash-late-checkpoint-unverified.json; then
             node late-checkpoint-preseed.js --dry-run \
               recovery/cash-late-checkpoint-unverified.json \
               recovery/public-session-dry-run
           else
-            echo 'CASH_PRESEED_PR_DRY_RUN=SOURCE_UNAVAILABLE'
+            echo 'CASH_PRESEED_PR_DRY_RUN=EMPTY_OR_SOURCE_UNAVAILABLE'
           fi
           echo 'CASH_PRESEED_PR_DRY_RUN_NO_VOLUME_WRITE=true'
           echo 'CASH_ROLLOVER_PR_DRY_RUN_NEVER_RESTARTS_RAILWAY=true'
