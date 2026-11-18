@@ -9,6 +9,7 @@ const fs=require('node:fs'),path=require('node:path');
 const {reconcileWitnesses}=require('./observed-settlement-reconciler');
 const {auditDirectFinal}=require('./direct-kalshi-final-audit');
 const {summarizeWitnessCoverage}=require('./witness-coverage');
+const {auditWitnessQuotes}=require('./witness-market-quote-size');
 function safeJson(p,maxBytes=2500000){
  const b=fs.readFileSync(p);
  if(b.length>maxBytes)throw Error('Oversized observation/research JSON');
@@ -56,10 +57,13 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
  })};
  // Keep the COMPLETE frozen current-session denominator, not only
  // the off-server observed directional winners.
- const witnessCoverage=summarizeWitnessCoverage({
-  early,late,reconciliation:withWitnessOrigins
+ const withWitnessQuoteEvidence=auditWitnessQuotes({
+  reconciliation:withWitnessOrigins,witnesses:collected.witnesses,late
  });
- const report={...withWitnessOrigins,witnessCoverage,githubRunCrossCheck:{
+ const witnessCoverage=summarizeWitnessCoverage({
+  early,late,reconciliation:withWitnessQuoteEvidence
+ });
+ const report={...withWitnessQuoteEvidence,witnessCoverage,githubRunCrossCheck:{
   witnessArtifactsReviewed:collected.witnesses.length,
   rejectedArtifacts:collected.excluded,
   searchWindowStartedAt:runs.windowStartedAt||null,
@@ -124,6 +128,17 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
  console.log('CASH_WITNESS_QUERY_SELECTED_RUNS='+report.githubRunCrossCheck.successfulRunsSelected);
  console.log('CASH_WITNESS_QUERY_TRUNCATED='+report.githubRunCrossCheck.runSelectionTruncated);
  console.log('CASH_WITNESS_ARTIFACTS_READ='+report.githubRunCrossCheck.witnessArtifactsReviewed);
+ console.log('CASH_PUBLIC_WITNESS_ASKS_AVAILABLE='+
+  report.witnessMarketQuoteCoverage.witnessedPublicAsksAvailable);
+ console.log('CASH_PUBLIC_WITNESS_DISPLAYED_SIZE_GE_ONE='+
+  report.witnessMarketQuoteCoverage.observedDisplayedSizeAtLeastOne);
+ console.log('CASH_PUBLIC_WITNESS_DISPLAYED_SIZE_LT_ONE='+
+  report.witnessMarketQuoteCoverage.observedDisplayedSizeBelowOne);
+ console.log('CASH_PUBLIC_WITNESS_ASK_SIZE_UNKNOWN='+
+  report.witnessMarketQuoteCoverage.observedAskWithMissingSize);
+ console.log('CASH_PUBLIC_WITNESS_SELECTED_SIDE_AT_LEAST_99_CENTS='+
+  report.witnessMarketQuoteCoverage.selectedSideAskAtOrAbove99Cents);
+ console.log('CASH_PUBLIC_WITNESS_NO_FILLS_VERIFIED=true');
  console.log('CASH_WITNESS_INDEPENDENTLY_QUALIFIED=0');
  return report;
 }
