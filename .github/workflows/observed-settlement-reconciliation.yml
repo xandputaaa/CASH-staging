@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '21 */4 * * *'
+    - cron: '21 * * * *' # UTC hourly, best effort; source remains read-only
   workflow_dispatch:
 permissions:
   contents: read
