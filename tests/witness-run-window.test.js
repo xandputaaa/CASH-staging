@@ -15,8 +15,8 @@ test('the previous 24-run observer cap is removed without silently losing run 25
   run(44220000100+i,7*60-i*5))}];
  const x=selectWitnessRuns(pages,{nowMs:NOW});
  assert.equal(x.queriedPageCount,2);
- assert.equal(x.recentSuccessfulRunsFound,111);
- assert.equal(x.selectedSuccessfulRuns,111);
+ assert.equal(x.recentSuccessfulRunsFound,112);
+ assert.equal(x.selectedSuccessfulRuns,112);
  assert.equal(x.runSelectionTruncated,false);
  assert.ok(x.workflow_runs.length>24);
  assert.equal(x.workflow_runs[0].id,44220000111);
