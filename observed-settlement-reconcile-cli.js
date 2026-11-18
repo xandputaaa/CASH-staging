@@ -8,6 +8,7 @@
 const fs=require('node:fs'),path=require('node:path');
 const {reconcileWitnesses}=require('./observed-settlement-reconciler');
 const {auditDirectFinal}=require('./direct-kalshi-final-audit');
+const {summarizeWitnessCoverage}=require('./witness-coverage');
 function safeJson(p,maxBytes=2500000){
  const b=fs.readFileSync(p);
  if(b.length>maxBytes)throw Error('Oversized observation/research JSON');
@@ -44,7 +45,12 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
  // Use a fresh, second-source Kalshi API GET after settlement on this GH
  // runner; the result cannot rewrite model verdicts or trade a contract.
  const checked=await checkDirectFinal(result);
- const report={...checked,githubRunCrossCheck:{
+ // Keep the COMPLETE frozen current-session denominator, not only
+ // the off-server observed directional winners.
+ const witnessCoverage=summarizeWitnessCoverage({
+  early,late,reconciliation:checked
+ });
+ const report={...checked,witnessCoverage,githubRunCrossCheck:{
   witnessArtifactsReviewed:collected.witnesses.length,
   rejectedArtifacts:collected.excluded,
   witnessRunMetadataSource:'GitHub Actions API workflow runs; runner job creation/completion timestamps',
@@ -76,6 +82,16 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
   report.secondSourceFinalAudit.late.publicFieldsHashMatchesServer);
  console.log('CASH_DIRECT_FINAL_UNIQUE_MARKETS_CHECKED='+
   report.secondSourceFinalAudit.uniqueMarketsAttempted);
+ console.log('CASH_COVERAGE_LATE_ALL_DIRECTIONAL='+
+  witnessCoverage.groups.late.publicProxyDirectional);
+ console.log('CASH_COVERAGE_LATE_EXTERNALLY_WITNESSED_DIRECTIONAL='+
+  witnessCoverage.groups.late.matchedDirectionalWitnesses);
+ console.log('CASH_COVERAGE_LATE_UNWITNESSED_DIRECTIONAL='+
+  witnessCoverage.groups.late.publicProxyDirectionalWithoutMatchedWitness);
+ console.log('CASH_COVERAGE_LATE_DIRECTLY_RECHECKED_FINAL_DIRECTIONAL='+
+  witnessCoverage.groups.late.directlyRecheckedFinalDirectional);
+ console.log('CASH_COVERAGE_LATE_WAIT_NO_VALID_WITNESS='+
+  witnessCoverage.groups.late.publicProxyWaitWithoutMatchedWitness);
  console.log('CASH_WITNESS_INDEPENDENTLY_QUALIFIED=0');
  return report;
 }
