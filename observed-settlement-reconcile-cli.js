@@ -45,12 +45,21 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
  // Use a fresh, second-source Kalshi API GET after settlement on this GH
  // runner; the result cannot rewrite model verdicts or trade a contract.
  const checked=await checkDirectFinal(result);
+ const runOrigins=new Map(runs.workflow_runs.map(x=>[String(x.id),x]));
+ const withWitnessOrigins={...checked,matched:checked.matched.map(row=>{
+  const origin=runOrigins.get(String(row.witnessGitHubRunId||''));
+  return {...row,
+   observerGithubEvent:origin?.event||'UNKNOWN',
+   observerGithubRunCreatedAt:origin?.created_at||null,
+   observerGithubRunHeadSha:origin?.head_sha||null
+  };
+ })};
  // Keep the COMPLETE frozen current-session denominator, not only
  // the off-server observed directional winners.
  const witnessCoverage=summarizeWitnessCoverage({
-  early,late,reconciliation:checked
+  early,late,reconciliation:withWitnessOrigins
  });
- const report={...checked,witnessCoverage,githubRunCrossCheck:{
+ const report={...withWitnessOrigins,witnessCoverage,githubRunCrossCheck:{
   witnessArtifactsReviewed:collected.witnesses.length,
   rejectedArtifacts:collected.excluded,
   searchWindowStartedAt:runs.windowStartedAt||null,
