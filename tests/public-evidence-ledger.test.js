@@ -213,3 +213,77 @@ test('actual serialized exact report bytes establish source SHA, not arbitrary r
   assert.equal(out.independentQualification,0);
  }finally{fs.rmSync(d,{recursive:true,force:true})}
 });
+
+
+test('real repeated 21,283ms vs 21,253ms public final two-read intervals do NOT change the immutable settlement',()=>{
+ const d=dir();
+ try{
+  const original=witness({directFinal:{...witness().directFinal,
+   sourceReadSeparationMs:21283}});
+  applyReportToDirectory(report([original]),meta('44251036554'),d,
+   {sourceReportSha256:REPORT});
+  const before=fs.readFileSync(file(d),'utf8');
+  const later=witness({directFinal:{...witness().directFinal,
+   sourceReadSeparationMs:21253}});
+  const result=applyReportToDirectory(report([later]),meta('44315958556'),d,
+   {sourceReportSha256:'c'.repeat(64)});
+  assert.equal(result.archivedOrUpdated,0);
+  assert.equal(fs.readFileSync(file(d),'utf8'),before);
+  const saved=JSON.parse(before);
+  assert.equal(saved.directlyRecheckedFinal.winner,'NO');
+  assert.equal(saved.directlyRecheckedFinal.directReadSeparationMs,21283);
+  assert.equal(saved.directlyRecheckedFinal.provenanceReconciliationGitHubRunId,
+   '44251036554');
+  assert.equal(saved.directlyRecheckedFinal.officialPublicFieldsSha256,EX);
+  assert.equal(saved.prediction.frozenEventSha256,SHA);
+ }finally{fs.rmSync(d,{recursive:true,force:true})}
+});
+test('new scheduled witness can append to the SAME forecast despite different recheck spacing',()=>{
+ const d=dir();
+ try{
+  applyReportToDirectory(report([witness({
+   directFinal:{...witness().directFinal,sourceReadSeparationMs:21283}
+  })]),meta('44251036554'),d,{sourceReportSha256:REPORT});
+  const second=witness({
+   witnessGitHubRunId:'44233000002',
+   observedAtRunner:'2026-11-18T03:47:20Z',
+   observerGithubRunCreatedAt:'2026-11-18T03:47:00Z',
+   directFinal:{...witness().directFinal,sourceReadSeparationMs:21253}
+  });
+  const result=applyReportToDirectory(report([second]),
+   meta('44315958556'),d,{sourceReportSha256:'e'.repeat(64)});
+  assert.equal(result.archivedOrUpdated,1);
+  const saved=JSON.parse(fs.readFileSync(file(d),'utf8'));
+  assert.equal(saved.observations.length,2);
+  assert.equal(saved.directlyRecheckedFinal.directReadSeparationMs,21283);
+  assert.equal(saved.directlyRecheckedFinal.winner,'NO');
+  assert.equal(saved.firstReconciliation.githubRunId,'44251036554');
+ }finally{fs.rmSync(d,{recursive:true,force:true})}
+});
+test('changed OFFICIAL settled winner, source digest or journal digest always fails closed even if recheck time changes',()=>{
+ const d=dir();
+ try{
+  applyReportToDirectory(report([witness()]),meta(),d,
+   {sourceReportSha256:REPORT});
+  const old=fs.readFileSync(file(d),'utf8');
+  const invalids=[
+   witness({publicWinner:'YES',state:'OBSERVED_DIRECTIONAL_MISS',
+    directFinal:{...witness().directFinal,directWinner:'YES',
+     sourceReadSeparationMs:21253}}),
+   witness({directFinal:{...witness().directFinal,
+    directPublicEvidenceSha256:'c'.repeat(64),sourceReadSeparationMs:21253}}),
+   witness({settlementEvidenceSha256:'c'.repeat(64),
+    directFinal:{...witness().directFinal,sourceReadSeparationMs:21253}}),
+   witness({directFinal:{...witness().directFinal,
+    sourceReadSeparationMs:19800}}),
+   witness({directFinal:{...witness().directFinal,
+    sourceReadSeparationMs:NaN}}),
+  ];
+  for(const bad of invalids){
+   assert.throws(()=>applyReportToDirectory(report([bad]),
+    meta('44315958556'),d,{sourceReportSha256:REPORT}),
+    /unsupported|conflict/i);
+   assert.equal(fs.readFileSync(file(d),'utf8'),old);
+  }
+ }finally{fs.rmSync(d,{recursive:true,force:true})}
+});
