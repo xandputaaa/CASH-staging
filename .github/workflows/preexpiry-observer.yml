@@ -33,3 +33,12 @@ jobs:
           path: witness/public-preexpiry-observation.json
           retention-days: 30
           if-no-files-found: ignore
+
+      - name: Retain bounded observer capture diagnostics (scheduled runs only)
+        if: github.event_name == 'schedule'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-observer-run-summary-${{ github.run_id }}
+          path: witness/observer-run-summary.json
+          retention-days: 30
+          if-no-files-found: error
