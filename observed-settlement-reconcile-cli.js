@@ -7,6 +7,7 @@
  */
 const fs=require('node:fs'),path=require('node:path');
 const {reconcileWitnesses}=require('./observed-settlement-reconciler');
+const {auditDirectFinal}=require('./direct-kalshi-final-audit');
 function safeJson(p,maxBytes=2500000){
  const b=fs.readFileSync(p);
  if(b.length>maxBytes)throw Error('Oversized observation/research JSON');
@@ -35,12 +36,15 @@ function collectWitnesses(dir,runs){
  }
  return {witnesses,excluded};
 }
-function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath}){
+async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath,checkDirectFinal=auditDirectFinal}){
  const runs=safeJson(runListPath,1000000);
  const collected=collectWitnesses(witnessDir,runs);
  const early=safeJson(earlyPath),late=safeJson(latePath);
  const result=reconcileWitnesses({witnesses:collected.witnesses,early,late});
- const report={...result,githubRunCrossCheck:{
+ // Use a fresh, second-source Kalshi API GET after settlement on this GH
+ // runner; the result cannot rewrite model verdicts or trade a contract.
+ const checked=await checkDirectFinal(result);
+ const report={...checked,githubRunCrossCheck:{
   witnessArtifactsReviewed:collected.witnesses.length,
   rejectedArtifacts:collected.excluded,
   witnessRunMetadataSource:'GitHub Actions API workflow runs; runner job creation/completion timestamps',
@@ -64,6 +68,14 @@ function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath}){
   (result.groups.late.witnessedPaper.totalCentiCentFeeNetUSD??'NOT_AVAILABLE'));
  console.log('CASH_WITNESS_UNRESOLVED_OR_REJECTED='+
   (result.groups.early.unresolvedOrRejected+result.groups.late.unresolvedOrRejected));
+ console.log('CASH_DIRECT_FINAL_EARLY_TWO_READ_CONFIRMED='+
+  report.secondSourceFinalAudit.early.secondSourceTwoReadConfirmed);
+ console.log('CASH_DIRECT_FINAL_LATE_TWO_READ_CONFIRMED='+
+  report.secondSourceFinalAudit.late.secondSourceTwoReadConfirmed);
+ console.log('CASH_DIRECT_FINAL_LATE_PUBLIC_HASH_MATCH='+
+  report.secondSourceFinalAudit.late.publicFieldsHashMatchesServer);
+ console.log('CASH_DIRECT_FINAL_UNIQUE_MARKETS_CHECKED='+
+  report.secondSourceFinalAudit.uniqueMarketsAttempted);
  console.log('CASH_WITNESS_INDEPENDENTLY_QUALIFIED=0');
  return report;
 }
@@ -71,6 +83,7 @@ if(require.main===module){
  const [dir,runListPath,earlyPath,latePath,outputPath]=process.argv.slice(2);
  if([dir,runListPath,earlyPath,latePath,outputPath].some(v=>!v))
   throw Error('Usage: node observed-settlement-reconcile-cli.js WITNESS_DIR RUNS_JSON EARLY_JSON LATE_JSON REPORT_JSON');
- buildReport({witnessDir:dir,runListPath,earlyPath,latePath,outputPath});
+ buildReport({witnessDir:dir,runListPath,earlyPath,latePath,outputPath})
+  .catch(e=>{console.error('CASH direct settlement audit failed: '+e.message);process.exitCode=1});
 }
 module.exports={collectWitnesses,buildReport};
