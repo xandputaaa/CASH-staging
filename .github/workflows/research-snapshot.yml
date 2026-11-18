@@ -154,6 +154,24 @@ jobs:
           path: recovery/*.json
           retention-days: 30
           if-no-files-found: error
+      - name: Read-only PR dry-run of the public self-reported session archiver
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          CASH_SOURCE_EVENT: schedule
+          CASH_SOURCE_BRANCH: main
+          CASH_SOURCE_HEAD_SHA: ${{ github.sha }}
+          CASH_SOURCE_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          export CASH_SOURCE_CREATED_AT="$(date -u -d '2 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+          export CASH_SOURCE_COMPLETED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p recovery/public-session-dry-run
+          node public-session-archive.js \
+            recovery/cash-public-research-unverified.json \
+            recovery/cash-late-checkpoint-unverified.json \
+            recovery/public-session-dry-run
+          echo 'CASH_PUBLIC_SESSION_PR_DRY_RUN_NO_GIT_WRITE=true'
       - name: Audit public freeze-time input chronology after research artifact is safely saved
         shell: bash
         run: |
