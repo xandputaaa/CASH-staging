@@ -29,6 +29,14 @@ Every scheduled archiver run now invokes `node public-session-archive-inspection
 
 The inspector can also be run on a checkout of the dedicated branch with `node public-session-archive-inspection.js .` while using trusted source from `main`. Zero files means `NO_SCHEDULED_SESSION_DATA_COMMIT_VERIFIED`; a passing inventory is still *not* pre-expiry witnessing, a public-exchange settlement recheck, or a qualified forecast.
 
+## Append-only proof against previous archive branch state
+
+Before the trusted schedule-only archiver writes a new Git commit, it now copies the already-checked-out dedicated public-session branch into a temporary local baseline. After the source hash-chain archiver and complete strict-file inspector run, `public-session-archive-delta.js` independently compares this baseline with the proposed worktree.
+
+It **fails before Git push** if any existing forecast file is deleted, if a previous frozen YES/NO/WAIT forecast or original GitHub backup metadata is changed, or if an existing source-reported outcome is rewritten or removed. Its only permitted update to an existing record is a previously absent self-reported outcome whose `firstSeenBackupRunId` equals the current successful scheduled source snapshot ID. New forecasts must likewise originate from this run. It reports separate counts of newly added forecasts, first appended outcomes, and unchanged records; an idempotent run with no file changes passes.
+
+Both copies are strictly schema-validated for unexpected fields, private data, symlinks and counterfeit qualification claims. This is an **independent code-path check of Git branch continuity**, not an independent time witness or third-party settlement attestation. It adds no Railway volume, API key, scheduled workflow or resource spend.
+
 ## Scheduled archive operational health (no new writes)
 
 Each successful scheduled research-snapshot job runs the **read-only** `session-archive-health.js` status checker near its end. It inspects GitHub's recent scheduled snapshot history, the session-archive `workflow_run` history, and the current session-archive branch HEAD commit. No extra GitHub archive commit is made by the checker, and a GitHub API health read failure is explicitly labeled `INDETERMINATE`, not silently interpreted as success.
