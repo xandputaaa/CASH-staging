@@ -41,6 +41,7 @@ function archiveBenchmarkInventory(sessionRoot,ledgerRoot){
  const marketIds=new Set([...sources.early.keys(),...sources.late.keys(),
   ...witnesses.early.keys(),...witnesses.late.keys()]);
  const rows={early:[],late:[]};
+ const missingForecasts={early:0,late:0};
  let missingBothModels=0,conflictingSettlement=0;
  for(const marketId of [...marketIds].sort()){
   const a=witnesses.early.get(marketId)?.directlyRecheckedFinal?.winner;
@@ -49,6 +50,7 @@ function archiveBenchmarkInventory(sessionRoot,ledgerRoot){
   const winner=a&&b&&a===b?a:null;
   for(const kind of ['early','late']){
    const src=sources[kind].get(marketId),wit=witnesses[kind].get(marketId);
+   if(!src&&!wit)missingForecasts[kind]++;
    rows[kind].push({marketId,side:src?.side||wit?.prediction.side||'WAIT',
     winner,sourcePresent:!!src,witnessPresent:!!wit,
     sourceFrozenHash:src?.selfHashedForecastEventSha256||null,
@@ -67,6 +69,9 @@ function archiveBenchmarkInventory(sessionRoot,ledgerRoot){
    !sources.early.has(m)||!sources.late.has(m)||
    !witnesses.early.has(m)||!witnesses.late.has(m)).length,
   missingBothModels,conflictingSettlement,
+  missingForecasts,
+  placeholderWaitsAreNotModelAbstentions:true,
+  descriptiveWaitCountsIncludeMissingForecastPlaceholders:true,
   sourceRecordCounts:{early:sources.early.size,late:sources.late.size},
   witnessedRecordCounts:{early:witnesses.early.size,late:witnesses.late.size},
   eligibleMarketUniverseKnown:false,benchmarkQualificationAllowed:false,
