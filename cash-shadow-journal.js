@@ -8,9 +8,18 @@ const crypto=require('node:crypto');
 const {ID}=require('./cash-shadow-momentum');
 const VERSION='CASH_SHADOW_HASHED_JOURNAL_V1';
 const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
-function createShadowJournal(){
+function createShadowJournal({snapshot=null}={}){
  const events=[],markets=new Set();
+ // Only accept fully verified snapshots; restoring cannot retroactively attest time.
+ if(snapshot!==null){
+  verifyShadowJournal(snapshot);
+  for(const event of snapshot.events){
+   events.push(Object.freeze({...event}));
+   markets.add(event.marketId);
+  }
+ }
  function append(forecast,{recordedAtMs}={}){
+  if(events.length>=100000)throw Error('Shadow journal full');
   if(!forecast||forecast.modelId!==ID||
    !/^KXBTC15M-[A-Za-z0-9-]{6,70}$/.test(forecast.marketId||'')||
    !['YES','NO','WAIT'].includes(forecast.side)||
