@@ -16,8 +16,8 @@ function auditBenchmarkInputs({baseline,candidate}={}){
  for(let i=0;i<baseline.length;i++){
   const a=baseline[i],b=candidate[i];
   if(!a||!b||!MARKET.test(a.marketId||'')||a.marketId!==b.marketId||
-     seen.has(a.marketId)||!['YES','NO','WAIT'].includes(a.side)||
-     !['YES','NO','WAIT'].includes(b.side)||
+     seen.has(a.marketId)||!['YES','NO','WAIT','MISSING'].includes(a.side)||
+     !['YES','NO','WAIT','MISSING'].includes(b.side)||
      !['YES','NO',null].includes(a.winner)||a.winner!==b.winner)
    throw Error('Evidence adapter requires unique paired market and common outcome');
   seen.add(a.marketId);

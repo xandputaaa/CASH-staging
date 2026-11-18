@@ -6,7 +6,7 @@
  * any strategy into a trading model.
  */
 const {wilson95}=require('./prospective-scorecard');
-const SIDES=new Set(['YES','NO','WAIT']);
+const SIDES=new Set(['YES','NO','WAIT','MISSING']);
 function summarizeCohort(rows){
  if(!Array.isArray(rows)||rows.length>100000)throw Error('Invalid bounded benchmark cohort');
  const seen=new Set();
@@ -19,10 +19,11 @@ function summarizeCohort(rows){
    throw Error('Invalid or duplicate chronological benchmark market');
   seen.add(row.marketId);
   if(row.side==='WAIT')counts.waits++;
+  else if(row.side==='MISSING')counts.missingForecasts++;
   else counts.directional++;
   if(row.outcome==='PENDING')counts.pending++;
   else if(row.outcome==='VOID')counts.voids++;
-  else if(row.side!=='WAIT'){
+  else if(row.side==='YES'||row.side==='NO'){
    counts.scoredDirectional++;
    if(row.side===row.outcome)counts.hits++;
    else counts.misses++;
@@ -31,6 +32,7 @@ function summarizeCohort(rows){
  return {...counts,conditionalHitRate:counts.scoredDirectional?
   counts.hits/counts.scoredDirectional:null,
   directionalCoverage:counts.eligible?counts.directional/counts.eligible:null,
+  actualForecastCoverage:counts.eligible?(counts.eligible-counts.missingForecasts)/counts.eligible:null,
   wilson95:wilson95(counts.hits,counts.scoredDirectional)};
 }
 function comparePrecommittedCohorts({baseline,candidate}={}){
