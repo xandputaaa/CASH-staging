@@ -169,8 +169,12 @@ function prepareForecasts(j,kind,metadata,digest){
   if(e.type!=='OUTCOME')continue;
   const id=e.payload.marketId;
   if(outcomeByMarket.has(id))throw Error('Multiple outcome events for same market');
-  if(!MARKET.test(id||'')||![null,'YES','NO'].includes(e.payload?.winner))
-   throw Error('Unsafe self-reported outcome');
+  const src=accepted.find(x=>x.p.marketId===id)?.p;
+  if(!MARKET.test(id||'')||![null,'YES','NO'].includes(e.payload?.winner)||
+     !src||!iso(e.recordedAt)||
+     ms(e.recordedAt)<ms(src.endTime)||
+     ms(e.recordedAt)>ms(metadata.completedAt)+5000)
+   throw Error('Unsafe or future self-reported outcome');
   outcomeByMarket.set(id,e);
  }
  const first=accepted[0]?.e.hash;
