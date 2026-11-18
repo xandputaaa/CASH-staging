@@ -101,8 +101,8 @@ function safeRow(row,meta,reportSha){
      !SHA.test(row.settlementEvidenceSha256||'')||
      !SHA.test(final.directPublicEvidenceSha256||'')||
      final.finalResultCorroborated!==true||
-     final.sourceReadSeparationMs<20000||
-     final.sourceReadSeparationMs===undefined)
+     !Number.isFinite(final.sourceReadSeparationMs)||
+     final.sourceReadSeparationMs<20000)
    throw Error('Claimed direct final is unsupported or contradicts frozen side');
   base.directlyRecheckedFinal={
    winner:row.publicWinner,
@@ -156,13 +156,22 @@ function mergeEntry(old,next){
   Number(a.githubObserverRunId)-Number(b.githubObserverRunId));
  const final=old.directlyRecheckedFinal;
  if(final&&next.directlyRecheckedFinal){
+  // Every new runner verifies Kalshi again and measures a DIFFERENT
+  // two-read separation. Keep the original committed verification and
+  // reject differences in the immutable settlement winner and hashes.
   const {
-   provenanceReconciliationGitHubRunId:olderOrigin,...older
+   provenanceReconciliationGitHubRunId:oldRunId,
+   directReadSeparationMs:oldReadSpacing,
+   ...oldImmutableSettlement
   }=final;
   const {
-   provenanceReconciliationGitHubRunId:newerOrigin,...newer
+   provenanceReconciliationGitHubRunId:newRunId,
+   directReadSeparationMs:newReadSpacing,
+   ...newImmutableSettlement
   }=next.directlyRecheckedFinal;
-  if(!immutableSame(older,newer))
+  if(!Number.isFinite(oldReadSpacing)||oldReadSpacing<20000||
+     !Number.isFinite(newReadSpacing)||newReadSpacing<20000||
+     !immutableSame(oldImmutableSettlement,newImmutableSettlement))
    throw Error('Official final public settlement conflict: manual audit required');
  }
  if(old.conditionalPaper&&next.conditionalPaper&&
