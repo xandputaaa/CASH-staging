@@ -1,6 +1,13 @@
 name: CASH read-only benchmark archive inventory
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/read-only-benchmark-inventory.yml'
+      - 'archive-benchmark-inventory.js'
+      - 'benchmark-evidence-gates.js'
+      - 'paired-model-benchmark.js'
 permissions:
   contents: read
 jobs:
