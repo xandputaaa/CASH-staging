@@ -127,8 +127,9 @@ function validateEntry(x,{modelFolder,sessionHash,marketId}){
     !Number.isSafeInteger(x.outcome.selfHashedOutcomeSequence)||
     x.outcome.selfHashedOutcomeSequence<=p.selfHashedForecastSequence||
     ![null,'YES','NO','VOID'].includes(x.outcome.internallyReportedWinner)||
-    !RUN.test(x.outcome.firstSeenBackupRunId||''))
-   throw Error('Invalid self-reported outcome');
+    !RUN.test(x.outcome.firstSeenBackupRunId||'')||
+    BigInt(x.outcome.firstSeenBackupRunId)<BigInt(b.runId))
+   throw Error('Invalid or backdated self-reported outcome');
  }
  return x;
 }
