@@ -1,5 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
+const {spawnSync}=require('node:child_process');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
 const {createLateCheckpointStore}=require('../late-checkpoint-store');
 const {createLateCheckpointMonitor}=require('../late-checkpoint-monitor');
@@ -212,5 +213,25 @@ test('original market in newly started active journal is blocked by completed hi
     JSON.stringify(first)+'\n');
   assert.throws(()=>createLateCheckpointStore({directory:x.d}),
    /repeats previously completed/);
+ }finally{x.clean()}
+});
+
+test('standalone CLI defaults to read-only plan and rejects offline rotation without separate approval',()=>{
+ const x=setup();try{
+  const source=path.join(x.d,'late-export-original.json');
+  fs.writeFileSync(source,JSON.stringify(x.late));
+  const script=path.resolve(__dirname,'../late-checkpoint-rotation.js');
+  const args=[source,x.archiveRoot,x.d];
+  const dry=spawnSync(process.execPath,[script,'--dry-run',...args],
+   {encoding:'utf8'});
+  assert.equal(dry.status,0,dry.stderr);
+  assert.match(dry.stdout,/CASH_LATE_ROTATION_READY=true/);
+  assert.match(dry.stdout,/CASH_LATE_ROTATION_RAILWAY_RESTART_ALLOWED=false/);
+  assert.deepEqual(fs.readFileSync(path.join(x.d,'late-checkpoint-events.jsonl')),x.raw);
+  const unapproved=spawnSync(process.execPath,[script,'--explicit-offline-rotation',...args],
+   {encoding:'utf8',env:{...process.env,CASH_ONE_TIME_OFFLINE_ROTATION_APPROVAL:''}});
+  assert.notEqual(unapproved.status,0);
+  assert.match(unapproved.stderr,/separate explicit operator approval/);
+  assert.equal(fs.existsSync(path.join(x.d,'late-checkpoint-completed')),false);
  }finally{x.clean()}
 });
