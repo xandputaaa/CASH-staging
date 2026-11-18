@@ -87,7 +87,8 @@ async function reconcileShadowPublicFinals({
  if(!sourceSnapshot){
   report.rows=coverage.contracts.map(c=>({
    marketId:c.marketId,side:c.side,firstWitnessRunId:c.firstWitnessRunId,
-   frozenEventHash:c.frozenEventHash,contractClosesAtMs:c.contractClosesAtMs,
+   frozenEventHash:c.frozenEventHash,forecastAsOfMs:c.forecastAsOfMs,
+   contractClosesAtMs:c.contractClosesAtMs,
    state:c.side==='WAIT'?'WITNESSED_WAIT_NOT_SCORED':'SOURCE_JOURNAL_UNAVAILABLE'
   }));
   return report;
@@ -104,7 +105,8 @@ async function reconcileShadowPublicFinals({
   return {
    marketId:c.marketId,side:c.side,
    firstWitnessRunId:c.firstWitnessRunId,
-   frozenEventHash:c.frozenEventHash,contractClosesAtMs:c.contractClosesAtMs,
+   frozenEventHash:c.frozenEventHash,forecastAsOfMs:c.forecastAsOfMs,
+   contractClosesAtMs:c.contractClosesAtMs,
    firstObservedAtRunnerMs:c.firstObservedAtRunnerMs,
    state:c.side==='WAIT'?'WITNESSED_WAIT_NOT_SCORED':
     !valid?'FROZEN_COMMITMENT_NOT_FOUND':
