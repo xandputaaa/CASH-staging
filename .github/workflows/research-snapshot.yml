@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '17 */4 * * *' # UTC, best effort; default branch only
+    - cron: '17,47 * * * *' # UTC, twice hourly, best effort; default branch only
 permissions:
   contents: read
 jobs:
@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
+      - uses: actions/checkout@v4
       - name: Fetch current public read-only CASH forecast export
         shell: bash
         run: |
@@ -88,6 +89,7 @@ jobs:
             --output recovery/cash-late-checkpoint-unverified.json; then
             node <<'NODE'
           const fs=require('node:fs'),crypto=require('node:crypto');
+          const {assessDefaultLateCapacity}=require('./research-capacity');
           const file='recovery/cash-late-checkpoint-unverified.json';
           const r=JSON.parse(fs.readFileSync(file,'utf8'));
           if(r.version!=='CASH_LATE_CHECKPOINT_SHADOW_V1'||
@@ -134,6 +136,10 @@ jobs:
           console.log('CASH_LATE_BACKUP_HITS='+c.hits);
           console.log('CASH_LATE_BACKUP_MISSES='+c.misses);
           console.log('CASH_LATE_BACKUP_SHA256='+digest);
+          const capacity=assessDefaultLateCapacity(r);
+          console.log('CASH_LATE_BACKUP_DEFAULT_LIMIT='+capacity.defaultConfiguredMax);
+          console.log('CASH_LATE_BACKUP_DEFAULT_REMAINING='+capacity.estimatedRemainingFrozenMarketSlots);
+          console.log('CASH_LATE_BACKUP_DEFAULT_CAPACITY_STATUS='+capacity.state);
           console.log('CASH_LATE_BACKUP_QUALIFIED=0');
           NODE
           else
