@@ -45,6 +45,11 @@ function summarizeModel(kind,journal,report){
   witnessedDirectionalHits:0,
   witnessedDirectionalMisses:0,
   witnessedDirectionalUnresolvedOrRejected:0,
+  witnessedDirectionalPaperPriced:0,
+  witnessedScoredDirectionalWithoutPaperPrice:0,
+  witnessedCorrectPaperProfitableConservative:0,
+  witnessedCorrectPaperNonpositiveConservative:0,
+  witnessedPaperBreakEvenAtOrAbove100Pct:0,
   witnessedWaitResolved:0,
   rejectedWitnessMatch:0,
   frozenMarketIdsNotInCurrentWitnessSet:[],
@@ -82,6 +87,24 @@ function summarizeModel(kind,journal,report){
    if(r.state==='OBSERVED_DIRECTIONAL_HIT')counts.witnessedDirectionalHits++;
    else if(r.state==='OBSERVED_DIRECTIONAL_MISS')counts.witnessedDirectionalMisses++;
    else counts.witnessedDirectionalUnresolvedOrRejected++;
+   if(['OBSERVED_DIRECTIONAL_HIT','OBSERVED_DIRECTIONAL_MISS'].includes(r.state)){
+    const paper=r.witnessedPaper;
+    if(paper?.state==='WITNESSED_QUOTED_COUNTERFACTUAL_ONLY'&&
+      Number.isFinite(paper.netAfterFees?.lower)&&
+      Number.isFinite(paper.breakEvenHitRateHigh)){
+     counts.witnessedDirectionalPaperPriced++;
+     if(r.state==='OBSERVED_DIRECTIONAL_HIT'){
+      if(paper.netAfterFees.lower>0)
+       counts.witnessedCorrectPaperProfitableConservative++;
+      else
+       counts.witnessedCorrectPaperNonpositiveConservative++;
+     }
+     if(paper.breakEvenHitRateHigh>=1)
+      counts.witnessedPaperBreakEvenAtOrAbove100Pct++;
+    }else{
+     counts.witnessedScoredDirectionalWithoutPaperPrice++;
+    }
+   }
    if(FINAL_DIRECT.has(r.directFinalStatus)){
     counts.directlyRecheckedFinalDirectional++;
     if(r.directFinalStatus==='DIRECT_FINAL_TWO_READ_JOURNAL_HASH_MATCH')
@@ -106,7 +129,10 @@ function summarizeModel(kind,journal,report){
      counts.publicProxyDirectionalWithoutMatchedWitness!==counts.publicProxyDirectional||
     counts.matchedWaitWitnesses+
      counts.publicProxyWaitWithoutMatchedWitness!==counts.publicProxyWait||
-    counts.allDirectional+counts.allWait!==counts.allFrozen)
+    counts.allDirectional+counts.allWait!==counts.allFrozen||
+    counts.witnessedDirectionalPaperPriced+
+     counts.witnessedScoredDirectionalWithoutPaperPrice!==
+      counts.witnessedDirectionalHits+counts.witnessedDirectionalMisses)
   throw Error('CASH witness denominator invariant violated');
  counts.observedDirectionalFractionOfPublicFrozen=
   counts.publicProxyDirectional?counts.matchedDirectionalWitnesses/counts.publicProxyDirectional:null;
