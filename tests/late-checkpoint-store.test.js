@@ -191,7 +191,7 @@ test('stale second process refuses to append an obsolete event sequence or rewri
   assert.equal(stale.events.length,0);
   const fresh=createLateCheckpointStore({directory:d});
   assert.equal(fresh.events.length,1);
-  assert.deepEqual(fresh.events,one.events);
+  assert.deepEqual(fresh.events,first.m.exportSession().events);
   assert.equal(harness(fresh).m.snapshot().replayedForecasts,1);
  }finally{close(d)}
 });
@@ -207,12 +207,12 @@ test('existing write lock blocks a new settlement without mutating memory or dis
   assert.equal(h.m.snapshot().pending,1);
   assert.equal(h.m.snapshot().failures>0,true);
   assert.equal(fs.readFileSync(s.path,'utf8'),before);
-  assert.equal(s.events.length,1);
+  assert.equal(h.m.exportSession().events.length,1);
   assert.equal(fs.readFileSync(lock,'utf8'),'intentional test lock');
   fs.unlinkSync(lock);
   await h.m.scan();
   assert.equal(h.m.snapshot().pending,0);
-  assert.equal(s.events.length,2);
+  assert.equal(h.m.exportSession().events.length,2);
   assert.equal(fs.existsSync(lock),false);
  }finally{close(d)}
 });
@@ -233,7 +233,7 @@ test('same-length disk mutation after a store opens cannot be silently appended 
   assert.equal(h.m.snapshot().pending,1);
   assert.equal(h.m.snapshot().failures>0,true);
   assert.equal(fs.readFileSync(s.path,'utf8'),forged);
-  assert.equal(s.events.length,1);
+  assert.equal(h.m.exportSession().events.length,1);
   assert.equal(fs.existsSync(path.join(d,'.late-checkpoint-events.write.lock')),false);
   // Even though the forged JSON is syntactically complete, a future startup
   // will only be able to replay the changed (self-hashed) source, not
@@ -250,7 +250,7 @@ test('truncated journal after opening must not be repaired by appending an outco
   h.setTime(now+240000);h.setResult(verified(now+240000));
   await h.m.scan();
   assert.equal(h.m.snapshot().pending,1);
-  assert.equal(s.events.length,1);
+  assert.equal(h.m.exportSession().events.length,1);
   assert.throws(()=>createLateCheckpointStore({directory:d}),/truncated/);
  }finally{close(d)}
 });
