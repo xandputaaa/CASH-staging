@@ -137,10 +137,10 @@ function scanPublicLedger(root,{maxFiles=10000}={}){
    const next=path.join(dir,name),meta=fs.lstatSync(next);
    if(meta.isSymbolicLink())throw Error('Untrusted ledger symlink');
    if(meta.isDirectory()){
-    if(segments.length>=3)throw Error('Unexpected nested ledger directory');
+    if(segments.length>=2)throw Error('Unexpected nested ledger directory');
     visit(next,[...segments,name]);continue;
    }
-   if(!meta.isFile()||segments.length!==3||
+   if(!meta.isFile()||segments.length!==2||
       !/^(early-v3|late-v1)\.json$/.test(name)||
       !/^\d{4}-\d{2}-\d{2}$/.test(segments[0])||
       !MARKETS.test(segments[1])||
