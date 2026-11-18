@@ -57,7 +57,7 @@ test('modified persisted shadow data cannot be silently reset',t=>{
  fs.writeFileSync(filename,JSON.stringify({events:[],version:'FAKE'}));
  const {quote,spot}=fixtures();
  assert.throws(()=>createShadowLiveFeed({...feeds(quote,spot),directory:dir}),
-  /journal envelope|Invalid/);
+  /journal envelope|[Ii]nvalid/);
 });
 test('unverified Kalshi contract metadata never freezes a shadow call',async t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'cash-shadow-unsafe-'));
