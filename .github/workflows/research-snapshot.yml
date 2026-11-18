@@ -171,6 +171,10 @@ jobs:
             recovery/cash-public-research-unverified.json \
             recovery/cash-late-checkpoint-unverified.json \
             recovery/public-session-dry-run
+          node research-rollover-preflight.js \
+            recovery/cash-late-checkpoint-unverified.json \
+            recovery/public-session-dry-run
+          echo 'CASH_ROLLOVER_PR_DRY_RUN_NEVER_RESTARTS_RAILWAY=true'
           echo 'CASH_PUBLIC_SESSION_PR_DRY_RUN_NO_GIT_WRITE=true'
       - name: Audit public freeze-time input chronology after research artifact is safely saved
         shell: bash
