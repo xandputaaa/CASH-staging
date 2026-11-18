@@ -9,7 +9,7 @@ const {createHash}=require('node:crypto');
 const API='https://external-api.kalshi.com/trade-api/v2/markets/';
 const ID=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
 const SHA=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
-const stamp=ms=>new Date(ms).toISOString();
+const stamp=ms=>Number.isFinite(ms)?new Date(ms).toISOString():null;
 function publicMarketFields(m){
  return {ticker:m.ticker??null,status:m.status??null,result:m.result??null,
   close_time:m.close_time??null,strike_type:m.strike_type??null,
