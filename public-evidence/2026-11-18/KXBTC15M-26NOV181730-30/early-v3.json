@@ -1,0 +1,30 @@
+{
+  "version": "CASH_PUBLIC_GITHUB_WITNESS_LEDGER_V1",
+  "prediction": {
+    "model": "KXBTC15M_SETTLEMENT_EARLY_V3",
+    "marketId": "KXBTC15M-26NOV181730-30",
+    "side": "WAIT",
+    "contractClosesAt": "2026-11-18T22:30:00.000Z",
+    "frozenEventSha256": "927deb566a79f23419ac176d739dccc58a409fe50c061c7e6115f2608d5eb455"
+  },
+  "observations": [
+    {
+      "githubObserverRunId": "44411627056",
+      "githubObserverHeadSha": "f6e02a86b57135cda65975838b5cbad6148f5265",
+      "observedAtRunner": "2026-11-18T22:26:47.766Z",
+      "githubRunCreatedAt": "2026-11-18T22:26:40.000Z",
+      "githubRunEvent": "schedule",
+      "directKalshiActiveMarketCorroborated": true
+    }
+  ],
+  "firstReconciliation": {
+    "githubRunId": "44418634405",
+    "headSha": "f6e02a86b57135cda65975838b5cbad6148f5265",
+    "reportSha256": "b02677d4356b2964f85a3d6dbf77771de649780146a3c9753dd450c4a4842498"
+  },
+  "directlyRecheckedFinal": null,
+  "conditionalPaper": null,
+  "independentQualification": 0,
+  "ordersEnabled": false,
+  "provenanceLimitations": "Public GitHub workflow witnesses and public Kalshi API records are not exchange-signed forecast truth, licensed BRTI audit, real fill, profit, calibrated odds or certified independent accuracy. Branch can be altered by authorized repository writers."
+}
