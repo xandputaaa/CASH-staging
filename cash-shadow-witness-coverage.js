@@ -67,7 +67,8 @@ function verifyRecord(doc,run){
  }
  return true;
 }
-function inspectShadowWitnessArchive(root,{maxFiles=20000}={}){
+function inspectShadowWitnessArchive(root,{maxFiles=20000,includeContracts=false}={}){
+ if(typeof includeContracts!=='boolean')throw Error('Invalid contract output flag');
  const dir=path.join(path.resolve(root),'public-shadow-witness');
  if(!Number.isInteger(maxFiles)||maxFiles<1||maxFiles>20000)
   throw Error('Invalid witness archive bound');
@@ -77,7 +78,7 @@ function inspectShadowWitnessArchive(root,{maxFiles=20000}={}){
   uniqueDirectional:0,uniqueAbstentions:0,repeatedObservations:0,
   YES:0,NO:0,WAIT:0,independentlyQualifiedCount:0,
   scoredDirectionalOutcomes:0,realMoneyOrdersAllowed:false,
-  latestUnique:[]
+  latestUnique:[],...(includeContracts?{contracts:[]}: {})
  });
  const ds=fs.lstatSync(dir);
  if(!ds.isDirectory()||ds.isSymbolicLink())throw Error('Unsafe witness directory');
@@ -133,6 +134,7 @@ function inspectShadowWitnessArchive(root,{maxFiles=20000}={}){
   independentlyQualifiedCount:0,scoredDirectionalOutcomes:0,
   realMoneyOrdersAllowed:false,
   latestUnique:items.slice(-10).reverse(),
+  ...(includeContracts?{contracts:items}: {}),
   warning:'Independent GitHub observation of public source claims only. Duplicate runs are not new markets. WAIT is not a directional forecast. No official BRTI settlement verification, calibrated predictive accuracy, or trading authorization.'
  });
 }
