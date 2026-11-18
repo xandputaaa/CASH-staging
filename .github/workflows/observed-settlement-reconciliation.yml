@@ -72,6 +72,7 @@ jobs:
           node public-evidence-ledger.js \
             audit/report/provisional-reconciliation.json \
             audit/ledger-test
+          node public-ledger-inspection.js audit/ledger-test
           echo 'CASH_LEDGER_PR_DRY_RUN_NO_GIT_COMMIT=true'
       - name: Retain a provisional audit report only (no raw licensed data)
         uses: actions/upload-artifact@v4
