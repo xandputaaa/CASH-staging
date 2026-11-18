@@ -1,0 +1,76 @@
+name: CASH public research evidence ledger
+on:
+  workflow_run:
+    workflows:
+      - CASH witnessed-settlement reconciliation
+    types: [completed]
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: cash-public-research-ledger-writer
+  cancel-in-progress: false
+jobs:
+  archive-public-scheduled-witness:
+    # PRIVILEGED workflow_run: NEVER execute PR artifacts or PR source code.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'schedule' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CASH_SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+      CASH_RECON_RUN_ID: ${{ github.event.workflow_run.id }}
+      CASH_RECON_SHA: ${{ github.event.workflow_run.head_sha }}
+      CASH_RECON_BRANCH: ${{ github.event.workflow_run.head_branch }}
+      CASH_RECON_CREATED_AT: ${{ github.event.workflow_run.created_at }}
+    steps:
+      - name: Checkout trusted default-branch validator only
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download the exact completed scheduled reconciliation artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit-recovery
+          gh run download "$CASH_RECON_RUN_ID" \
+            -n "cash-provisional-settlement-reconciliation-${CASH_RECON_RUN_ID}" \
+            -D audit-recovery
+          test -s audit-recovery/provisional-reconciliation.json
+      - name: Checkout dedicated non-default public ledger branch
+        uses: actions/checkout@v4
+        with:
+          ref: cash-public-evidence-ledger
+          path: ledger-store
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Validate the limited public fields and monotonic provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          node public-evidence-ledger.js \
+            audit-recovery/provisional-reconciliation.json \
+            ledger-store
+      - name: Push only new public evidence on the dedicated branch
+        shell: bash
+        working-directory: ledger-store
+        run: |
+          set -euo pipefail
+          if [[ -z "$(git status --porcelain -- public-evidence)" ]]; then
+            echo 'CASH_LEDGER_NO_NEW_PUBLIC_EVIDENCE=true'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- public-evidence
+          git commit -m "Archive public schedule-only CASH witnesses (run ${CASH_RECON_RUN_ID})"
+          git push origin HEAD:cash-public-evidence-ledger
+          echo 'CASH_LEDGER_GITHUB_COMMIT_CREATED=true'
