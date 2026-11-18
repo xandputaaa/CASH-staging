@@ -201,3 +201,19 @@ test('self-reported outcome after actual GH backup completion is never silently 
   assert.equal(fs.existsSync(path.join(d,'public-sessions')),false);
  }finally{fs.rmSync(d,{recursive:true,force:true})}
 });
+
+test('older scheduled GitHub snapshot cannot backdate first outcome onto a newer saved forecast',()=>{
+ const d=temp();
+ try{
+  apply(d);
+  const original=fs.readFileSync(file(d),'utf8');
+  const staleOutcome=meta('44318999999');
+  assert.throws(()=>apply(d,{
+    early:journal('early',{outcome:'NO'}),
+    late:journal('late',{outcome:'NO'}),
+    source:staleOutcome
+  }),/Backdated first outcome snapshot/);
+  assert.equal(fs.readFileSync(file(d),'utf8'),original);
+  assert.equal(scanArchive(d).internallyRecordedOutcomes,0);
+ }finally{fs.rmSync(d,{recursive:true,force:true})}
+});
