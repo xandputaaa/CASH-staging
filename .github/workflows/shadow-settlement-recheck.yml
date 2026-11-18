@@ -32,6 +32,15 @@ jobs:
           persist-credentials: false
       - name: Verify real witness branch chronology before any result check
         run: node cash-shadow-witness-coverage.js shadow-witness-store
+      - name: Read-only live integration smoke with Railway public shadow source
+        run: node cash-shadow-settlement-runner.js
+      - name: Retain PR-only provisional integration report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-shadow-final-pr-smoke-${{ github.run_id }}
+          path: audit/shadow-public-final-recheck.json
+          retention-days: 7
+          if-no-files-found: error
   recheck-shadow-public-final:
     if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
