@@ -127,8 +127,9 @@ function validateEntry(x,{modelFolder,sessionHash,marketId}){
     !Number.isSafeInteger(x.outcome.selfHashedOutcomeSequence)||
     x.outcome.selfHashedOutcomeSequence<=p.selfHashedForecastSequence||
     ![null,'YES','NO','VOID'].includes(x.outcome.internallyReportedWinner)||
-    !RUN.test(x.outcome.firstSeenBackupRunId||''))
-   throw Error('Invalid self-reported outcome');
+    !RUN.test(x.outcome.firstSeenBackupRunId||'')||
+    BigInt(x.outcome.firstSeenBackupRunId)<BigInt(b.runId))
+   throw Error('Invalid or backdated self-reported outcome');
  }
  return x;
 }
@@ -147,6 +148,11 @@ function mergeEntry(old,newValue){
       {...newValue.outcome,firstSeenBackupRunId:null}))
   throw Error('Self-reported outcome hash or winner conflict, manual review required');
  if(old.outcome||!newValue.outcome)return old;
+ // The first source-reported outcome cannot be attributed to a GH run
+ // predating the run that first preserved this frozen forecast.
+ if(BigInt(newValue.outcome.firstSeenBackupRunId)<
+    BigInt(old.firstReadOnlyBackup.runId))
+  throw Error('Backdated first outcome snapshot conflicts with archived forecast origin');
  return {...old,outcome:newValue.outcome};
 }
 function sourceJournal(j,kind){

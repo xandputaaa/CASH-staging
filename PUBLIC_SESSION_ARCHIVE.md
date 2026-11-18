@@ -23,6 +23,12 @@ Original forecast identity and the first snapshot provenance cannot change once 
 
 The source GH snapshot's scheduled run timestamps impose a basic sanity check: no archived forecast can claim to be frozen after the source backup finished, and no outcome can claim to have been recorded before contract expiry or after the source snapshot finished. These are not source-authenticated timestamps, nor a guarantee against falsifying an earlier self-hashed server history.
 
+## Read-only verification before commit
+
+Every scheduled archiver run now invokes `node public-session-archive-inspection.js archive-store` after appending and **before** attempting a Git commit. This fails closed if any archived file has an unexpected or private field, a false qualification claim, or an outcome first-seen run ID that predates the record's first backup. It reports separate early/late session counts, archived forecast-file totals, source-reported outcome hashes, outcomes still absent from archive copies, and duplicate market IDs across server sessions.
+
+The inspector can also be run on a checkout of the dedicated branch with `node public-session-archive-inspection.js .` while using trusted source from `main`. Zero files means `NO_SCHEDULED_SESSION_DATA_COMMIT_VERIFIED`; a passing inventory is still *not* pre-expiry witnessing, a public-exchange settlement recheck, or a qualified forecast.
+
 ## Important limits
 
 **This is NOT an external pre-expiry forecast witness.** GitHub may first download an old forecast *after* its market has closed. Even with a valid hash chain, it cannot independently prove the original model forecast was produced before settlement, or that a self-reported outcome matches Kalshi. Every archived file is labeled \`UNVERIFIED_RAILWAY_JOURNAL_EXPORTED_DURING_GITHUB_SCHEDULE\`, \`independentQualifiedCount:0\`, \`actualFillsVerified:0\`, \`ordersEnabled:false\`.

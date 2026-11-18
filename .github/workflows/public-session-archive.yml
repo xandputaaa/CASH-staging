@@ -61,6 +61,11 @@ jobs:
             source-read-only/cash-public-research-unverified.json \
             source-read-only/cash-late-checkpoint-unverified.json \
             archive-store
+      - name: Inspect full source-only archive before any branch commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node public-session-archive-inspection.js archive-store
       - name: Commit only new unverified public-session data
         shell: bash
         working-directory: archive-store
