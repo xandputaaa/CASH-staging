@@ -9,8 +9,8 @@ test('empty valid archives remain unqualified and have no invented forecasts',()
   const r=archiveBenchmarkInventory(a,b);
   assert.equal(r.unionArchivedMarkets,0);
   assert.deepEqual(r.missingForecasts,{early:0,late:0});
-  assert.equal(r.placeholderWaitsAreNotModelAbstentions,true);
-  assert.equal(r.descriptiveWaitCountsIncludeMissingForecastPlaceholders,true);
+  assert.equal(r.missingForecastsExcludedFromWaitCounts,true);
+  assert.equal(r.missingForecastsReportedAsMissingSide,true);
   assert.equal(r.baseline.eligible,0);
   assert.equal(r.candidate.eligible,0);
   assert.equal(r.completeEvidenceForSuppliedRows,true);
