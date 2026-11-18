@@ -26,6 +26,7 @@ const {createEarlyMoveMonitor}=require('./early-move');
 const earlyMoveScript=fs.readFileSync('early-move-ui.js');
 const settlementCallScript=fs.readFileSync('settlement-call-ui.js');
 const {createProspectiveStore}=require('./prospective-store');
+const {createShadowLiveFeed}=require('./cash-shadow-live-feed');
 const {createKalshiBrtiFeed}=require('./kalshi-brti');
 const {createKalshiOrderVerifier}=require('./kalshi-order-verify');
 const {resolvePrivateConfig}=require('./private-key-config');
@@ -54,6 +55,7 @@ const lateCheckpoint=createLateCheckpointMonitor({
  feeFeed:kalshiFeeFeed
 });
 const earlyMove=createEarlyMoveMonitor({quotes:venueFeeds,spot:feed});
+const shadowModelLab=createShadowLiveFeed({quotes:venueFeeds,spot:feed});
 const server=http.createServer(async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
   res.setHeader('Referrer-Policy','no-referrer');
@@ -192,6 +194,20 @@ const server=http.createServer(async(req,res)=>{
     res.setHeader('Content-Disposition','attachment; filename="CASH-late-checkpoint-unverified.json"');
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
     res.end(JSON.stringify(lateCheckpoint.exportSession(),null,2));return;
+  }
+  if(req.method==='GET'&&req.url==='/api/model-lab/shadow/status'){
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(shadowModelLab.view()));return;
+  }
+  if(req.method==='GET'&&req.url==='/api/model-lab/shadow/export'){
+    const snapshot=shadowModelLab.exportSnapshot();
+    if(!snapshot){
+      res.writeHead(503,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify({status:'SHADOW_DURABLE_FEED_UNAVAILABLE',
+       records:0,independentlyQualified:0,ordersAllowed:false}));return;
+    }
+    res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+    res.end(JSON.stringify(snapshot));return;
   }
   if(req.method==='GET'&&req.url==='/api/prospective'){
     res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
@@ -388,6 +404,18 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   checkProspective();
   const prospectiveTimer=setInterval(checkProspective,20000);
   prospectiveTimer.unref();
+  // Isolated Model Lab: record first, fsync to explicitly mounted audit
+  // storage, then expose only hash-chain snapshots. No orders or qualification.
+  if(shadowModelLab.enabled){
+    const shadowLabScan=()=>shadowModelLab.scan().then(s=>{
+      if(s.status==='FROZEN_AND_PERSISTED'||s.status==='PERSISTENCE_FAILURE')
+       console.log('CASH Model Lab durable shadow: '+s.status+
+        ', records='+s.records+', qualified=0, orders=DISABLED');
+    }).catch(()=>console.log('CASH Model Lab shadow unavailable; orders=DISABLED'));
+    shadowLabScan();
+    const shadowLabTimer=setInterval(shadowLabScan,20000);
+    shadowLabTimer.unref();
+  }else console.log('CASH Model Lab shadow: durable audit volume not configured; collection OFF');
   // Fixed, late pre-expiry shadow experiment. Never overwrites V3 early calls.
   // Cache-sharing read-only feeds, separate contract IDs and denominators.
   let lastLateLog='';
