@@ -51,3 +51,30 @@ When the *same* market is in both early and late models, one direct read pair ma
 The added \`secondSourceFinalAudit\` report tabulates source corroboration separately from the unmodified \`groups.early\` and \`groups.late\` descriptive scores, original pre-expiry witnesses, and quoted-but-unfilled fee sensitivity. **No forecast is removed, no hit or miss is reclassified, no expected value is calibrated, and independent qualification stays 0/100.**
 
 Two reads from the same exchange endpoint can share an API cache and are not two independent data providers. Direct Kalshi public prices and the exchange's reported expiration benchmark are not independent verification of the proprietary CF Benchmarks calculation or its original minute history; source fields and GitHub timing are not cryptographically signed evidence. No user balance, Kalshi private key, trade endpoint, bank data, paid integration, or Railway collector change is needed.
+
+
+## Current-session coverage denominator — November 17, 2026
+
+The reconciliation report now has a \`witnessCoverage\` section derived from the COMPLETE, verified public research journal export for **each frozen model in the current volatile Railway server session**. This closes a reporting blind spot: previous off-server hit rates listed only forecasts for which GitHub had successfully made an early observation. That is insufficient to measure external verification coverage, and it can accidentally create optimism if Github witnesses are only available for some calls.
+
+For the early and late cohorts separately, the new section reports:
+
+- All frozen markets, directional YES/NO forecasts, and WAITs, including unresolved calls.
+- Public-proxy directional YES/NO denominator, separated from licensed BRTI records that cannot be posted in public observation artifacts.
+- Distinct hash-matched, GitHub-runner pre-expiry directional witnesses, the number **without** a matched witness in currently retrieved GitHub artifacts, and corresponding WAIT coverage.
+- Public market corroboration at observation time from the independent direct read-only Kalshi endpoint, and direct two-read final-result corroboration after expiry.
+- Witnessed directional HITS, MISSES, and pending/rejected outcomes; these never erase or reclassify the unwitnessed subset.
+- A descriptive \`observedDirectionalFractionOfPublicFrozen\` **coverage ratio**, not a probability of future prediction success, edge, win rate or trading readiness.
+
+**Scope limitation:** This is a *bounded current-Railway-RAM-session versus recently downloaded GitHub observation artifacts* report. Existing GitHub automation enumerates at most 24 successful runs from the past 24 hours and artifacts expire after 30 days. Historic events missing from either source are NOT proof that a prediction never existed or a job never ran. The coverage counts are not a globally complete historical record; a Railway restart resets in-memory market journals. Never infer certified accuracy from the witnessed subset, and never relabel unobserved cases as wins or misses.
+
+The artifact explicitly includes \`archivalCompletenessProven:false\`, \`independentlyQualifiedCount:0\`, \`actualFillsVerified:0\`, \`realOrdersEnabled:false\`, and \`calibrated:false\`. No model thresholds, fee forecasts, order routing, timestamps, live data or external accounts were changed. This is **GitHub-only** integrity reporting and does not require a Railway restart.
+
+
+### Separate *correct forecast* from *economically favorable quoted hypothetical*
+
+The witnessed-denominator report also includes \`witnessedCorrectPaperProfitableConservative\`, \`witnessedCorrectPaperNonpositiveConservative\`, \`witnessedPaperBreakEvenAtOrAbove100Pct\`, and \`witnessedScoredDirectionalWithoutPaperPrice\`. These values are derived only from the **original** hash-matched, pre-expiry frozen public ask and fee metadata and already-reconciled official final result. No future price, fills, order placement or user balance is used.
+
+A real Nov 17/18 example illustrates why the extra fields matter. The three-minute NO forecast for \`KXBTC15M-26NOV172145-45\` was observed by GitHub at 02:41:55Z before the 02:45:00Z contract close, with active public Kalshi strike corroboration at that time, and later matched to Kalshi's final NO result via two direct after-close exchange reads. CASH's own frozen NO ask at 02:41:28Z was **$0.995**. A full $1 winning payout would generate only **$0.005 gross**. Under the published general fee approximation, centicent rounding produces a conditional **+$0.0046**, but conservatively assuming a one-cent taker fee produces **-$0.0050** net for the SAME correct call. The conservative assumed break-even success rate would be **100.5%**, impossible even for a perfect forecaster. The original trade's availability/liquidity/actual fees were never verified, and no actual order was placed.
+
+The first separately GitHub-witnessed NO forecast (00:00Z contract) had frozen public NO ask $0.927 and conditional conservative one-contract win profit +$0.063. Combining the two hypothetical wins gives **+$0.058 conservative**, but these are **two unfilled paper scenarios**, not audited actual profits or a reliable EV estimate. Correct direction is never automatically labeled a tradable opportunity. All denominator counts remain scoped to the current volatile Railway research session plus the recent GH artifact set; independent qualification remains 0/100.
