@@ -25,6 +25,8 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
  const bootAt=iso(clock()),records=[],events=[],seen=new Set(),missed=new Set();
  let headHash='GENESIS',inflight=null,scans=0,failures=0,lastReason='NOT_CHECKED',pendingCursor=0;
  let replayedForecasts=0;
+ const stageReasons=new Map();
+ const countStageReason=reason=>stageReasons.set(reason,(stageReasons.get(reason)||0)+1);
  if(store){
   if(!Array.isArray(store.events)||typeof store.append!=='function')
    throw Error('Late checkpoint store interface invalid');
@@ -178,7 +180,8 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
     ]);
     const useBrti=brti?.forecastingEnabled?.()===true;
     stage(quote,useBrti?brti.internal():reference,seriesFees);
-   }catch{failures++;lastReason='SOURCE_OR_COLLECTION_ERROR'}
+    countStageReason(lastReason);
+   }catch{failures++;lastReason='SOURCE_OR_COLLECTION_ERROR';countStageReason(lastReason)}
    await settle();
    return snapshot();
   })().finally(()=>{inflight=null});
@@ -192,7 +195,11 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
   return {
    version:'CASH_LATE_CHECKPOINT_SHADOW_V1',model:NAME,
    referenceModel:'KXBTC15M_SETTLEMENT_EARLY_V3',bootAt,scans,failures,
-   lastReason,storage:store?.mode||'VOLATILE_SERVER_SESSION',headHash,
+   lastReason,
+   stageReasonCounts:Object.fromEntries([...stageReasons].sort(([a],[b])=>a.localeCompare(b))),
+   stageReasonCountScope:'CURRENT_MONITOR_PROCESS_SCAN_ATTEMPTS_ONLY',
+   stageReasonCountsNotDistinctMarkets:true,
+   storage:store?.mode||'VOLATILE_SERVER_SESSION',headHash,
    replayedForecasts,
    priorCompletedSegments:store?.priorCompletedSegments||0,
    priorCompletedMarketCount:store?.priorMarketIds?.length||0,

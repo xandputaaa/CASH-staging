@@ -68,6 +68,8 @@ test('pre-specified late-window timing; do not replay near-expiry data into an o
  await h.m.scan();
  assert.equal(h.m.snapshot().records,0);
  assert.equal(h.m.snapshot().lastReason,'LATE_CHECKPOINT_MISSED');
+ assert.equal(h.m.snapshot().stageReasonCounts.BEFORE_LATE_CHECKPOINT,1);
+ assert.equal(h.m.snapshot().stageReasonCounts.LATE_CHECKPOINT_MISSED,1);
  assert.equal(h.m.snapshot().windowMissedMarketIds,1);
 });
 test('WAIT decision is frozen and counted in denominator, not as a missed trade',async()=>{
@@ -75,6 +77,7 @@ test('WAIT decision is frozen and counted in denominator, not as a missed trade'
  await h.m.scan();
  const r=h.m.snapshot();
  assert.equal(r.latest.side,null);
+ assert.equal(r.stageReasonCounts.FROZEN_WAIT,1);
  assert.equal(r.scorecard.overall.waits,1);
  assert.equal(r.scorecard.overall.directional,0);
  assert.equal(r.scorecard.overall.exploratoryDirectionalHitRate,null);
@@ -119,6 +122,7 @@ test('BRTI research opt-in fails closed if official data is missing rather than 
  await h.m.scan();
  assert.equal(h.m.snapshot().records,0);
  assert.equal(h.m.snapshot().lastReason,'PRECHECK_SPOT_PROXY_UNAVAILABLE');
+ assert.equal(h.m.snapshot().stageReasonCounts.PRECHECK_SPOT_PROXY_UNAVAILABLE,1);
  assert.equal(h.m.snapshot().scorecard.bySource.publicSpotProxy.captured,0);
 });
 test('licensed index price and samples never appear in public late snapshot or export',async()=>{
