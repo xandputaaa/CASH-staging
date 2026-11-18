@@ -24,6 +24,14 @@ jobs:
           node-version: '22'
       - name: Test isolated shadow journal, live feed and observer
         run: node --test tests/cash-shadow-*.test.js
+      - name: Checkout real append-only witness archive read-only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cash-shadow-public-witness
+          path: witness-store
+          persist-credentials: false
+      - name: Validate actual existing pre-expiry shadow witness archive
+        run: node cash-shadow-witness-coverage.js witness-store
   capture-shadow-public:
     if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     permissions:
