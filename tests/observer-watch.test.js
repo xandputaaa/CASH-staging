@@ -107,6 +107,10 @@ test('missing forecasts, invalid observer response and deadline never create fal
   clock:()=>t,wait:async ms=>{t+=ms;},pollIntervalMs:40000,maxRuntimeMs:80000,
   observer:async()=>response(t,[])});
  assert.equal(r.evidenceRecorded,0);
+ const summary=JSON.parse(fs.readFileSync(path.join(dir,'observer-run-summary.json'),'utf8'));
+ assert.equal(summary.evidenceRecorded,0);
+ assert.equal(summary.captureCompletenessProven,false);
+ assert.ok(summary.emptyProbes>0);
  assert.ok(r.emptyProbes>0);
  assert.equal(r.validProbes,r.attempts);
  assert.equal(r.lateDirectionalRecorded,0);
@@ -121,6 +125,9 @@ test('missing forecasts, invalid observer response and deadline never create fal
     claimedIndependentlyQualifiedCount:100})});
  assert.equal(invalid.evidenceRecorded,0);
  assert.equal(invalid.validProbes,0);
+ const failedSummary=JSON.parse(fs.readFileSync(path.join(d,'observer-run-summary.json'),'utf8'));
+ assert.ok(failedSummary.invalidProbes>0);
+ assert.equal(failedSummary.evidenceRecorded,0);
  assert.ok(invalid.invalidProbes>0);
  assert.equal(fs.existsSync(path.join(d,'public-preexpiry-observation.json')),false);
  fs.rmSync(d,{recursive:true,force:true});
