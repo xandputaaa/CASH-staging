@@ -12,6 +12,7 @@ const MODEL='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1';
 const MARKET=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
 const HASH=/^[a-f0-9]{64}$/;
 const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const bytesHash=x=>crypto.createHash('sha256').update(x).digest('hex');
 const time=x=>typeof x==='string'?Date.parse(x):NaN;
 const keys=(value,allowed)=>value&&typeof value==='object'&&!Array.isArray(value)&&
  Object.keys(value).every(k=>allowed.includes(k));
@@ -115,7 +116,7 @@ function createLateCheckpointStore({directory=process.env.CASH_AUDIT_DIR}={}){
  // against a privileged operator modifying the volume or remote replicas.
  // Never automatically remove a lock left by a crashed process.
  const lockfile=path.join(directory,'.late-checkpoint-events.write.lock');
- let expectedBytes=Buffer.byteLength(raw),expectedSha256=hash(raw);
+ let expectedBytes=Buffer.byteLength(raw),expectedSha256=bytesHash(Buffer.from(raw));
  function append(event){
   // Check the complete proposed semantic chain before any filesystem write.
   verifyLateCheckpointChain([...events,event]);
@@ -148,9 +149,9 @@ function createLateCheckpointStore({directory=process.env.CASH_AUDIT_DIR}={}){
      if(bytes<=0)throw Error('Late journal failed complete disk re-read');
      read+=bytes;
     }
-    if(hash(existing)!==expectedSha256)
+    if(bytesHash(existing)!==expectedSha256)
      throw Error('Late journal disk content diverged since last read');
-    newSha256=hash(Buffer.concat([existing,buffer]));
+    newSha256=bytesHash(Buffer.concat([existing,buffer]));
     let offset=0;
     while(offset<buffer.length){
      const n=fs.writeSync(fd,buffer,offset,buffer.length-offset);
