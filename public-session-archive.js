@@ -126,7 +126,7 @@ function validateEntry(x,{modelFolder,sessionHash,marketId}){
   if(!SHA.test(x.outcome.selfHashedOutcomeEventSha256||'')||
     !Number.isSafeInteger(x.outcome.selfHashedOutcomeSequence)||
     x.outcome.selfHashedOutcomeSequence<=p.selfHashedForecastSequence||
-    ![null,'YES','NO'].includes(x.outcome.internallyReportedWinner)||
+    ![null,'YES','NO','VOID'].includes(x.outcome.internallyReportedWinner)||
     !RUN.test(x.outcome.firstSeenBackupRunId||''))
    throw Error('Invalid self-reported outcome');
  }
@@ -170,7 +170,7 @@ function prepareForecasts(j,kind,metadata,digest){
   const id=e.payload.marketId;
   if(outcomeByMarket.has(id))throw Error('Multiple outcome events for same market');
   const src=accepted.find(x=>x.p.marketId===id)?.p;
-  if(!MARKET.test(id||'')||![null,'YES','NO'].includes(e.payload?.winner)||
+  if(!MARKET.test(id||'')||![null,'YES','NO','VOID'].includes(e.payload?.winner)||
      !src||!iso(e.recordedAt)||
      ms(e.recordedAt)<ms(src.endTime)||
      ms(e.recordedAt)>ms(metadata.completedAt)+5000)
