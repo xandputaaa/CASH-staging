@@ -164,3 +164,61 @@ test('tampered event chain or unauthorized certification fails closed',()=>{
   reconciliation:{...report([]),independentQualifiedCount:100}
  }),/Missing hash-checked/);
 });
+
+test('a correct witnessed forecast can have negative conservative paper net at a 0.995 ask',()=>{
+ const early=journal('early',[]);
+ const late=journal('late',[
+  {marketId:ids[0],side:'NO'},
+  {marketId:ids[1],side:'NO'},
+  {marketId:ids[2],side:'YES'}
+ ]);
+ const won=(id,ask,netLow,be)=>row('late',id,'NO','OBSERVED_DIRECTIONAL_HIT',{
+  directlyCheckedPublicMarket:true,
+  directFinalStatus:'DIRECT_FINAL_TWO_READ_JOURNAL_HASH_MATCH',
+  witnessedPaper:{
+   state:'WITNESSED_QUOTED_COUNTERFACTUAL_ONLY',
+   observedAsk:ask,selectedSide:'NO',
+   breakEvenHitRateHigh:be,
+   netAfterFees:{lower:netLow,upper:netLow+.002},
+   executableQuoteConfirmed:false,
+   actualFillConfirmed:false,
+   actualProfitVerified:false
+  }
+ });
+ const a=summarizeWitnessCoverage({early,late,reconciliation:report([
+  won(ids[0],.927,.063,.937),
+  won(ids[1],.995,-.005,1.005)
+ ])});
+ const c=a.groups.late;
+ assert.equal(c.witnessedDirectionalHits,2);
+ assert.equal(c.witnessedDirectionalPaperPriced,2);
+ assert.equal(c.witnessedCorrectPaperProfitableConservative,1);
+ assert.equal(c.witnessedCorrectPaperNonpositiveConservative,1);
+ assert.equal(c.witnessedPaperBreakEvenAtOrAbove100Pct,1);
+ assert.equal(c.publicProxyDirectionalWithoutMatchedWitness,1);
+ assert.equal(a.independentlyQualifiedCount,0);
+ assert.equal(a.realOrdersEnabled,false);
+});
+test('scored wrong call remains loss and unpriced win remains explicitly unpriced',()=>{
+ const early=journal('early',[]);
+ const late=journal('late',[
+  {marketId:ids[0],side:'YES'},
+  {marketId:ids[1],side:'NO'}
+ ]);
+ const a=summarizeWitnessCoverage({early,late,reconciliation:report([
+  row('late',ids[0],'YES','OBSERVED_DIRECTIONAL_MISS',{
+   witnessedPaper:{
+    state:'WITNESSED_QUOTED_COUNTERFACTUAL_ONLY',
+    breakEvenHitRateHigh:.3,netAfterFees:{lower:-.3,upper:-.29}
+   }
+  }),
+  row('late',ids[1],'NO','OBSERVED_DIRECTIONAL_HIT')
+ ])});
+ const c=a.groups.late;
+ assert.equal(c.witnessedDirectionalMisses,1);
+ assert.equal(c.witnessedDirectionalHits,1);
+ assert.equal(c.witnessedDirectionalPaperPriced,1);
+ assert.equal(c.witnessedScoredDirectionalWithoutPaperPrice,1);
+ assert.equal(c.witnessedCorrectPaperProfitableConservative,0);
+ assert.equal(c.witnessedCorrectPaperNonpositiveConservative,0);
+});
