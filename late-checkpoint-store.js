@@ -112,6 +112,18 @@ function createLateCheckpointStore({directory=process.env.CASH_AUDIT_DIR}={}){
  if(raw)try{events=raw.trimEnd().split('\n').map(s=>JSON.parse(s))}
  catch{throw Error('Late journal is not valid JSONL')}
  verifyLateCheckpointChain(events);
+ // Old complete disk journals are audited separately; never concatenate
+ // into the active 320-event chain or call them new model validation.
+ // Resolve lazily to avoid a circular module initializer.
+ const {inspectCompletedLateSegments}=require('./late-checkpoint-rotation');
+ const prior=inspectCompletedLateSegments(directory);
+ const priorMarkets=new Set(prior.priorMarketIds);
+ for(const e of events)if(e.type==='FORECAST'&&priorMarkets.has(e.payload.marketId))
+  throw Error('Current late journal repeats previously completed frozen market');
+ // A crash between hard-link publication and unlink leaves identical active
+ // + completed files; this must be reviewed, NEVER silently resumed.
+ if(current&&prior.segmentHashes.includes(bytesHash(Buffer.from(raw))))
+  throw Error('Incomplete completed-journal handoff: duplicate active source');
  // Only writers honoring this lock are serialized; this is NOT a defense
  // against a privileged operator modifying the volume or remote replicas.
  // Never automatically remove a lock left by a crashed process.
@@ -120,6 +132,8 @@ function createLateCheckpointStore({directory=process.env.CASH_AUDIT_DIR}={}){
  function append(event){
   // Check the complete proposed semantic chain before any filesystem write.
   verifyLateCheckpointChain([...events,event]);
+  if(event.type==='FORECAST'&&priorMarkets.has(event.payload?.marketId))
+   throw Error('Forecast already committed in earlier completed late segment');
   const buffer=Buffer.from(JSON.stringify(event)+'\n');
   // O_EXCL prevents simultaneous cooperating Node processes from appending
   // to the same volume. A stale lock means operator review, not auto-delete.
@@ -174,6 +188,9 @@ function createLateCheckpointStore({directory=process.env.CASH_AUDIT_DIR}={}){
   events.push(event);
  }
  return {mode:'FILESYSTEM_JOURNAL_UNVERIFIED',configured:true,
-  events:events.map(e=>structuredClone(e)),path:filename,append};
+  events:events.map(e=>structuredClone(e)),path:filename,
+  priorMarketIds:prior.priorMarketIds.slice(),
+  priorCompletedSegments:prior.completedSegments,
+  append};
 }
 module.exports={createLateCheckpointStore,verifyLateCheckpointChain,MAX_EVENTS};
