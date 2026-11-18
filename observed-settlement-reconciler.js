@@ -177,6 +177,9 @@ function reconcileOne(witness,kind,journal){
   results.push({
    model:evidence.model,marketId:evidence.marketId,
    witnessedSide:evidence.frozenSide,
+   // Originates in immutable off-server witness + hash-matched original
+   // forecast; required for DIRECT final exchange read after close.
+   contractClosesAt:evidence.contractClosesAt,
    directExchangeAtWitness:direct?.state||'NOT_SEPARATELY_OBSERVED',
    directlyCheckedPublicMarket:direct?.state==='MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET',
    paperStatus:paper?(witnessedPaper?'PAPER_PNL_POSSIBLE':
