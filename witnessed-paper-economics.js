@@ -91,6 +91,7 @@ function auditWitnessedPaperEconomics(root){
     if(lower<=0)metrics.lateCorrectButNonpositiveConservativePaper++;
     else metrics.lateConservativePositiveCorrectPaper++;
    }
+  }
  }
  metrics.lateDirectionalWilson95Lower=wilson95Lower(
   metrics.lateDirectionalDirectHits,metrics.lateDirectionalDirectFinals);
