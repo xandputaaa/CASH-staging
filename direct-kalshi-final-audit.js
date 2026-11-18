@@ -66,7 +66,8 @@ function checkDirectFinal(entry,market,receivedMs){
    publicWinnerInServerJournal:entry.publicWinner};
  const hashMatches=selectedHash===entry.settlementEvidenceSha256;
  return {...base,state:'DIRECT_FINAL_NUMERIC_MATCH',
-  directWinner:winner,publicStrikeCents:numeric.strikeCents,
+  directWinner:winner,publishedCloseTime:market.close_time,
+  publicStrikeCents:numeric.strikeCents,
   publicFinalCents:numeric.finalCents,
   directPublicEvidenceSha256:selectedHash,
   matchesServerJournalPublicFields:hashMatches,
@@ -134,12 +135,32 @@ async function auditDirectFinal(report,{
    direct.set(unique[i].marketId,finished);
   }
  }
+ const confirmedKinds=new Set([
+  'DIRECT_FINAL_TWO_READ_JOURNAL_HASH_MATCH',
+  'DIRECT_FINAL_TWO_READ_NUMERIC_MATCH_FIELDS_DIFFER'
+ ]);
  const matched=report.matched.map(row=>{
   if(!['OBSERVED_DIRECTIONAL_HIT','OBSERVED_DIRECTIONAL_MISS'].includes(row.state))
    return {...row,directFinalStatus:'NOT_A_SCORED_DIRECTIONAL_SETTLEMENT'};
-  return {...row,directFinalStatus:direct.get(row.marketId)?.state||
-    'DIRECT_FINAL_NOT_CHECKED',...(direct.has(row.marketId)?
-    {directFinal:direct.get(row.marketId)}:{})};
+  const external=direct.get(row.marketId);
+  if(!external)return {...row,directFinalStatus:'DIRECT_FINAL_NOT_CHECKED'};
+  // The same Kalshi contract can have both an early and a late research
+  // side. One direct HTTP fetch can be shared, but EVERY model's internal
+  // public winner/strike/expiry must be compared independently.
+  if(confirmedKinds.has(external.state)){
+   if(external.directWinner!==row.publicWinner||
+      time(external.publishedCloseTime)!==time(row.contractClosesAt))
+    return {...row,directFinalStatus:'DIRECT_FINAL_COHORT_RESULT_OR_CLOSE_CONFLICT',
+     directFinal:{...external,state:'DIRECT_FINAL_COHORT_RESULT_OR_CLOSE_CONFLICT',
+      finalResultCorroborated:false}};
+   const same=external.directPublicEvidenceSha256===row.settlementEvidenceSha256;
+   const status=same?'DIRECT_FINAL_TWO_READ_JOURNAL_HASH_MATCH':
+     'DIRECT_FINAL_TWO_READ_NUMERIC_MATCH_FIELDS_DIFFER';
+   return {...row,directFinalStatus:status,
+    directFinal:{...external,state:status,matchesServerJournalPublicFields:same,
+     sourceFieldDifference:!same}};
+  }
+  return {...row,directFinalStatus:external.state,directFinal:external};
  });
  const validSet=new Set([
   'DIRECT_FINAL_TWO_READ_JOURNAL_HASH_MATCH',
