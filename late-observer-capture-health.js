@@ -92,6 +92,55 @@ function runCreationToFirstWitness(rows){
  return out;
 }
 
+/*
+ * Original-run denominators by trusted trigger type. The existing per-poll
+ * eligibility and conversion validators run first; this merely partitions
+ * the verified rows. Missing historical diagnostics stay UNKNOWN.
+ */
+function triggerConversionCoverage(rows){
+ const blank=()=>({archivedRuns:0,withConversion:0,withoutConversion:0,
+  early:{eligiblePolls:0,eligibleWithoutWitnessPolls:0,
+   eligibleWithWitnessPolls:0,runsWithEligiblePolls:0,
+   runsWithUnwitnessedEligiblePolls:0},
+  late:{eligiblePolls:0,eligibleWithoutWitnessPolls:0,
+   eligibleWithWitnessPolls:0,runsWithEligiblePolls:0,
+   runsWithUnwitnessedEligiblePolls:0}});
+ const out={schedule:blank(),workflow_run:blank()};
+ for(const r of rows){
+  const dest=out[r.event];
+  if(!dest)throw Error('Unknown original observer trigger type');
+  dest.archivedRuns++;
+  if(r.witnessConversion===undefined){
+   dest.withoutConversion++;
+   continue;
+  }
+  dest.withConversion++;
+  for(const kind of ['early','late']){
+   const c=r.witnessConversion[kind],d=dest[kind];
+   const eligible=c.eligibleWithWitnessPolls+
+    c.eligibleWithoutWitnessPolls;
+   d.eligiblePolls+=eligible;
+   d.eligibleWithWitnessPolls+=c.eligibleWithWitnessPolls;
+   d.eligibleWithoutWitnessPolls+=c.eligibleWithoutWitnessPolls;
+   if(eligible>0)d.runsWithEligiblePolls++;
+   if(c.eligibleWithoutWitnessPolls>0)
+    d.runsWithUnwitnessedEligiblePolls++;
+  }
+ }
+ for(const dest of Object.values(out)){
+  if(dest.withConversion+dest.withoutConversion!==dest.archivedRuns)
+   throw Error('Trigger conversion run denominator mismatch');
+  for(const kind of ['early','late']){
+   const d=dest[kind];
+   if(d.eligiblePolls!==d.eligibleWithWitnessPolls+
+      d.eligibleWithoutWitnessPolls||
+      d.runsWithUnwitnessedEligiblePolls>d.runsWithEligiblePolls||
+      d.runsWithEligiblePolls>dest.withConversion)
+    throw Error('Trigger conversion poll denominator mismatch');
+  }
+ }
+ return out;
+}
 function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
  if(!Array.isArray(rows)||rows.length>MAX_RUNS||
    !Number.isInteger(expectedRunCount)||expectedRunCount<0||
@@ -249,6 +298,7 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
   successfulScheduledParentRuns:counts.backupTriggered,
   sourceEligibilityDiagnostics:eligibility,
   sourceToWitnessConversionDiagnostics:conversion,
+  triggerSourceToWitnessCoverage:triggerConversionCoverage(ordered),
   githubRunCreationToFirstWitness:runCreationToFirstWitness(ordered),
   originalPolls:{attempted:counts.totalAttempts,valid:counts.validPolls,
    empty:counts.emptyPolls,invalid:counts.invalidPolls},
@@ -264,7 +314,7 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
   independentlyQualifiedCount:0,
   actualFillsVerified:0,
   realMoneyOrdersEnabled:false,
-  caveat:'Runs and polls are not independent markets. A valid empty probe says no publicly eligible UNEXPIRED single-exchange-proxy commitment was preserved at that GitHub runner time; it does NOT prove the source was offline, no prediction was generated, the model lost accuracy, or that licensed-index / other nonpublic forecasts were absent. Only originally archived runs are included. GitHub run creation-to-first-witness timing is only for captured original observer RUNS and includes runner execution, checkout, network and polling: it cannot establish when GitHub scheduled the job, when the journal became publicly available, or timing for non-capture runs. Eligibility and source-to-witness conversion diagnostic totals cover only runs that originally recorded each optional field; historical missing fields are explicitly excluded, not interpreted as zero. Each source-to-witness number is a POLL count, not a distinct model contract or evidence qualification. An archived YES/NO is not automatically a checked final, fills or a qualified forecast.'
+  caveat:'Runs and polls are not independent markets. A valid empty probe says no publicly eligible UNEXPIRED single-exchange-proxy commitment was preserved at that GitHub runner time; it does NOT prove the source was offline, no prediction was generated, the model lost accuracy, or that licensed-index / other nonpublic forecasts were absent. Only originally archived runs are included. GitHub run creation-to-first-witness timing is only for captured original observer RUNS and includes runner execution, checkout, network and polling: it cannot establish when GitHub scheduled the job, when the journal became publicly available, or timing for non-capture runs. Eligibility and source-to-witness conversion diagnostic totals cover only runs that originally recorded each optional field; historical missing fields are explicitly excluded, not interpreted as zero. Trigger-specific eligible and unwitnessed poll totals include only original archived runs with conversion diagnostics and cannot measure unarchived scheduled jobs, source-publication delays or independent qualification. Each source-to-witness number is a POLL count, not a distinct model contract or evidence qualification. An archived YES/NO is not automatically a checked final, fills or a qualified forecast.'
  };
 }
 function safeJson(file,max){
@@ -369,8 +419,21 @@ if(require.main===module){
   console.log('CASH_ORIGINAL_GH_CREATED_TO_FIRST_WITNESS_'+kind.toUpperCase()+'_OVER_180S='+x.over180s);
   console.log('CASH_ORIGINAL_GH_CREATED_TO_FIRST_WITNESS_'+kind.toUpperCase()+'_MEDIAN_SECONDS='+x.medianSeconds);
  }
+ for(const kind of ['schedule','workflow_run']){
+  const d=s.triggerSourceToWitnessCoverage[kind],prefix='CASH_ORIGINAL_TRIGGER_'+kind.toUpperCase();
+  console.log(prefix+'_ARCHIVED_RUNS='+d.archivedRuns);
+  console.log(prefix+'_WITH_CONVERSION='+d.withConversion);
+  console.log(prefix+'_MISSING_CONVERSION='+d.withoutConversion);
+  for(const model of ['early','late']){
+   const m=d[model],p=prefix+'_'+model.toUpperCase();
+   console.log(p+'_ELIGIBLE_POLLS='+m.eligiblePolls);
+   console.log(p+'_ELIGIBLE_WITHOUT_WITNESS_POLLS='+m.eligibleWithoutWitnessPolls);
+   console.log(p+'_RUNS_WITH_ELIGIBLE_POLLS='+m.runsWithEligiblePolls);
+   console.log(p+'_RUNS_WITH_UNWITNESSED_ELIGIBLE_POLLS='+m.runsWithUnwitnessedEligiblePolls);
+  }
+ }
  console.log('CASH_ORIGINAL_CAPTURE_QUALIFIED=0');
  console.log('CASH_ORIGINAL_CAPTURE_ORDERS=false');
 }
 module.exports={classifyCapture,summarizeCaptures,auditCaptureHealth,
- runCreationToFirstWitness,firstOriginalWitnessAt,VERSION};
+ runCreationToFirstWitness,firstOriginalWitnessAt,triggerConversionCoverage,VERSION};
