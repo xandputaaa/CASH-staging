@@ -39,6 +39,36 @@ function isReady(x){
  return x.frozenEvidence.some(f=>f.model===LATE&&
   f.exchangeAtWitness?.state==='MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET');
 }
+// Aggregate diagnostic *polls*, never unique contracts or scored outcomes.
+// Every bucket is a numeric count; the original frozen evidence is untouched.
+function emptyEligibilityBucket(){
+ return {validSourcePolls:0,unavailableSourcePolls:0,invalidSourcePolls:0,
+  eligibleForecastPolls:0,expiredOnlyPolls:0,otherIneligiblePolls:0,
+  emptyJournalPolls:0};
+}
+function recordEligibilityPoll(rollup,diagnostics){
+ for(const kind of ['early','late']){
+  const x=diagnostics?.[kind],bucket=rollup[kind];
+  if(x?.status==='SOURCE_UNAVAILABLE_OR_UNFETCHED'){
+   bucket.unavailableSourcePolls++;
+  }else if(x?.status==='SOURCE_JOURNAL_INVALID'){
+   bucket.invalidSourcePolls++;
+  }else if(x?.status==='VALID_SELF_HASHED_SOURCE_JOURNAL'){
+   if(!Number.isInteger(x.forecastCount)||x.forecastCount<0||
+      !Number.isInteger(x.eligibleBeforeThreeRecordCap)||
+      x.eligibleBeforeThreeRecordCap<0||
+      x.eligibleBeforeThreeRecordCap>x.forecastCount||
+      !Number.isInteger(x.reasons?.EXPIRED_OR_WITHIN_15S_CLOSE_GUARD))
+    throw Error('Invalid public eligibility diagnostic');
+   bucket.validSourcePolls++;
+   if(x.forecastCount===0)bucket.emptyJournalPolls++;
+   else if(x.eligibleBeforeThreeRecordCap>0)bucket.eligibleForecastPolls++;
+   else if(x.reasons.EXPIRED_OR_WITHIN_15S_CLOSE_GUARD===x.forecastCount)
+    bucket.expiredOnlyPolls++;
+   else bucket.otherIneligiblePolls++;
+  }else throw Error('Missing public eligibility diagnostic');
+ }
+}
 async function watchScheduledObserver({
  observer=runObserver,clock=()=>Date.now(),wait=sleep,
  outDirectory='witness',maxRuntimeMs=MAX_RUNTIME_MS,
@@ -52,13 +82,19 @@ async function watchScheduledObserver({
  let best=null,rank=0,attempts=0,lastError=null,stopReason='TIME_BUDGET_EXHAUSTED';
  let validProbes=0,invalidProbes=0,emptyProbes=0,provisionalLateProbes=0,directLateProbes=0;
  let probeArtifactsPreserved=0;
+ const eligibilityPolls={early:emptyEligibilityBucket(),late:emptyEligibilityBucket()};
  const seenSourceCommitments=new Map();
  const probeDir=path.join(outDirectory,'.probe');
  const archiveDir=path.join(outDirectory,'probes');
  while(attempts<maxAttempts&&clock()<=deadline){
   attempts++;
   try{
-   const r=await observer({outDirectory:probeDir});
+   let diagnosticReceived=false;
+   const r=await observer({outDirectory:probeDir,onEligibility:diagnostics=>{
+    if(diagnosticReceived)throw Error('Duplicate eligibility diagnostic');
+    diagnosticReceived=true;
+    recordEligibilityPoll(eligibilityPolls,diagnostics);
+   }});
    // Revalidate every candidate using the existing external-witness
    // envelope rules. Invalid or unsafe responses cannot write artifacts.
    validObservation(r);
@@ -129,6 +165,9 @@ async function watchScheduledObserver({
    x.model===LATE&&['YES','NO'].includes(x.frozenSide)).length||0,
   directExchangeMatches:best?.directExchangeMatches||0,
   firstObservedAtRunner:best?.observedAtRunner||null,
+  // Optional V1 summary extension. Counts refer to source polls, not distinct
+  // frozen forecasts, not witnessed trades and not independent qualification.
+  eligibilityPolls,
   independentQualifiedCount:0,ordersEnabled:false,
   lastError:lastError||null
  };
@@ -146,6 +185,8 @@ async function watchScheduledObserver({
  console.log('CASH_WATCH_RECORDED='+summary.evidenceRecorded);
  console.log('CASH_WATCH_LATE_DIRECTIONAL='+summary.lateDirectionalRecorded);
  console.log('CASH_WATCH_DIRECT_MATCHES='+summary.directExchangeMatches);
+ console.log('CASH_WATCH_ELIGIBILITY_EARLY='+JSON.stringify(eligibilityPolls.early));
+ console.log('CASH_WATCH_ELIGIBILITY_LATE='+JSON.stringify(eligibilityPolls.late));
  console.log('CASH_WATCH_INDEPENDENTLY_QUALIFIED=0');
  return summary;
 }
@@ -158,4 +199,4 @@ if(require.main===module)
  });
 module.exports={watchScheduledObserver,evidenceRank,isReady,MAX_RUNTIME_MS,
  TRUSTED_SCHEDULE_COMPLETION_BUDGET_MS,budgetForObserverEvent,
- POLL_INTERVAL_MS,MAX_ATTEMPTS};
+ POLL_INTERVAL_MS,MAX_ATTEMPTS,emptyEligibilityBucket,recordEligibilityPoll};
