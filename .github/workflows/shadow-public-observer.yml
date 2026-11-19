@@ -5,6 +5,12 @@ on:
   schedule:
     - cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *'
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - 'CASH dual-model research snapshot'
+      - 'CASH pre-expiry public research observer'
+      - 'CASH witnessed-settlement reconciliation'
+    types: [completed]
 permissions:
   contents: read
 concurrency:
@@ -42,7 +48,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
   capture-shadow-public:
-    if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'schedule' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)) }}
     permissions:
       contents: write
     runs-on: ubuntu-latest
