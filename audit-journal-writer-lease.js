@@ -11,6 +11,7 @@ function withExclusiveJournalLease({directory},operation){
  const lock=path.join(directory,'.shadow-journal-writer.lock');
  // Fail closed on stale locks: never steal an unverified writer lease.
  const fd=fs.openSync(lock,'wx',0o600);
+ const identity=fs.fstatSync(fd);
  try{
   fs.writeSync(fd,JSON.stringify({pid:process.pid,createdAt:new Date().toISOString()})+'\n');
   fs.fsyncSync(fd);
@@ -18,7 +19,18 @@ function withExclusiveJournalLease({directory},operation){
   if(result&&typeof result.then==='function')throw Error('Async lease operation unsupported');
   return result;
  }finally{
-  try{fs.closeSync(fd)}finally{fs.unlinkSync(lock)}
+  // A different process may have replaced the pathname while our lease was held.
+  // Never remove another owner's lock or silently grant concurrent ownership.
+  let sameOwner=false;
+  try{
+   const current=fs.lstatSync(lock);
+   sameOwner=current.isFile()&&!current.isSymbolicLink()&&
+     current.dev===identity.dev&&current.ino===identity.ino;
+  }catch(error){if(error.code!=='ENOENT')throw error}
+  try{fs.closeSync(fd)}finally{
+   if(sameOwner)fs.unlinkSync(lock);
+  }
+  if(!sameOwner)throw Error('Writer lease pathname changed; manual recovery required');
  }
 }
 module.exports={withExclusiveJournalLease};
