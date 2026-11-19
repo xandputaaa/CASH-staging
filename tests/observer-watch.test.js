@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
-const {watchScheduledObserver,evidenceRank,MAX_RUNTIME_MS}=require('../observer-watch');
+const {watchScheduledObserver,evidenceRank,MAX_RUNTIME_MS,emptyEligibilityBucket,recordEligibilityPoll}=require('../observer-watch');
 const EARLY='KXBTC15M_SETTLEMENT_EARLY_V3';
 const LATE='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1';
 const close='2026-11-18T02:15:00Z';
@@ -150,4 +150,52 @@ test('bounded runner rejects schedules beyond published max or invalid loops',as
  await assert.rejects(watchScheduledObserver({maxRuntimeMs:MAX_RUNTIME_MS+1}),/Unsafe bounded/);
  await assert.rejects(watchScheduledObserver({maxAttempts:999}),/Unsafe bounded/);
  assert.equal(evidenceRank({frozenEvidence:[]}),0);
+});
+
+test('source eligibility rolls up polls without claiming distinct contracts or outcomes',async()=>{
+ const bucket={early:emptyEligibilityBucket(),late:emptyEligibilityBucket()};
+ const valid=(count,eligible,expired)=>({
+  status:'VALID_SELF_HASHED_SOURCE_JOURNAL',forecastCount:count,
+  eligibleBeforeThreeRecordCap:eligible,
+  reasons:{EXPIRED_OR_WITHIN_15S_CLOSE_GUARD:expired}});
+ recordEligibilityPoll(bucket,{early:valid(4,0,4),
+  late:{status:'SOURCE_UNAVAILABLE_OR_UNFETCHED'}});
+ recordEligibilityPoll(bucket,{early:valid(5,1,4),late:valid(5,0,4)});
+ recordEligibilityPoll(bucket,{early:valid(0,0,0),late:{status:'SOURCE_JOURNAL_INVALID'}});
+ assert.deepEqual(bucket.early,{
+  validSourcePolls:3,unavailableSourcePolls:0,invalidSourcePolls:0,
+  eligibleForecastPolls:1,expiredOnlyPolls:1,otherIneligiblePolls:0,
+  emptyJournalPolls:1});
+ assert.deepEqual(bucket.late,{
+  validSourcePolls:1,unavailableSourcePolls:1,invalidSourcePolls:1,
+  eligibleForecastPolls:0,expiredOnlyPolls:0,otherIneligiblePolls:1,
+  emptyJournalPolls:0});
+ assert.throws(()=>recordEligibilityPoll(bucket,{
+  early:valid(-1,0,0),late:valid(1,1,0)}),/Invalid public eligibility/);
+ assert.doesNotMatch(JSON.stringify(bucket),/KXBTC15M-|privateKey|spotPrice|priceToBeat/);
+});
+test('real scheduled watcher persists only aggregate public eligibility, never modifies frozen witness',async()=>{
+ const dir=temp();let t=Date.parse('2026-11-18T02:12:00Z');
+ const valid=(count,eligible,expired)=>({
+  status:'VALID_SELF_HASHED_SOURCE_JOURNAL',
+  forecastCount:count,eligibleBeforeThreeRecordCap:eligible,
+  reasons:{EXPIRED_OR_WITHIN_15S_CLOSE_GUARD:expired}});
+ const r=await watchScheduledObserver({outDirectory:dir,clock:()=>t,
+  wait:async ms=>{t+=ms;},maxRuntimeMs:90000,pollIntervalMs:40000,
+  observer:async({onEligibility})=>{
+   onEligibility({early:valid(4,0,4),late:valid(5,1,4)});
+   return response(t,[e(LATE,Date.parse('2026-11-18T02:11:32Z'),
+    'WAIT',true,t+1000)]);
+  }});
+ assert.equal(r.attempts,1);
+ assert.equal(r.eligibilityPolls.early.expiredOnlyPolls,1);
+ assert.equal(r.eligibilityPolls.late.eligibleForecastPolls,1);
+ assert.equal(r.independentQualifiedCount,0);
+ const stored=JSON.parse(fs.readFileSync(path.join(dir,'observer-run-summary.json')));
+ assert.deepEqual(stored.eligibilityPolls,r.eligibilityPolls);
+ const observed=JSON.parse(fs.readFileSync(
+  path.join(dir,'public-preexpiry-observation.json')));
+ assert.equal(observed.frozenEvidence[0].frozenSide,'WAIT');
+ assert.equal(Object.hasOwn(observed,'eligibilityPolls'),false);
+ fs.rmSync(dir,{recursive:true,force:true});
 });

@@ -189,7 +189,7 @@ async function fetchPublic(url,fetchImpl=fetch){
 }
 async function runObserver({
  fetchImpl=fetch,clock=()=>Date.now(),outDirectory='witness',
- env=process.env
+ env=process.env,onEligibility=null
 }={}){
  const [early,late]=await Promise.all([
   fetchPublic(BASE+'/api/prospective/export',fetchImpl).catch(()=>null),
@@ -200,10 +200,18 @@ async function runObserver({
   runId:env.GITHUB_RUN_ID,repository:env.GITHUB_REPOSITORY,commitSha:env.GITHUB_SHA});
  // These diagnostics cannot manufacture a witness; the observer envelope,
  // model verdicts, contract selection and journal checks are unchanged.
+ const eligibility={};
  for(const [kind,snapshot] of Object.entries({early,late})){
   const aggregate=diagnosePublicEligibility(snapshot,kind,Date.parse(observedAt));
+  eligibility[kind]=aggregate;
   console.log('CASH_OBSERVER_PUBLIC_ELIGIBILITY_'+kind.toUpperCase()+'='+
    JSON.stringify(aggregate));
+ }
+ // A local-only callback collects aggregate source-status metrics for the
+ // scheduled watcher. Never place this data in a frozen forecast envelope.
+ if(onEligibility!==null){
+  if(typeof onEligibility!=='function')throw Error('Invalid observer diagnostic collector');
+  onEligibility(eligibility);
  }
  // A second, independent read-only network request made DIRECTLY by
  // GitHub to Kalshi. Failure must be reported, not silently considered

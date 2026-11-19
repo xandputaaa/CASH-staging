@@ -243,3 +243,42 @@ test('archive creation refuses the future GitHub source and mismatched event att
  assert.throws(()=>validateSource(x.origin,{...x.source,event:'schedule'},x.parent),
   /Untrusted observer GitHub run/);
 });
+
+test('bounded eligibility poll rollup archives intact while legacy original summaries remain accepted',t=>{
+ const x=fixture(t);
+ const summaryFile=path.join(x.artifact,'observer-run-summary.json');
+ const original=JSON.parse(fs.readFileSync(summaryFile));
+ original.eligibilityPolls={
+  early:{validSourcePolls:2,unavailableSourcePolls:0,invalidSourcePolls:0,
+   eligibleForecastPolls:1,expiredOnlyPolls:1,otherIneligiblePolls:0,
+   emptyJournalPolls:0},
+  late:{validSourcePolls:1,unavailableSourcePolls:1,invalidSourcePolls:0,
+   eligibleForecastPolls:1,expiredOnlyPolls:0,otherIneligiblePolls:0,
+   emptyJournalPolls:0}
+ };
+ put(summaryFile,original);
+ archive(x);
+ const archived=JSON.parse(fs.readFileSync(path.join(
+  x.root,'late-preexpiry-run',RUN,'observer-run-summary.json')));
+ assert.deepEqual(archived.eligibilityPolls,original.eligibilityPolls);
+ assert.equal(inspectArchive(x.root).independentlyQualifiedCount,0);
+});
+test('forged, inconsistent or sensitive eligibility poll rollups fail closed',t=>{
+ const zero=()=>({validSourcePolls:0,unavailableSourcePolls:0,invalidSourcePolls:0,
+  eligibleForecastPolls:0,expiredOnlyPolls:0,otherIneligiblePolls:0,
+  emptyJournalPolls:0});
+ for(const change of [
+  x=>{x.early.validSourcePolls=3;},
+  x=>{x.late.eligibleForecastPolls=1;},
+  x=>{x.early.privateKey='SECRET';},
+  x=>{x.late.invalidSourcePolls=-1;}
+ ]){
+  const a=fixture(t),summaryFile=path.join(a.artifact,'observer-run-summary.json');
+  const s=JSON.parse(fs.readFileSync(summaryFile));
+  s.eligibilityPolls={early:zero(),late:zero()};
+  change(s.eligibilityPolls);
+  put(summaryFile,s);
+  assert.throws(()=>archive(a),/Inconsistent public eligibility poll summary|extra provenance/);
+  assert.equal(inspectArchive(a.root).runs,0);
+ }
+});

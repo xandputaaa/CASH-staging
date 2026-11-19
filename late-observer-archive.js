@@ -85,7 +85,8 @@ function validateSource(origin,run,parent){
  return {created,updated};
 }
 function validateSummary(summary){
- strictKeys(summary,[
+ const hasEligibility=Object.hasOwn(summary,'eligibilityPolls');
+ const summaryKeys=[
   'version','attempts','stopReason','validProbes','invalidProbes',
   'emptyProbes','provisionalLateProbes','directLateProbes',
   'captureCompletenessProven','evidenceRecorded',
@@ -93,7 +94,10 @@ function validateSummary(summary){
   'probeArchiveSelectionBasedOnOutcome','lateDirectionalRecorded',
   'directExchangeMatches','firstObservedAtRunner',
   'independentQualifiedCount','ordersEnabled','lastError'
- ]);
+ ];
+ // Existing original archives predate the new optional diagnostic. Do not
+ // retroactively rewrite them or silently reinterpret missing data as zero.
+ strictKeys(summary,hasEligibility?[...summaryKeys,'eligibilityPolls']:summaryKeys);
  if(summary.version!=='CASH_SCHEDULED_WITNESS_WATCH_V1'||
     !Number.isInteger(summary.attempts)||summary.attempts<1||
     summary.attempts>20||!Number.isInteger(summary.validProbes)||
@@ -115,6 +119,23 @@ function validateSummary(summary){
     (summary.lastError!==null&&
       (typeof summary.lastError!=='string'||summary.lastError.length>200)))
   throw Error('Inconsistent late watcher summary');
+ if(hasEligibility){
+  strictKeys(summary.eligibilityPolls,['early','late']);
+  const keys=['validSourcePolls','unavailableSourcePolls','invalidSourcePolls',
+   'eligibleForecastPolls','expiredOnlyPolls','otherIneligiblePolls',
+   'emptyJournalPolls'];
+  for(const kind of ['early','late']){
+   const x=summary.eligibilityPolls[kind];
+   strictKeys(x,keys);
+   if(keys.some(k=>!Number.isInteger(x[k])||x[k]<0||
+      x[k]>summary.attempts)||
+      x.validSourcePolls+x.unavailableSourcePolls+x.invalidSourcePolls>
+        summary.attempts||
+      x.eligibleForecastPolls+x.expiredOnlyPolls+
+      x.otherIneligiblePolls+x.emptyJournalPolls!==x.validSourcePolls)
+    throw Error('Inconsistent public eligibility poll summary');
+  }
+ }
 }
 function checkObservation(obs,origin,bounds){
  validObservation(obs);
