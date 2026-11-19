@@ -337,3 +337,16 @@ test('trigger conversion excludes historical unknowns and fails closed on imposs
   witnessConversion:{early:bad,late:bad}})]),
   /Trigger conversion/);
 });
+
+
+test('aggregate poll counts fail closed before exceeding exact integer precision',()=>{
+ const n=Number.MAX_SAFE_INTEGER-10;
+ const huge=i=>r(i,{attempts:n,valid:n,empty:n,invalid:0,
+  commitments:0,directional:0});
+ assert.throws(()=>summarizeCaptures([huge(1),huge(2)]),
+  /Unsafe aggregated observer denominator/);
+ const x=summarizeCaptures([huge(1)]);
+ assert.equal(x.originalPolls.attempted,n);
+ assert.equal(x.independentlyQualifiedCount,0);
+ assert.equal(x.realMoneyOrdersEnabled,false);
+});
