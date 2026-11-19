@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
-const {watchScheduledObserver,evidenceRank,MAX_RUNTIME_MS,emptyEligibilityBucket,recordEligibilityPoll,emptyConversionBucket,recordWitnessConversion}=require('../observer-watch');
+const {watchScheduledObserver,evidenceRank,MAX_RUNTIME_MS,emptyEligibilityBucket,recordEligibilityPoll,emptyConversionBucket,recordWitnessConversion,safeObserverError}=require('../observer-watch');
 const EARLY='KXBTC15M_SETTLEMENT_EARLY_V3';
 const LATE='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1';
 const close='2026-11-18T02:15:00Z';
@@ -271,5 +271,24 @@ test('invalid observer envelope cannot fabricate source eligibility success',asy
  assert.equal(r.eligibilityPolls.early.eligibleForecastPolls,0);
  assert.equal(r.witnessConversion.early.diagnosticPolls,0);
  assert.equal(r.independentQualifiedCount,0);
+ fs.rmSync(dir,{recursive:true,force:true});
+});
+
+test('observer errors are classified without exposing attacker-controlled strings',async()=>{
+ const secret='token=super-secret&marketId=KXBTC15M-PRIVATE';
+ assert.equal(safeObserverError(Error('request failed '+secret)),'OBSERVER_POLL_FAILED');
+ assert.equal(safeObserverError(Error('Invalid observation '+secret)),'PROBE_VALIDATION_REJECTED');
+ assert.equal(safeObserverError(Error('Invalid public eligibility diagnostic '+secret)),'SOURCE_DIAGNOSTIC_INVALID');
+ assert.equal(safeObserverError(Error('Oversized observation probe '+secret)),'PROBE_OVERSIZED');
+ const dir=temp();let t=at;
+ const summary=await watchScheduledObserver({outDirectory:dir,clock:()=>t,
+  wait:async ms=>{t+=ms;},maxRuntimeMs:80000,pollIntervalMs:40000,
+  observer:async()=>{throw Error('https://host/path?'+secret);}});
+ assert.equal(summary.lastError,'OBSERVER_POLL_FAILED');
+ assert.equal(summary.validProbes,0);
+ assert.equal(summary.independentQualifiedCount,0);
+ assert.equal(summary.ordersEnabled,false);
+ const persisted=fs.readFileSync(path.join(dir,'observer-run-summary.json'),'utf8');
+ assert.doesNotMatch(persisted,/super-secret|KXBTC15M-PRIVATE|https:\/\/host/);
  fs.rmSync(dir,{recursive:true,force:true});
 });
