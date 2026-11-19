@@ -1,0 +1,20 @@
+{
+  "version": "CASH_PUBLIC_LATE_GITHUB_OBSERVER_ORIGIN_V1",
+  "sourceWorkflow": "CASH pre-expiry public research observer",
+  "runId": "44626414846",
+  "event": "workflow_run",
+  "repository": "xandputaaa/CASH-staging",
+  "headBranch": "main",
+  "headSha": "5739d552aae4e93efeda230d3916f0b86170aca6",
+  "parent": {
+    "id": "44626170333",
+    "name": "CASH witnessed-settlement reconciliation",
+    "event": "schedule",
+    "conclusion": "success",
+    "headBranch": "main",
+    "headRepository": "xandputaaa/CASH-staging"
+  },
+  "independentlyQualifiedCount": 0,
+  "ordersEnabled": false,
+  "note": "GitHub workflow-event metadata, cross-check with direct GitHub API before archiving. No independently certified trading prediction, inference-time BRTI calculation, executable quote, fill or profit."
+}
