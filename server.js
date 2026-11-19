@@ -46,7 +46,8 @@ const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
 const kalshiFeeFeed=createKalshiFeeFeed();
 const resolver=createResolver();
-const auditJournal=createAuditJournal();
+// Explicit opt-in only: preserve existing behavior until all rollover participants use the lease.
+const auditJournal=createAuditJournal({exclusiveWriter:process.env.CASH_EXCLUSIVE_JOURNAL_WRITER==='1'});
 const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver,journal:auditJournal,spot:feed});
 const brtiFeed=createKalshiBrtiFeed();
 const orderVerifier=createKalshiOrderVerifier();
