@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test expiry, strike, result, witnesses, abstentions and tampering
-        run: node --test tests/cash-shadow-settlement-*.test.js
+        run: node --test tests/cash-shadow-settlement-*.test.js tests/cash-shadow-exchange-archive.test.js
       - name: Checkout externally witnessed archive read-only
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -32,6 +32,8 @@ jobs:
           persist-credentials: false
       - name: Verify real witness branch chronology before any result check
         run: node cash-shadow-witness-coverage.js shadow-witness-store
+      - name: Verify paired pre-expiry public Kalshi checks in real GitHub archive
+        run: node -e "const x=require('./cash-shadow-exchange-archive').inspectShadowExchangeArchive('shadow-witness-store');console.log('CASH_SHADOW_PAIRED_EXCHANGE_ARCHIVED_MATCHES='+x.matchedUniqueContracts);console.log('CASH_SHADOW_PAIRED_EXCHANGE_UNIQUE='+x.witnessedUniqueContracts);console.log('CASH_SHADOW_PAIRED_EXCHANGE_QUALIFIED=0')"
       - name: Read-only live integration smoke with Railway public shadow source
         run: node cash-shadow-settlement-runner.js
       - name: Retain PR-only provisional integration report
