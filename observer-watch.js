@@ -12,7 +12,11 @@ const fs=require('node:fs'),path=require('node:path');
 const {runObserver}=require('./preexpiry-observer');
 const {validObservation}=require('./observed-settlement-reconciler');
 const MAX_RUNTIME_MS=12*60*1000;
+const TRUSTED_SCHEDULE_COMPLETION_BUDGET_MS=3*60*1000;
 const POLL_INTERVAL_MS=40000;
+function budgetForObserverEvent(eventName){
+ return eventName==='workflow_run'?TRUSTED_SCHEDULE_COMPLETION_BUDGET_MS:MAX_RUNTIME_MS;
+}
 const MAX_ATTEMPTS=20;
 const LATE='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -144,9 +148,12 @@ async function watchScheduledObserver({
  return summary;
 }
 if(require.main===module)
- watchScheduledObserver().catch(e=>{
+ watchScheduledObserver({
+  maxRuntimeMs:budgetForObserverEvent(process.env.GITHUB_EVENT_NAME)
+ }).catch(e=>{
   console.error('CASH scheduled witness watch failed closed: '+String(e?.message||e));
   process.exitCode=1;
  });
 module.exports={watchScheduledObserver,evidenceRank,isReady,MAX_RUNTIME_MS,
+ TRUSTED_SCHEDULE_COMPLETION_BUDGET_MS,budgetForObserverEvent,
  POLL_INTERVAL_MS,MAX_ATTEMPTS};
