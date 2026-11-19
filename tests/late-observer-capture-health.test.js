@@ -103,3 +103,39 @@ test('existing scheduled cross-archive workflow audits actual original witness-h
  assert.match(y,/permissions:\s*\n  contents: read/);
  assert.doesNotMatch(y,/contents: write/);
 });
+
+test('eligibility rollup counts only original diagnostic-bearing runs and preserves legacy unknowns',()=>{
+ const diag=(eligible,expired)=>({
+  early:{validSourcePolls:1,unavailableSourcePolls:1,invalidSourcePolls:0,
+   eligibleForecastPolls:eligible,expiredOnlyPolls:expired,
+   otherIneligiblePolls:0,emptyJournalPolls:0},
+  late:{validSourcePolls:1,unavailableSourcePolls:0,invalidSourcePolls:1,
+   eligibleForecastPolls:0,expiredOnlyPolls:1,
+   otherIneligiblePolls:0,emptyJournalPolls:0}
+ });
+ const x=summarizeCaptures([r(1),r(2,{eligibilityPolls:diag(1,0)}),
+  r(3,{eligibilityPolls:diag(0,1)})]);
+ assert.equal(x.sourceEligibilityDiagnostics.archivedRunsWithDiagnostics,2);
+ assert.equal(x.sourceEligibilityDiagnostics.archivedRunsWithoutDiagnostics,1);
+ assert.equal(x.sourceEligibilityDiagnostics.early.eligibleForecastPolls,1);
+ assert.equal(x.sourceEligibilityDiagnostics.early.expiredOnlyPolls,1);
+ assert.equal(x.sourceEligibilityDiagnostics.late.invalidSourcePolls,2);
+ assert.equal(x.independentlyQualifiedCount,0);
+ assert.equal(x.realMoneyOrdersEnabled,false);
+});
+test('malformed eligibility diagnostics fail closed rather than fabricate coverage',()=>{
+ const valid={early:{validSourcePolls:1,unavailableSourcePolls:0,
+  invalidSourcePolls:0,eligibleForecastPolls:1,expiredOnlyPolls:0,
+  otherIneligiblePolls:0,emptyJournalPolls:0},
+ late:{validSourcePolls:0,unavailableSourcePolls:0,invalidSourcePolls:0,
+  eligibleForecastPolls:0,expiredOnlyPolls:0,
+  otherIneligiblePolls:0,emptyJournalPolls:0}};
+ assert.throws(()=>summarizeCaptures([r(1,{eligibilityPolls:null})]),
+  /Malformed original eligibility/);
+ assert.throws(()=>summarizeCaptures([r(1,{eligibilityPolls:{
+  ...valid,early:{...valid.early,expiredOnlyPolls:1}}})]),
+  /Malformed original eligibility/);
+ assert.throws(()=>summarizeCaptures([r(1,{eligibilityPolls:{
+  ...valid,late:{...valid.late,invalidSourcePolls:6}}})]),
+  /Malformed original eligibility/);
+});
