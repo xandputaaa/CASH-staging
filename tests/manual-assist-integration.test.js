@@ -41,3 +41,41 @@ test('manual preview rejects stale or missing fee observation even with live sta
   assert.equal(result.executionAuthorized,false);
  }
 });
+
+test('risk ceiling blocks a preview above $10 including fees, with no execution',()=>{
+ const now=Date.parse('2026-11-19T20:00:00Z');
+ const quote={venue:'Kalshi',marketId:'KXBTC15M-26NOV192000',status:'live',refreshFailed:false,
+  fetchedAt:new Date(now-1000).toISOString(),endTime:new Date(now+300000).toISOString(),
+  contractRuleStatus:'BRTI_60S_RULE_TEXT_PRESENT',strikeType:'greater_or_equal',tieGoesToYes:true,
+  yesAsk:0.99,noAsk:0.01};
+ const fees={state:'SERIES_METADATA_LIVE',feeType:'quadratic',feeMultiplier:1,refreshedAt:new Date(now-1000).toISOString()};
+ const within=manualAssist({quote,fees,side:'YES',contracts:10,now});
+ const over=manualAssist({quote,fees,side:'YES',contracts:11,now});
+ assert.equal(within.status,'INFORMATION_ONLY');
+ assert.ok(within.estimatedMaxLossUsd<=10);
+ assert.equal(over.status,'BLOCKED');
+ assert.ok(over.estimatedMaxLossUsd>10);
+ assert.ok(over.blockers.includes('EXCEEDS_MAX_POTENTIAL_LOSS'));
+ assert.equal(over.executionAuthorized,false);
+ assert.equal(over.realOrdersEnabled,false);
+});
+test('bad prices, invalid sides, stale quote and missing settlement rules fail closed',()=>{
+ const now=Date.parse('2026-11-19T20:00:00Z');
+ const quote={venue:'Kalshi',marketId:'KXBTC15M-26NOV192000',status:'live',refreshFailed:false,
+  fetchedAt:new Date(now-1000).toISOString(),endTime:new Date(now+300000).toISOString(),
+  contractRuleStatus:'BRTI_60S_RULE_TEXT_PRESENT',strikeType:'greater_or_equal',tieGoesToYes:true,
+  yesAsk:0.5,noAsk:0.5};
+ const fees={state:'SERIES_METADATA_LIVE',feeType:'quadratic',feeMultiplier:1,refreshedAt:new Date(now-1000).toISOString()};
+ const cases=[
+  {side:'BUY',quote,reason:'INVALID_SIDE'},
+  {side:'YES',quote:{...quote,yesAsk:1},reason:'UNAVAILABLE_ASK_OR_FEE_ESTIMATE'},
+  {side:'YES',quote:{...quote,fetchedAt:new Date(now-13000).toISOString()},reason:'STALE_QUOTE'},
+  {side:'YES',quote:{...quote,tieGoesToYes:false},reason:'UNVERIFIED_SETTLEMENT_RULE'}
+ ];
+ for(const c of cases){
+  const result=manualAssist({quote:c.quote,fees,side:c.side,contracts:1,now});
+  assert.equal(result.status,'BLOCKED');
+  assert.ok(result.blockers.includes(c.reason));
+  assert.equal(result.executionAuthorized,false);
+ }
+});
