@@ -32,6 +32,15 @@ jobs:
           persist-credentials: false
       - name: Validate actual existing pre-expiry shadow witness archive
         run: node cash-shadow-witness-coverage.js witness-store
+      - name: Audit live source versus externally witnessed contract coverage (read only)
+        run: node cash-shadow-source-coverage-runner.js
+      - name: Retain PR coverage diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-shadow-collection-coverage-pr-${{ github.run_id }}
+          path: audit/shadow-source-observation-coverage.json
+          retention-days: 7
+          if-no-files-found: error
   capture-shadow-public:
     if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     permissions:
@@ -116,3 +125,13 @@ jobs:
           echo 'CASH_SHADOW_PUBLIC_WITNESS_ARCHIVED=true'
       - name: Audit unique public shadow contract coverage (no scoring)
         run: node cash-shadow-witness-coverage.js witness-store
+      - name: Compare all durable public shadow commitments with uniquely witnessed contracts
+        run: node cash-shadow-source-coverage-runner.js
+      - name: Retain read-only coverage gap diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-shadow-source-coverage-${{ github.run_id }}
+          path: audit/shadow-source-observation-coverage.json
+          retention-days: 90
+          if-no-files-found: warn
