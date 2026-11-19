@@ -345,6 +345,11 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
    mode:'PUBLIC_MARKET_FAVORED_ASK_V1',
    storageMode:journal?.mode||'VOLATILE_SERVER_SESSION',
    recoveredEvents:journal?.events?.length||0,
+   archivedPendingHydrated:archivedPendingState!==null,
+   archivedPendingCount:archivedPendingState?.pendingCount||0,
+   archivedHistoricalCaptures:archivedPendingState?.capturedCount||0,
+   archiveHydrationEvidenceStatus:archivedPendingState!==null?
+    'FILESYSTEM_JOURNAL_UNVERIFIED':null,
    qualifyingProspectiveContracts:0,requiredQualifyingContracts:100,
    qualifyingForModelAccuracy:false,independentForecastModel:false,
    warning:journal?.configured?'Read-only public market-favored quote baseline. Events are written to a local filesystem journal, but the volume and capture time have NOT been independently validated. These are NOT verified CASH AI predictions and do not count toward the 100-contract gate.':'Read-only public market-favored quote baseline. Session data disappears on restart and is not independently time-attested. These are NOT verified CASH AI predictions and do not count toward the 100 prospective-contract gate.',
