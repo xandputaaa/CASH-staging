@@ -37,6 +37,16 @@ jobs:
             # PR dry run and manual diagnostics are single-pass only.
             node preexpiry-observer.js
           fi
+      - name: Record trusted run and scheduled-parent provenance for durable audit
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_run'
+        env:
+          CASH_PARENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          CASH_PARENT_NAME: ${{ github.event.workflow_run.name }}
+          CASH_PARENT_EVENT: ${{ github.event.workflow_run.event }}
+          CASH_PARENT_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CASH_PARENT_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          CASH_PARENT_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+        run: node late-observer-origin.js
       - name: Retain public-only pre-expiry research evidence without orders
         uses: actions/upload-artifact@v4
         with:
