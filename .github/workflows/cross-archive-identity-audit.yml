@@ -3,6 +3,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    # A daily read-only audit of distinct public pre-expiry/settled cohorts.
+    - cron: '33 3 * * *'
 permissions:
   contents: read
 jobs:
@@ -24,6 +27,11 @@ jobs:
           ref: cash-public-evidence-ledger
           persist-credentials: false
           path: witnesses
+      - uses: actions/checkout@v4
+        with:
+          ref: cash-late-public-witness
+          persist-credentials: false
+          path: durable
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -32,4 +40,7 @@ jobs:
           node source/public-session-archive-inspection.js sessions > /dev/null
           node source/public-ledger-inspection.js witnesses > /dev/null
           node source/cross-archive-identity-audit.js sessions witnesses
+          # Public original-run archive never supplies outcomes on its own.
+          # Validate its exact original bytes/hashes before identity joining.
+          node source/late-public-cohort-audit.js durable witnesses
           echo CASH_CROSS_ARCHIVE_IDENTITY_AUDIT=PASS
