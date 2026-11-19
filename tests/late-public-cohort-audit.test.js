@@ -245,7 +245,7 @@ test('UTC close normalization preserves a real one-second mismatch and rejects i
 test('first GitHub witness lead bins are distinct model-market decisions, never duplicate polls',()=>{
  const rows=[
   defaultDurable({observedAt:'2026-11-19T04:29:45.000Z'}),
-  defaultDurable({observedAt:'2026-11-19T04:29:20.000Z'}),
+  defaultDurable({observedAt:'2026-11-19T04:27:50.000Z'}),
   defaultDurable({model:early,marketId:SECOND,hash:HASH2,
    observedAt:'2026-11-19T04:29:00.000Z'}),
   defaultDurable({model:late,hash:HASH2,
@@ -258,7 +258,7 @@ test('first GitHub witness lead bins are distinct model-market decisions, never 
  assert.deepEqual(t.early,{
   modelMarketDecisions:2,atMost30s:0,over30To60s:1,
   over60To120s:0,over120s:1,
-  minimumLeadSeconds:60,medianLeadSeconds:65,maximumLeadSeconds:70
+  minimumLeadSeconds:60,medianLeadSeconds:95,maximumLeadSeconds:130
  });
  assert.deepEqual(t.late,{
   modelMarketDecisions:1,atMost30s:0,over30To60s:0,
