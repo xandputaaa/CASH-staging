@@ -207,3 +207,37 @@ test('inconsistent winner or missing conditional paper economics fails closed',(
   paperPriced:true,netConservativeUSD:null})],0),
  /Invalid immutable public cohort/);
 });
+
+test('same real GitHub close instant with and without .000Z is one matched prospective commitment',()=>{
+ const market='KXBTC15M-26NOV190300-00';
+ const hash='82deefb637ee4613da18416de6179e9ab2725bf6f2bcded5a696934282d1685a';
+ const durable=defaultDurable({
+  model:late,marketId:market,side:'YES',hash,
+  close:'2026-11-19T08:00:00Z',
+  observedAt:'2026-11-19T07:56:33.094Z',
+  githubRunId:'44483220349'
+ });
+ const ledger=defaultLegacy({
+  model:late,marketId:market,side:'YES',hash,
+  close:'2026-11-19T08:00:00.000Z',
+  winner:'YES',directFinal:true,paperPriced:true,netConservativeUSD:0.007
+ });
+ const x=run([durable],[ledger],1);
+ assert.equal(x.overlap.identicalFrozenCommitments,1);
+ assert.equal(x.overlap.durableDirectionalWithSeparateScheduledTwoReadFinal,1);
+ assert.equal(x.distinctUnion.uniqueKalshiContracts,1);
+ assert.equal(x.scheduledLegacy.lateConservativeHypotheticalNetUSD,0.007);
+ assert.equal(x.independentlyQualifiedCount,0);
+});
+test('UTC close normalization preserves a real one-second mismatch and rejects invalid clock syntax',()=>{
+ const durable=defaultDurable({close:'2026-11-19T04:30:00Z'});
+ assert.throws(()=>run([durable],[defaultLegacy({close:'2026-11-19T04:30:01.000Z'})],1),
+  /conflicts with scheduled settled ledger/);
+ for(const close of [
+  '2026-11-19 04:30:00','2026-11-19T04:30:00-07:00',
+  '2026-11-19T04:30:00.00Z','2026-02-29T04:30:00Z','not-a-time'
+ ]){
+  assert.throws(()=>run([defaultDurable({close})],[],1),
+   /Invalid UTC contract close timestamp|Noncanonical UTC/);
+ }
+});
