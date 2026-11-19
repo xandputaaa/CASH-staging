@@ -1,0 +1,121 @@
+name: CASH durable late public pre-expiry witness archive
+on:
+  pull_request:
+    branches: [main]
+  workflow_run:
+    workflows:
+      - CASH pre-expiry public research observer
+    types: [completed]
+permissions:
+  actions: read
+  contents: read
+concurrency:
+  group: cash-late-public-witness-archive
+  cancel-in-progress: false
+jobs:
+  validate-public-observer-archive:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read only own trusted PR implementation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Verify origin, parent provenance, immutable evidence and injection safety
+        run: node --test tests/late-observer-origin.test.js tests/late-observer-archive.test.js
+      - name: Read-only checkout of durable public late archive
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cash-late-public-witness
+          path: late-store
+          persist-credentials: false
+      - name: Audit existing archive without modifying it
+        run: node -e "const x=require('./late-observer-archive').inspectArchive('late-store');console.log('CASH_LATE_PREEXPIRY_ARCHIVE_RUNS='+x.runs);console.log('CASH_LATE_PREEXPIRY_QUALIFIED=0')"
+  archive-successful-public-observer:
+    # Privileged workflow_run NEVER executes code from the source run or PR,
+    # only frozen main-branch verifier with public-origin artifact validation.
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_run') &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    permissions:
+      contents: write
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      GH_TOKEN: \${{ github.token }}
+      CASH_SOURCE_RUN_ID: \${{ github.event.workflow_run.id }}
+    steps:
+      - name: Use only trusted default main branch archive validator
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Fetch authentic observer run metadata and exact existing run artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$CASH_SOURCE_RUN_ID" =~ ^[0-9]{8,16}$ ]]; then
+            echo 'CASH_LATE_ARCHIVE_BAD_SOURCE_RUN_ID=true'
+            exit 1
+          fi
+          mkdir -p audit/late-source audit/late-meta
+          gh api "repos/\${GITHUB_REPOSITORY}/actions/runs/\${CASH_SOURCE_RUN_ID}" > audit/late-meta/source.json
+          gh run download "$CASH_SOURCE_RUN_ID" \
+            -n "cash-preexpiry-observation-\${CASH_SOURCE_RUN_ID}" \
+            -D audit/late-source
+          test -s audit/late-source/observer-origin.json
+          test -s audit/late-source/observer-run-summary.json
+          PARENT_RUN_ID="$(node -e "const v=require('./audit/late-source/observer-origin.json');process.stdout.write(v.parent?.id||'NONE')")"
+          if [[ "$PARENT_RUN_ID" == "NONE" ]]; then
+            echo 'CASH_LATE_ARCHIVE_DIRECT_SCHEDULE=true'
+          elif [[ "$PARENT_RUN_ID" =~ ^[0-9]{8,16}$ ]]; then
+            gh api "repos/\${GITHUB_REPOSITORY}/actions/runs/\${PARENT_RUN_ID}" > audit/late-meta/parent.json
+          else
+            echo 'CASH_LATE_ARCHIVE_UNTRUSTED_PARENT_ID=true'
+            exit 1
+          fi
+      - name: Checkout separate append-only nondefault public research witness branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cash-late-public-witness
+          path: late-store
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Verify original runner timestamps, provenance, all immutable probes and archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f audit/late-meta/parent.json ]]; then
+            PARENT_FILE='audit/late-meta/parent.json'
+          else
+            PARENT_FILE='NONE'
+          fi
+          node late-observer-archive.js \
+            audit/late-source audit/late-meta/source.json \
+            "$PARENT_FILE" late-store
+      - name: Commit public-only append-only run artifacts without model mutation
+        shell: bash
+        working-directory: late-store
+        run: |
+          set -euo pipefail
+          if [[ -z "$(git status --porcelain -- late-preexpiry-run)" ]]; then
+            echo 'CASH_LATE_ARCHIVE_NO_CHANGE=true'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- late-preexpiry-run
+          git commit -m "Append pre-expiry CASH public runner evidence (run \${CASH_SOURCE_RUN_ID})"
+          git push origin HEAD:cash-late-public-witness
+          echo 'CASH_LATE_DURABLE_ARCHIVE_APPENDED=true'
