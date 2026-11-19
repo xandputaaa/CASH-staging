@@ -75,8 +75,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
-      - name: Observe public shadow journal using runner UTC after fetch
-        run: node cash-shadow-public-observer-runner.js
+      - name: Observe public shadow journal using fresh runner UTC in a bounded retry window
+        run: node cash-shadow-bounded-observer.js
       - name: Independently check frozen contract public Kalshi strike and rule before expiry
         run: node cash-shadow-exchange-corroboration.js
       - name: Retain second-source Kalshi public market diagnostics
