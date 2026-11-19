@@ -15,14 +15,16 @@ function inspectArchiveSemanticIndex({manifest,directory,activeJournalPath,limit
  const active=bytes.length?bytes.toString('utf8').trimEnd().split('\n').map(JSON.parse):[];
  verifyChain(active,{limit});
  const records=new Map();
+ const archivedCaptureIds=new Set(),activeCaptureIds=new Set();
  let resolved=0;
- function accept(event){
+ function accept(event,origin){
   const x=event.payload,id=x?.id;
   if(typeof id!=='string'||!id)throw Error('Missing audit identity');
   if(event.type==='CAPTURE'){
    if(records.has(id))throw Error('Duplicate capture across archive history');
    if(!isValidCaptureEvidence(x,minimumLeadMs))throw Error('Semantically invalid archived capture');
    records.set(id,{capture:x,resolved:false});
+   (origin==='ARCHIVE'?archivedCaptureIds:activeCaptureIds).add(id);
   }else if(event.type==='RESOLUTION'){
    const record=records.get(id);
    if(!record||record.resolved)throw Error('Orphan or duplicate resolution across archive history');
@@ -39,13 +41,15 @@ function inspectArchiveSemanticIndex({manifest,directory,activeJournalPath,limit
   const reread=readSegment(path.join(directory,segment.filename),{limit});
   if(reread.sha256!==segment.sha256||reread.chainTip!==segment.chainTip||reread.events.length!==segment.eventCount)
    throw Error('Archive segment changed after manifest verification');
-  for(const event of reread.events)accept(event);
+  for(const event of reread.events)accept(event,'ARCHIVE');
  }
- for(const event of active)accept(event);
+ for(const event of active)accept(event,'ACTIVE');
  const pendingIds=[...records].filter(([,x])=>!x.resolved).map(([id])=>id).sort();
  return Object.freeze({state:'ARCHIVE_SEMANTIC_INDEX_VERIFIED',
   captures:records.size,resolutions:resolved,
   capturedIds:Object.freeze([...records.keys()].sort()),pendingIds:Object.freeze(pendingIds),
+  archivedCaptureIds:Object.freeze([...archivedCaptureIds].sort()),
+  activeCaptureIds:Object.freeze([...activeCaptureIds].sort()),
   pending:pendingIds.length,archivedEvents:verified.totalEvents,activeEvents:active.length,
   evidenceStatus:'FILESYSTEM_JOURNAL_UNVERIFIED',mutatesStorage:false,
   liveStartupEnabled:false,automaticRolloverEnabled:false});
