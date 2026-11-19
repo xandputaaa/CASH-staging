@@ -11,6 +11,11 @@ function planShadowRollover({journalPath,archiveDirectory,maxEvents=650,maxRecor
  if(!journalStat.isFile()||journalStat.isSymbolicLink()||journalStat.size>12*1024*1024)
   throw Error('Unsafe active journal');
  if(!archiveStat.isDirectory()||archiveStat.isSymbolicLink())throw Error('Unsafe archive directory');
+ const sourceDirectory=path.dirname(journalPath);
+ const sourceStat=fs.lstatSync(sourceDirectory);
+ if(!sourceStat.isDirectory()||sourceStat.isSymbolicLink())throw Error('Unsafe source directory');
+ if(fs.realpathSync(sourceDirectory)===fs.realpathSync(archiveDirectory))
+  throw Error('Archive destination must differ from source');
  const raw=fs.readFileSync(journalPath);
  if(!raw.length||raw[raw.length-1]!==10)throw Error('Incomplete or empty active journal');
  const events=raw.toString('utf8').trimEnd().split('\n').map(line=>JSON.parse(line));
