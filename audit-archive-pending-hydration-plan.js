@@ -15,6 +15,15 @@ function planArchivedPendingHydration(options){
    pendingReason:null,captureSequence:null,
    archiveRecovered:true});
  });
+ // Archived pending captures are evidence, not trusted mutable runtime objects.
+ // Clone their nested quote/spot evidence so a caller cannot mutate the
+ // recovery result and accidentally change another consumer's state.
+ for(const record of pendingRecords){
+  if(record.observedAsks&&typeof record.observedAsks==='object')
+   Object.freeze(record.observedAsks);
+  if(record.spotCandidate&&typeof record.spotCandidate==='object')
+   Object.freeze(record.spotCandidate);
+ }
  const ids=new Set(recovered.capturedIds);
  if(ids.size!==recovered.capturedCount||pendingRecords.some(r=>!ids.has(r.id)))
   throw Error('Recovered pending identities do not match historical identity set');
