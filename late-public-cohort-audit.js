@@ -52,7 +52,7 @@ function normalize(row,source){
        Date.parse(row.observedAt)>=Date.parse(row.close)||
        (row.frozenAt!==undefined&&
         (typeof row.frozenAt!=='string'||
-         !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$/.test(row.frozenAt)||
+         !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(row.frozenAt)||
          !Number.isFinite(Date.parse(row.frozenAt))||
          (row.frozenAt!==new Date(Date.parse(row.frozenAt)).toISOString()&&
           row.frozenAt!==new Date(Date.parse(row.frozenAt)).toISOString().replace('.000Z','Z'))||
