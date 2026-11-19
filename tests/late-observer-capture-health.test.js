@@ -139,3 +139,68 @@ test('malformed eligibility diagnostics fail closed rather than fabricate covera
   ...valid,late:{...valid.late,invalidSourcePolls:6}}})]),
   /Malformed original eligibility/);
 });
+
+function eligibilityForCapture(n){
+ const model=eligible=>({
+  validSourcePolls:5,unavailableSourcePolls:0,invalidSourcePolls:0,
+  eligibleForecastPolls:eligible,expiredOnlyPolls:5-eligible,
+  otherIneligiblePolls:0,emptyJournalPolls:0});
+ return {early:model(n),late:model(4)};
+}
+function conversionForCapture(){
+ const model=(eligibleWith,eligibleWithout,direct)=>({
+  diagnosticPolls:5,diagnosticsMissingPolls:0,
+  eligibleWithWitnessPolls:eligibleWith,
+  eligibleWithoutWitnessPolls:eligibleWithout,
+  eligibleWithDirectMatchPolls:direct,witnessWithoutEligibilityPolls:0});
+ return {early:model(1,1,1),late:model(3,1,2)};
+}
+test('source-to-witness rollup excludes legacy conversion-unknown runs without fabricating zero captures',()=>{
+ const x=summarizeCaptures([
+  r(1),
+  r(2,{eligibilityPolls:eligibilityForCapture(2)}),
+  r(3,{eligibilityPolls:eligibilityForCapture(2),
+   witnessConversion:conversionForCapture()})
+ ]);
+ const c=x.sourceToWitnessConversionDiagnostics;
+ assert.equal(c.archivedRunsWithConversion,1);
+ assert.equal(c.archivedRunsWithoutConversion,2);
+ assert.equal(c.eligibilityRunsWithoutConversion,1);
+ assert.equal(c.early.diagnosticPolls,5);
+ assert.equal(c.early.eligibleWithWitnessPolls,1);
+ assert.equal(c.early.eligibleWithoutWitnessPolls,1);
+ assert.equal(c.late.eligibleWithWitnessPolls,3);
+ assert.equal(c.late.eligibleWithoutWitnessPolls,1);
+ assert.equal(c.late.eligibleWithDirectMatchPolls,2);
+ assert.equal(x.sourceEligibilityDiagnostics.archivedRunsWithDiagnostics,2);
+ assert.equal(x.independentlyQualifiedCount,0);
+ assert.equal(x.realMoneyOrdersEnabled,false);
+ assert.ok(x.caveat.includes('not interpreted as zero'));
+ assert.doesNotMatch(JSON.stringify(c),/KXBTC15M-|spotPrice|apiKey/);
+});
+test('conversion totals reject missing eligibility, forged arithmetic, and private extra fields',()=>{
+ const eligibility=eligibilityForCapture(2),conversion=conversionForCapture();
+ const cases=[
+  {witnessConversion:conversion},
+  {eligibilityPolls:eligibility,witnessConversion:{
+   ...conversion,early:{...conversion.early,diagnosticPolls:6}}},
+  {eligibilityPolls:eligibility,witnessConversion:{
+   ...conversion,late:{...conversion.late,eligibleWithoutWitnessPolls:2}}},
+  {eligibilityPolls:eligibility,witnessConversion:{
+   ...conversion,late:{...conversion.late,eligibleWithDirectMatchPolls:4}}},
+  {eligibilityPolls:eligibility,witnessConversion:{
+   ...conversion,early:{...conversion.early,privatePrice:65000}}},
+  {eligibilityPolls:eligibility,witnessConversion:{
+   ...conversion,early:{...conversion.early,diagnosticsMissingPolls:-1}}}
+ ];
+ for(const extra of cases)
+  assert.throws(()=>summarizeCaptures([r(1,extra)]),
+   /Malformed original witness conversion diagnostic/);
+});
+test('a valid empty archived inventory has explicit zero conversion-bearing runs and no evidence',()=>{
+ const x=summarizeCaptures([]);
+ assert.equal(x.sourceToWitnessConversionDiagnostics.archivedRunsWithConversion,0);
+ assert.equal(x.sourceToWitnessConversionDiagnostics.archivedRunsWithoutConversion,0);
+ assert.equal(x.sourceToWitnessConversionDiagnostics.late.eligibleWithWitnessPolls,0);
+ assert.equal(x.independentlyQualifiedCount,0);
+});

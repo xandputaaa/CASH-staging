@@ -58,6 +58,18 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
    eligibleForecastPolls:0,expiredOnlyPolls:0,otherIneligiblePolls:0,
    emptyJournalPolls:0}
  };
+ // Only aggregate original, validated, immutable per-poll conversion
+ // counters. Historical absence means unknown, NEVER zero witnesses.
+ const conversion={
+  archivedRunsWithConversion:0,archivedRunsWithoutConversion:0,
+  eligibilityRunsWithoutConversion:0,
+  early:{diagnosticPolls:0,diagnosticsMissingPolls:0,
+   eligibleWithWitnessPolls:0,eligibleWithoutWitnessPolls:0,
+   eligibleWithDirectMatchPolls:0,witnessWithoutEligibilityPolls:0},
+  late:{diagnosticPolls:0,diagnosticsMissingPolls:0,
+   eligibleWithWitnessPolls:0,eligibleWithoutWitnessPolls:0,
+   eligibleWithDirectMatchPolls:0,witnessWithoutEligibilityPolls:0}
+ };
  let longestEmpty=0,streak=0,runStart=null,longestSpan=null;
  let lastCapturedAt=null,lastDirectionalAt=null,lastEmptyAt=null;
  const gapSamples=[];
@@ -83,6 +95,37 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
     for(const k of Object.keys(dest))dest[k]+=src[k];
    }
    eligibility.archivedRunsWithDiagnostics++;
+  }
+  if(r.witnessConversion===undefined){
+   conversion.archivedRunsWithoutConversion++;
+   if(r.eligibilityPolls!==undefined)
+    conversion.eligibilityRunsWithoutConversion++;
+  }else{
+   if(r.eligibilityPolls===undefined||!r.witnessConversion||
+      typeof r.witnessConversion!=='object'||
+      Array.isArray(r.witnessConversion)||
+      Object.keys(r.witnessConversion).sort().join(',')!=='early,late')
+    throw Error('Malformed original witness conversion diagnostic');
+   for(const kind of ['early','late']){
+    const src=r.witnessConversion[kind],dest=conversion[kind];
+    const eligibilityForModel=r.eligibilityPolls[kind];
+    if(!src||typeof src!=='object'||Array.isArray(src)||
+       Object.keys(src).sort().join(',')!==Object.keys(dest).sort().join(',')||
+       Object.keys(dest).some(k=>!Number.isInteger(src[k])||
+        src[k]<0||src[k]>r.valid)||
+       src.diagnosticPolls+src.diagnosticsMissingPolls!==r.valid||
+       src.diagnosticPolls!==eligibilityForModel.validSourcePolls+
+        eligibilityForModel.unavailableSourcePolls+
+        eligibilityForModel.invalidSourcePolls||
+       src.eligibleWithWitnessPolls+src.eligibleWithoutWitnessPolls!==
+        eligibilityForModel.eligibleForecastPolls||
+       src.eligibleWithDirectMatchPolls>src.eligibleWithWitnessPolls||
+       src.witnessWithoutEligibilityPolls>
+        src.diagnosticPolls-eligibilityForModel.eligibleForecastPolls)
+     throw Error('Malformed original witness conversion diagnostic');
+    for(const k of Object.keys(dest))dest[k]+=src[k];
+   }
+   conversion.archivedRunsWithConversion++;
   }
   if(r.event==='schedule')counts.directScheduled++;
   else counts.backupTriggered++;
@@ -141,6 +184,7 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
   directScheduleRuns:counts.directScheduled,
   successfulScheduledParentRuns:counts.backupTriggered,
   sourceEligibilityDiagnostics:eligibility,
+  sourceToWitnessConversionDiagnostics:conversion,
   originalPolls:{attempted:counts.totalAttempts,valid:counts.validPolls,
    empty:counts.emptyPolls,invalid:counts.invalidPolls},
   longestConsecutiveArchivedValidEmptyRuns:longestEmpty,
@@ -155,7 +199,7 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
   independentlyQualifiedCount:0,
   actualFillsVerified:0,
   realMoneyOrdersEnabled:false,
-  caveat:'Runs and polls are not independent markets. A valid empty probe says no publicly eligible UNEXPIRED single-exchange-proxy commitment was preserved at that GitHub runner time; it does NOT prove the source was offline, no prediction was generated, the model lost accuracy, or that licensed-index / other nonpublic forecasts were absent. Only originally archived runs are included. Eligibility diagnostic totals cover only runs that originally recorded that optional field; legacy runs are explicitly excluded, not interpreted as zero. An archived YES/NO is not automatically a checked final, fills or a qualified forecast.'
+  caveat:'Runs and polls are not independent markets. A valid empty probe says no publicly eligible UNEXPIRED single-exchange-proxy commitment was preserved at that GitHub runner time; it does NOT prove the source was offline, no prediction was generated, the model lost accuracy, or that licensed-index / other nonpublic forecasts were absent. Only originally archived runs are included. Eligibility and source-to-witness conversion diagnostic totals cover only runs that originally recorded each optional field; historical missing fields are explicitly excluded, not interpreted as zero. Each source-to-witness number is a POLL count, not a distinct model contract or evidence qualification. An archived YES/NO is not automatically a checked final, fills or a qualified forecast.'
  };
 }
 function safeJson(file,max){
@@ -187,7 +231,8 @@ function auditCaptureHealth(root){
     attempts:s.attempts,valid:s.validProbes,empty:s.emptyProbes,
     invalid:s.invalidProbes,commitments:m.distinctCommitments,
     directional:m.directionalCommitments,
-    ...(s.eligibilityPolls===undefined?{}:{eligibilityPolls:s.eligibilityPolls})
+    ...(s.eligibilityPolls===undefined?{}:{eligibilityPolls:s.eligibilityPolls}),
+    ...(s.witnessConversion===undefined?{}:{witnessConversion:s.witnessConversion})
    });
   }
  }
@@ -214,6 +259,13 @@ if(require.main===module){
  for(const kind of ['early','late']){
   for(const [key,value] of Object.entries(s.sourceEligibilityDiagnostics[kind]))
    console.log('CASH_ORIGINAL_ELIGIBILITY_'+kind.toUpperCase()+'_'+key+'='+value);
+ }
+ console.log('CASH_ORIGINAL_CONVERSION_DIAGNOSTIC_RUNS='+s.sourceToWitnessConversionDiagnostics.archivedRunsWithConversion);
+ console.log('CASH_ORIGINAL_CONVERSION_LEGACY_RUNS='+s.sourceToWitnessConversionDiagnostics.archivedRunsWithoutConversion);
+ console.log('CASH_ORIGINAL_CONVERSION_ELIGIBILITY_ONLY_RUNS='+s.sourceToWitnessConversionDiagnostics.eligibilityRunsWithoutConversion);
+ for(const kind of ['early','late']){
+  for(const [key,value] of Object.entries(s.sourceToWitnessConversionDiagnostics[kind]))
+   console.log('CASH_ORIGINAL_CONVERSION_'+kind.toUpperCase()+'_'+key+'='+value);
  }
  console.log('CASH_ORIGINAL_CAPTURE_QUALIFIED=0');
  console.log('CASH_ORIGINAL_CAPTURE_ORDERS=false');
