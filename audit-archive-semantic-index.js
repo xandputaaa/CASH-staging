@@ -36,7 +36,10 @@ function inspectArchiveSemanticIndex({manifest,directory,activeJournalPath,limit
   }else throw Error('Unsupported audit event');
  }
  for(const segment of verified.segments){
-  for(const event of readSegment(path.join(directory,segment.filename),{limit}).events)accept(event);
+  const reread=readSegment(path.join(directory,segment.filename),{limit});
+  if(reread.sha256!==segment.sha256||reread.chainTip!==segment.chainTip||reread.events.length!==segment.eventCount)
+   throw Error('Archive segment changed after manifest verification');
+  for(const event of reread.events)accept(event);
  }
  for(const event of active)accept(event);
  const pendingIds=[...records].filter(([,x])=>!x.resolved).map(([id])=>id).sort();
