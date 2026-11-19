@@ -26,3 +26,13 @@ test('rejects archive filename collisions',()=>sandbox(dir=>{
  fs.writeFileSync(path.join(args.archiveDirectory,plan.archiveFilename),'existing');
  assert.throws(()=>planShadowRollover(args),/already exists/);
 }));
+
+test('rejects archive destination identical to source directory',()=>sandbox(dir=>{
+ const args=fixture(dir);
+ assert.throws(()=>planShadowRollover({journalPath:args.journalPath,archiveDirectory:dir}),/must differ/);
+}));
+test('rejects archive directory symlink alias to source',()=>sandbox(dir=>{
+ const args=fixture(dir),alias=path.join(dir,'source-alias');
+ fs.symlinkSync(dir,alias,'dir');
+ assert.throws(()=>planShadowRollover({journalPath:args.journalPath,archiveDirectory:alias}),/Unsafe archive directory/);
+}));
