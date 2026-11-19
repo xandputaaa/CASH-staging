@@ -46,6 +46,7 @@ async function watchScheduledObserver({
  let best=null,rank=0,attempts=0,lastError=null,stopReason='TIME_BUDGET_EXHAUSTED';
  let validProbes=0,invalidProbes=0,emptyProbes=0,provisionalLateProbes=0,directLateProbes=0;
  let probeArtifactsPreserved=0;
+ const seenSourceCommitments=new Map();
  const probeDir=path.join(outDirectory,'.probe');
  const archiveDir=path.join(outDirectory,'probes');
  while(attempts<maxAttempts&&clock()<=deadline){
@@ -55,16 +56,30 @@ async function watchScheduledObserver({
    // Revalidate every candidate using the existing external-witness
    // envelope rules. Invalid or unsafe responses cannot write artifacts.
    validObservation(r);
-   // Keep every valid pre-expiry observation, not just the selected "best".
+   // Keep each distinct valid pre-expiry commitment, not just the selected "best".
    // This preserves distinct WAIT and directional contracts with their own
    // original runner timestamps and bounds artifacts at 20 x 200KB per run.
-   if(r.frozenEvidence.length){
+   // Save each distinct frozen model/market, plus a later separate direct
+   // Kalshi corroboration if the first public read was unavailable. Repeated
+   // 40-second polls of an unchanged WAIT do NOT consume 20 archive slots.
+   const newCommitment=r.frozenEvidence.some(x=>{
+    const key=x.model+':'+x.marketId+':'+x.frozenEventHash;
+    const prior=seenSourceCommitments.get(key);
+    const matched=x.exchangeAtWitness?.state==='MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET';
+    return prior===undefined||(matched&&!prior);
+   });
+   if(newCommitment){
     const raw=JSON.stringify(r,null,2)+'\n';
     if(Buffer.byteLength(raw)>200000)throw Error('Oversized observation probe');
     fs.mkdirSync(archiveDir,{recursive:true});
     fs.writeFileSync(path.join(archiveDir,String(attempts).padStart(3,'0')+'.json'),
      raw,{flag:'wx',mode:0o600});
     probeArtifactsPreserved++;
+    for(const x of r.frozenEvidence){
+     const key=x.model+':'+x.marketId+':'+x.frozenEventHash;
+     const matched=x.exchangeAtWitness?.state==='MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET';
+     seenSourceCommitments.set(key,Boolean(seenSourceCommitments.get(key))||matched);
+    }
    }
    validProbes++;
    if(!r.frozenEvidence.length)emptyProbes++;
