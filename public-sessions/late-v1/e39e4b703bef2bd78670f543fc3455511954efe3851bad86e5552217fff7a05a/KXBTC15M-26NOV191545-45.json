@@ -1,0 +1,32 @@
+{
+  "version": "CASH_PUBLIC_UNWITNESSED_SESSION_RECORD_V1",
+  "provenanceClass": "UNVERIFIED_RAILWAY_JOURNAL_EXPORTED_DURING_GITHUB_SCHEDULE",
+  "prediction": {
+    "sessionFirstEventSha256": "e39e4b703bef2bd78670f543fc3455511954efe3851bad86e5552217fff7a05a",
+    "model": "KXBTC15M_LATE_CHECKPOINT_SHADOW_V1",
+    "marketId": "KXBTC15M-26NOV191545-45",
+    "side": "WAIT",
+    "claimedFrozenAt": "2026-11-19T20:41:35.519Z",
+    "contractClosesAt": "2026-11-19T20:45:00.000Z",
+    "selfHashedForecastEventSha256": "c49767bf76675c251e9403cbad765b440f258af5d3d121906dab764102c4b359",
+    "selfHashedForecastSequence": 167,
+    "sourceType": "SINGLE_EXCHANGE_PROXY"
+  },
+  "outcome": {
+    "selfHashedOutcomeEventSha256": "c6f8c6cf62a339ea1d1b1c2c8a63f99f556b1187193ff01081d89e0c0355154f",
+    "selfHashedOutcomeSequence": 168,
+    "internallyReportedWinner": "YES",
+    "firstSeenBackupRunId": "44615281618"
+  },
+  "firstReadOnlyBackup": {
+    "runId": "44615281618",
+    "headSha": "fda24c8ec6888c6d9b5f6c3065e83e309693f7fc",
+    "createdAt": "2026-11-19T21:05:44.000Z",
+    "completedAt": "2026-11-19T21:06:12.000Z",
+    "snapshotExportSha256": "63a9768c23124a1de0b23fcaf53d125652cd0ada97d7b5ea46979eb3c8572ffe"
+  },
+  "limitations": "Server-generated hash chain and claimed freeze timestamp, not proof of pre-expiry GitHub witnessing, exact CF BRTI, original market input integrity, tradeable odds, fill, or independently qualified accuracy.",
+  "independentQualifiedCount": 0,
+  "ordersEnabled": false,
+  "actualFillsVerified": 0
+}
