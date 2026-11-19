@@ -36,6 +36,12 @@ function createAuditJournal({directory=process.env.CASH_AUDIT_DIR,limit=MAX_EVEN
     throw Error('CASH_AUDIT_DIR must be an absolute pre-mounted directory');
   const directoryStat=fs.statSync(directory);
   if(!directoryStat.isDirectory())throw Error('CASH_AUDIT_DIR is not a directory');
+  // Until archived events can be replayed into the live monitor, refuse to
+  // start from a fresh active journal beside a committed archive manifest.
+  // Otherwise previously captured identities could be silently re-captured.
+  const archiveManifest=path.join(directory,'shadow-archive-manifest.json');
+  if(fs.existsSync(archiveManifest))
+    throw Error('Archived journal manifest present: live archive replay is not integrated; startup refused');
   const filename=path.join(directory,FILE);
   if(fs.existsSync(filename)&&!fs.statSync(filename).isFile())throw Error('Audit journal is not a regular file');
   const content=fs.existsSync(filename)?fs.readFileSync(filename,'utf8'):'';
