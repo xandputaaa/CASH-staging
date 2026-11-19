@@ -193,8 +193,8 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
    events.push(e);lastHash=e.hash;
   }
  }
- loadSavedHistory();
- // Experimental offline-only hydration. A real archive manifest still blocks
+ // Experimental offline-only hydration before replaying active resolutions.
+ // A real archive manifest still blocks
  // createAuditJournal startup; callers cannot bypass durable startup guards.
  if(archivedPendingState!==null){
   if(archivedIdentityState!==null||
@@ -206,7 +206,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
      new Set(archivedPendingState.capturedIds).size!==archivedPendingState.capturedCount||
      archivedPendingState.capturedIds.some(id=>typeof id!=='string'||!id)||
      archivedPendingState.pendingCount>maxRecords||
-     archivedPendingState.pendingCount>maxEvents-events.length||
+     archivedPendingState.pendingCount>maxEvents-(journal?.events?.length||0)||
      observations.length!==0||events.length!==0)
    throw Error('Archived pending hydration requires verified identity state and empty active journal');
   const historicalIds=new Set(archivedPendingState.capturedIds);
@@ -223,6 +223,7 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
   for(const id of historicalIds)ids.add(id);
  }
 
+ loadSavedHistory();
  function append(type,payload){
   if(events.length>=maxEvents)return null;
   const e={sequence:events.length+1,type,recordedAt:ISO(clock()),payload,previousHash:lastHash};
