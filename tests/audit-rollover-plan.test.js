@@ -8,7 +8,7 @@ function fixture(dir){const journalPath=path.join(dir,'shadow-events.jsonl'),arc
 test('produces deterministic read-only rollover plan',()=>sandbox(dir=>{
  const args=fixture(dir),before=fs.readFileSync(args.journalPath);
  const plan=planShadowRollover(args);
- assert.equal(plan.sourceEventCount,1);assert.match(plan.archiveFilename,/^shadow-segment-[a-f0-9]{64}\.jsonl$/);
+ assert.equal(plan.sourceEventCount,1);assert.match(plan.archiveFilename,/^shadow-segment-0001-[a-f0-9]{16}\.jsonl$/);
  assert.equal(plan.mutatesStorage,false);assert.equal(plan.automaticRolloverEnabled,false);
  assert.deepEqual(fs.readFileSync(args.journalPath),before);
  assert.deepEqual(fs.readdirSync(args.archiveDirectory),[]);
