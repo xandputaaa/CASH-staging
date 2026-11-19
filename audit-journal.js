@@ -60,6 +60,13 @@ function createAuditJournal({directory=process.env.CASH_AUDIT_DIR,limit=MAX_EVEN
   }):[];
   verifyChain(events,{limit});
   function appendUnlocked(event){
+    // A committed archive may appear after journal initialization. Never
+    // continue writing against an archive history that this process has not
+    // recovered. Recheck inside the writer lease when enabled.
+    for(const location of archiveLocations){
+      if(fs.existsSync(path.join(location,'shadow-archive-manifest.json')))
+        throw Error('Archived journal manifest appeared during live session; append refused');
+    }
     if(events.length>=limit)throw Error('Audit journal is full; export and archive before continuing');
     const previous=events.length?events[events.length-1].hash:'GENESIS';
     if(event.sequence!==events.length+1||event.previousHash!==previous
