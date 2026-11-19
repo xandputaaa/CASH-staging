@@ -122,9 +122,18 @@ function hasVerifiedEvidence(result,record){
 }
 
 function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=MIN_LEAD_MS,
- maxRecords=MAX_RECORDS,maxEvents=MAX_EVENTS,journal=null,spot=null}={}){
+ maxRecords=MAX_RECORDS,maxEvents=MAX_EVENTS,journal=null,spot=null,archivedIdentityState=null}={}){
  if(!quotes||!results)throw Error('Shadow monitor needs read-only quote and result providers');
- const bootAt=ISO(clock()),observations=[],events=[],ids=new Set();
+ if(archivedIdentityState!==null){
+  if(!archivedIdentityState||archivedIdentityState.state!=='ARCHIVE_SEMANTIC_INDEX_VERIFIED'
+    ||archivedIdentityState.pending!==0||!Array.isArray(archivedIdentityState.capturedIds)
+    ||archivedIdentityState.capturedIds.length!==archivedIdentityState.captures
+    ||new Set(archivedIdentityState.capturedIds).size!==archivedIdentityState.captures
+    ||archivedIdentityState.capturedIds.some(id=>typeof id!=='string'||!id))
+    throw Error('Archive identities not fully settled and verified; live startup refused');
+ }
+ const bootAt=ISO(clock()),observations=[],events=[],
+  ids=new Set(archivedIdentityState?.capturedIds||[]);
  let lastHash='GENESIS',inflight=null,scanCount=0,lastScanAt=null,lastError=null,pendingCursor=0,totalSettlementChecks=0;
  const collection=createScanContinuity({clock});
  function capacity(){
