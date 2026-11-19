@@ -1,0 +1,85 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {runBoundedShadowObserver,MAX_WAIT_MS}=require('../cash-shadow-bounded-observer');
+function sample(status='NO_ELIGIBLE_PREEXPIRY_RECORDS'){
+ return {status,observedBeforeExpiryCount:status==='OBSERVED_PREEXPIRY'?1:0};
+}
+function harness(sequence,{start=100000,intervalMs=30000,maxWaitMs=180000}={}){
+ let clock=start,calls=0,slept=0;
+ const logs=[];
+ const config={
+  maxWaitMs,intervalMs,now:()=>clock,
+  sleep:async ms=>{slept+=ms;clock+=ms},
+  runObserver:async()=>{const s=sequence[Math.min(calls,sequence.length-1)];calls++;clock+=500;return sample(s)},
+  log:s=>logs.push(s)
+ };
+ return {config,calls:()=>calls,slept:()=>slept,logs};
+}
+test('eligible first observation returns immediately, no unnecessary next fetch',async()=>{
+ const h=harness(['OBSERVED_PREEXPIRY']);
+ const r=await runBoundedShadowObserver(h.config);
+ assert.equal(r.attempts,1);
+ assert.equal(h.slept(),0);
+ assert.equal(r.result.observedBeforeExpiryCount,1);
+ assert.ok(h.logs.includes('CASH_SHADOW_BOUNDED_OBSERVER_QUALIFIED=0'));
+});
+test('delayed successful witness is preserved and later attempts cannot overwrite it',async()=>{
+ const h=harness(['NO_ELIGIBLE_PREEXPIRY_RECORDS','PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID','OBSERVED_PREEXPIRY','NO_ELIGIBLE_PREEXPIRY_RECORDS']);
+ const r=await runBoundedShadowObserver(h.config);
+ assert.equal(r.attempts,3);
+ assert.equal(h.calls(),3);
+ assert.equal(h.slept(),60000);
+ assert.equal(r.result.status,'OBSERVED_PREEXPIRY');
+});
+test('never fabricates pre-expiry evidence when every bounded attempt is empty',async()=>{
+ const h=harness(['NO_ELIGIBLE_PREEXPIRY_RECORDS']);
+ const r=await runBoundedShadowObserver(h.config);
+ assert.equal(r.attempts,6);
+ assert.equal(h.slept(),150000);
+ assert.equal(r.result.observedBeforeExpiryCount,0);
+ assert.equal(r.result.status,'NO_ELIGIBLE_PREEXPIRY_RECORDS');
+});
+test('source outage retries but never invents a witnessed contract',async()=>{
+ const h=harness(['PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID'],{maxWaitMs:65000});
+ const r=await runBoundedShadowObserver(h.config);
+ assert.equal(r.attempts,3);
+ assert.equal(r.result.status,'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID');
+ assert.equal(r.result.observedBeforeExpiryCount,0);
+});
+test('zero retry budget observes exactly once, preserving PR dry-run behavior',async()=>{
+ const h=harness(['NO_ELIGIBLE_PREEXPIRY_RECORDS'],{maxWaitMs:0});
+ const r=await runBoundedShadowObserver(h.config);
+ assert.equal(r.attempts,1);
+ assert.equal(h.slept(),0);
+});
+test('timeout checks wall-clock budget after source HTTP fetch, no extra 30-second wait',async()=>{
+ const h=harness(['NO_ELIGIBLE_PREEXPIRY_RECORDS'],{maxWaitMs:31000});
+ const r=await runBoundedShadowObserver(h.config);
+ assert.equal(r.attempts,2);
+ assert.equal(h.slept(),30000);
+});
+test('unsafe retry configurations fail before invoking source or any side effect',async()=>{
+ for(const overrides of [
+  {maxWaitMs:MAX_WAIT_MS+1},{maxWaitMs:-1},{intervalMs:0},
+  {intervalMs:100},{now:()=>NaN},
+  {runObserver:null},{observerOptions:null}
+ ]){
+  let calls=0;
+  const cfg={runObserver:async()=>{calls++;return sample('OBSERVED_PREEXPIRY')},
+   now:()=>1000,log:()=>{},...overrides};
+  await assert.rejects(()=>runBoundedShadowObserver(cfg));
+  assert.equal(calls,0);
+ }
+});
+test('contradictory source observer success with zero entries fails closed',async()=>{
+ const h=harness(['NO_ELIGIBLE_PREEXPIRY_RECORDS']);
+ h.config.runObserver=async()=>({status:'OBSERVED_PREEXPIRY',observedBeforeExpiryCount:0});
+ await assert.rejects(()=>runBoundedShadowObserver(h.config),/inconsistent evidence/);
+});
+test('regressing runner clock fails rather than claiming a new observation',async()=>{
+ let ticks=0;
+ await assert.rejects(()=>runBoundedShadowObserver({
+  runObserver:async()=>sample(),now:()=>ticks++===0?100000:99000,
+  sleep:async()=>{},log:()=>{}
+ }),/moved backwards/);
+});
