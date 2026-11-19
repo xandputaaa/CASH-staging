@@ -227,7 +227,7 @@ test('watcher commits only valid poll diagnostics and preserves missing as unkno
   forecastCount:1,eligibleBeforeThreeRecordCap:eligible,
   reasons:{EXPIRED_OR_WITHIN_15S_CLOSE_GUARD:eligible?0:1}});
  const r=await watchScheduledObserver({outDirectory:dir,clock:()=>t,
-  wait:async ms=>{t+=ms;},pollIntervalMs:40000,maxRuntimeMs:90000,
+  wait:async ms=>{t+=ms;},pollIntervalMs:40000,maxRuntimeMs:80000,
   observer:async({onEligibility})=>{
    calls++;
    if(calls===1){
