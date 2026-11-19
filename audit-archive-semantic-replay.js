@@ -17,7 +17,10 @@ function verifyArchivedShadowMonitorReplay({manifest,directory,activeJournalPath
  verifyChain(active,{limit});
  const all=[];
  for(const s of verified.segments){
-  all.push(...readSegment(path.join(directory,s.filename),{limit}).events);
+  const reread=readSegment(path.join(directory,s.filename),{limit});
+  if(reread.sha256!==s.sha256||reread.chainTip!==s.chainTip||reread.events.length!==s.eventCount)
+   throw Error('Archive segment changed after manifest verification');
+  all.push(...reread.events);
  }
  all.push(...active);
  if(all.length>limit)throw Error('Combined replay exceeds monitor event capacity');
