@@ -69,6 +69,40 @@ function recordEligibilityPoll(rollup,diagnostics){
   }else throw Error('Missing public eligibility diagnostic');
  }
 }
+
+function emptyConversionBucket(){
+ return {diagnosticPolls:0,diagnosticsMissingPolls:0,
+  eligibleWithWitnessPolls:0,eligibleWithoutWitnessPolls:0,
+  eligibleWithDirectMatchPolls:0,witnessWithoutEligibilityPolls:0};
+}
+// Count source eligibility versus ACTUALLY accepted runner-clock evidence.
+// Polls are not unique contracts, directional calls or scored outcomes.
+// A missing callback is unknown, never an implied empty source journal.
+function recordWitnessConversion(rollup,diagnostics,observation){
+ if(!observation||!Array.isArray(observation.frozenEvidence))
+  throw Error('Invalid observation for diagnostic conversion');
+ for(const [kind,model] of [
+  ['early','KXBTC15M_SETTLEMENT_EARLY_V3'],
+  ['late',LATE]
+ ]){
+  const bucket=rollup[kind];
+  if(!diagnostics){bucket.diagnosticsMissingPolls++;continue;}
+  const x=diagnostics[kind];
+  bucket.diagnosticPolls++;
+  const eligible=x.status==='VALID_SELF_HASHED_SOURCE_JOURNAL'&&
+   x.eligibleBeforeThreeRecordCap>0;
+  const witnessed=observation.frozenEvidence.filter(f=>f.model===model);
+  if(eligible){
+   if(witnessed.length){
+    bucket.eligibleWithWitnessPolls++;
+    if(witnessed.some(f=>f.exchangeAtWitness?.state===
+       'MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET'))
+     bucket.eligibleWithDirectMatchPolls++;
+   }else bucket.eligibleWithoutWitnessPolls++;
+  }else if(witnessed.length)bucket.witnessWithoutEligibilityPolls++;
+ }
+}
+
 async function watchScheduledObserver({
  observer=runObserver,clock=()=>Date.now(),wait=sleep,
  outDirectory='witness',maxRuntimeMs=MAX_RUNTIME_MS,
@@ -82,22 +116,33 @@ async function watchScheduledObserver({
  let best=null,rank=0,attempts=0,lastError=null,stopReason='TIME_BUDGET_EXHAUSTED';
  let validProbes=0,invalidProbes=0,emptyProbes=0,provisionalLateProbes=0,directLateProbes=0;
  let probeArtifactsPreserved=0;
- const eligibilityPolls={early:emptyEligibilityBucket(),late:emptyEligibilityBucket()};
+ let eligibilityPolls={early:emptyEligibilityBucket(),late:emptyEligibilityBucket()};
+ let witnessConversion={early:emptyConversionBucket(),late:emptyConversionBucket()};
  const seenSourceCommitments=new Map();
  const probeDir=path.join(outDirectory,'.probe');
  const archiveDir=path.join(outDirectory,'probes');
  while(attempts<maxAttempts&&clock()<=deadline){
   attempts++;
   try{
-   let diagnosticReceived=false;
-   const r=await observer({outDirectory:probeDir,onEligibility:diagnostics=>{
+   let diagnosticReceived=false,diagnostics=null;
+   const r=await observer({outDirectory:probeDir,onEligibility:received=>{
     if(diagnosticReceived)throw Error('Duplicate eligibility diagnostic');
     diagnosticReceived=true;
-    recordEligibilityPoll(eligibilityPolls,diagnostics);
+    diagnostics=received;
    }});
    // Revalidate every candidate using the existing external-witness
    // envelope rules. Invalid or unsafe responses cannot write artifacts.
    validObservation(r);
+   // Stage both counters atomically. An observer that fails envelope,
+   // diagnostics, file integrity or write checks cannot inflate source
+   // poll counts without producing a valid probe.
+   const nextEligibility={early:{...eligibilityPolls.early},
+    late:{...eligibilityPolls.late}};
+   const nextConversion={early:{...witnessConversion.early},
+    late:{...witnessConversion.late}};
+   if(diagnosticReceived)recordEligibilityPoll(nextEligibility,diagnostics);
+   recordWitnessConversion(nextConversion,
+    diagnosticReceived?diagnostics:null,r);
    // Keep each distinct valid pre-expiry commitment, not just the selected "best".
    // This preserves distinct WAIT and directional contracts with their own
    // original runner timestamps and bounds artifacts at 20 x 200KB per run.
@@ -123,6 +168,8 @@ async function watchScheduledObserver({
      seenSourceCommitments.set(key,Boolean(seenSourceCommitments.get(key))||matched);
     }
    }
+   eligibilityPolls=nextEligibility;
+   witnessConversion=nextConversion;
    validProbes++;
    if(!r.frozenEvidence.length)emptyProbes++;
    if(r.frozenEvidence.some(f=>f.model===LATE)&&!isReady(r))provisionalLateProbes++;
@@ -167,7 +214,7 @@ async function watchScheduledObserver({
   firstObservedAtRunner:best?.observedAtRunner||null,
   // Optional V1 summary extension. Counts refer to source polls, not distinct
   // frozen forecasts, not witnessed trades and not independent qualification.
-  eligibilityPolls,
+  eligibilityPolls,witnessConversion,
   independentQualifiedCount:0,ordersEnabled:false,
   lastError:lastError||null
  };
@@ -187,6 +234,8 @@ async function watchScheduledObserver({
  console.log('CASH_WATCH_DIRECT_MATCHES='+summary.directExchangeMatches);
  console.log('CASH_WATCH_ELIGIBILITY_EARLY='+JSON.stringify(eligibilityPolls.early));
  console.log('CASH_WATCH_ELIGIBILITY_LATE='+JSON.stringify(eligibilityPolls.late));
+ console.log('CASH_WATCH_CONVERSION_EARLY='+JSON.stringify(witnessConversion.early));
+ console.log('CASH_WATCH_CONVERSION_LATE='+JSON.stringify(witnessConversion.late));
  console.log('CASH_WATCH_INDEPENDENTLY_QUALIFIED=0');
  return summary;
 }
@@ -199,4 +248,5 @@ if(require.main===module)
  });
 module.exports={watchScheduledObserver,evidenceRank,isReady,MAX_RUNTIME_MS,
  TRUSTED_SCHEDULE_COMPLETION_BUDGET_MS,budgetForObserverEvent,
- POLL_INTERVAL_MS,MAX_ATTEMPTS,emptyEligibilityBucket,recordEligibilityPoll};
+ POLL_INTERVAL_MS,MAX_ATTEMPTS,emptyEligibilityBucket,recordEligibilityPoll,
+ emptyConversionBucket,recordWitnessConversion};
