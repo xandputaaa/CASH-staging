@@ -339,4 +339,4 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
  }
  return {scan,capture,resolvePending,snapshot,evaluation,auditPreflight,exportSession};
 }
-module.exports={createShadowMonitor,hasVerifiedEvidence,chooseMarketBaseline};
+module.exports={createShadowMonitor,hasVerifiedEvidence,chooseMarketBaseline,isValidCaptureEvidence};
