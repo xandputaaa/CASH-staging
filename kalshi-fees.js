@@ -26,7 +26,8 @@ function takerPreview(price,multiplier,contracts=1){
  // an illustrative upper-rounded fee, not a broker-specific exact fill.
  const fee=raw<=0?0:Math.ceil((raw-1e-12)*10000)/10000;
  return {contracts,price,fee,feeBeforeRounding:raw,
-  hypotheticalCost:Math.round((cost+fee)*10000)/10000,
+  // Never round the hypothetical maximum loss downward near the $10 guardrail.
+  hypotheticalCost:Math.ceil(((cost+fee)-1e-12)*10000)/10000,
   grossBreakEven:price,
   estimatedAfterFeeBreakEven:(cost+fee)/contracts,
   maxGrossPayout:contracts,

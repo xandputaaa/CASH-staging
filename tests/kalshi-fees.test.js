@@ -43,3 +43,13 @@ test('unknown fee response can never silently claim validated terms',async()=>{
  const x=await f.query();
  assert.equal(x.state,'UNAVAILABLE');assert.equal(x.feeMultiplier,null);
 });
+
+test('hypothetical cost rounds upward rather than understating loss at precision boundary',()=>{
+ const p=takerPreview(0.400001,0,1);
+ assert.equal(p.fee,0);
+ assert.equal(p.hypotheticalCost,0.4001);
+ assert.ok(p.hypotheticalCost>=p.price+p.fee);
+ const q=takerPreview(0.400001,0,25);
+ assert.equal(q.hypotheticalCost,10.0001);
+ assert.ok(q.hypotheticalCost>10);
+});
