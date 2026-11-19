@@ -6,6 +6,7 @@
  * evidence or qualified AI prediction validation.
  */
 const fs=require('node:fs'),path=require('node:path'),{createHash}=require('node:crypto');
+const {withExclusiveJournalLease}=require('./audit-journal-writer-lease');
 const FILE='shadow-events.jsonl';
 const MAX_FILE_BYTES=12*1024*1024,MAX_EVENTS=650;
 function hashEvent(event){
@@ -27,7 +28,7 @@ function verifyChain(events,{limit=MAX_EVENTS}={}){
   }
   return previous;
 }
-function createAuditJournal({directory=process.env.CASH_AUDIT_DIR,limit=MAX_EVENTS}={}){
+function createAuditJournal({directory=process.env.CASH_AUDIT_DIR,limit=MAX_EVENTS,exclusiveWriter=false}={}){
   if(!directory){
     return {mode:'VOLATILE_SERVER_SESSION',configured:false,events:[],append(){},path:null};
   }
@@ -44,7 +45,7 @@ function createAuditJournal({directory=process.env.CASH_AUDIT_DIR,limit=MAX_EVEN
     try{return JSON.parse(line)}catch{throw Error('Audit journal has invalid JSON')}
   }):[];
   verifyChain(events,{limit});
-  function append(event){
+  function appendUnlocked(event){
     if(events.length>=limit)throw Error('Audit journal is full; export and archive before continuing');
     const previous=events.length?events[events.length-1].hash:'GENESIS';
     if(event.sequence!==events.length+1||event.previousHash!==previous
@@ -59,6 +60,20 @@ function createAuditJournal({directory=process.env.CASH_AUDIT_DIR,limit=MAX_EVEN
       fs.fsyncSync(fd);
     }finally{fs.closeSync(fd)}
     events.push(event);
+  }
+  function append(event){
+    if(!exclusiveWriter)return appendUnlocked(event);
+    return withExclusiveJournalLease({directory},()=>{
+      // A stale in-memory view cannot be trusted after another process appends.
+      const disk=fs.existsSync(filename)?fs.readFileSync(filename,'utf8'):'';
+      if(disk!==content&&events.length===0)throw Error('Journal changed since startup; reopen required');
+      const persisted=disk?disk.trimEnd().split('\n').map(JSON.parse):[];
+      const tip=verifyChain(persisted,{limit});
+      const memoryTip=events.length?events[events.length-1].hash:'GENESIS';
+      if(persisted.length!==events.length||tip!==memoryTip)
+        throw Error('Journal changed since startup; reopen required');
+      return appendUnlocked(event);
+    });
   }
   return {
     mode:'FILESYSTEM_JOURNAL_UNVERIFIED',configured:true,path:filename,
