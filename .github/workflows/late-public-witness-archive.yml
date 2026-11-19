@@ -50,8 +50,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     env:
-      GH_TOKEN: \${{ github.token }}
-      CASH_SOURCE_RUN_ID: \${{ github.event.workflow_run.id }}
+      GH_TOKEN: ${{ github.token }}
+      CASH_SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
     steps:
       - name: Use only trusted default main branch archive validator
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -70,9 +70,9 @@ jobs:
             exit 1
           fi
           mkdir -p audit/late-source audit/late-meta
-          gh api "repos/\${GITHUB_REPOSITORY}/actions/runs/\${CASH_SOURCE_RUN_ID}" > audit/late-meta/source.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CASH_SOURCE_RUN_ID}" > audit/late-meta/source.json
           gh run download "$CASH_SOURCE_RUN_ID" \
-            -n "cash-preexpiry-observation-\${CASH_SOURCE_RUN_ID}" \
+            -n "cash-preexpiry-observation-${CASH_SOURCE_RUN_ID}" \
             -D audit/late-source
           test -s audit/late-source/observer-origin.json
           test -s audit/late-source/observer-run-summary.json
@@ -80,7 +80,7 @@ jobs:
           if [[ "$PARENT_RUN_ID" == "NONE" ]]; then
             echo 'CASH_LATE_ARCHIVE_DIRECT_SCHEDULE=true'
           elif [[ "$PARENT_RUN_ID" =~ ^[0-9]{8,16}$ ]]; then
-            gh api "repos/\${GITHUB_REPOSITORY}/actions/runs/\${PARENT_RUN_ID}" > audit/late-meta/parent.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PARENT_RUN_ID}" > audit/late-meta/parent.json
           else
             echo 'CASH_LATE_ARCHIVE_UNTRUSTED_PARENT_ID=true'
             exit 1
@@ -116,6 +116,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- late-preexpiry-run
-          git commit -m "Append pre-expiry CASH public runner evidence (run \${CASH_SOURCE_RUN_ID})"
+          git commit -m "Append pre-expiry CASH public runner evidence (run ${CASH_SOURCE_RUN_ID})"
           git push origin HEAD:cash-late-public-witness
           echo 'CASH_LATE_DURABLE_ARCHIVE_APPENDED=true'
