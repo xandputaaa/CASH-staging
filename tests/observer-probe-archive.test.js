@@ -132,3 +132,43 @@ test('probe with same original frozen hash is a repeated observation, not a new 
  assert.equal(new Set(c.witnesses.flatMap(w=>w.frozenEvidence.map(e=>
   e.model+':'+e.marketId))).size,1);
 });
+
+test('repeated identical WAIT polls are deduplicated but still witnessed at first runner time',async t=>{
+ const root=makeDir(t),out=path.join(root,RUN);
+ let tNow=START;
+ const r=await watchScheduledObserver({
+  outDirectory:out,clock:()=>tNow,
+  wait:async ms=>{tNow+=ms},
+  pollIntervalMs:40000,maxRuntimeMs:135000,
+  observer:async()=>observation(tNow,[event(EARLY,'WAIT')])
+ });
+ assert.equal(r.additionalImmutableProbeFiles,1);
+ assert.equal(fs.readdirSync(path.join(out,'probes')).length,1);
+ const first=JSON.parse(fs.readFileSync(path.join(out,'probes','001.json')));
+ assert.equal(first.observedAtRunner,new Date(START).toISOString());
+ const collected=collectWitnesses(root,runs());
+ assert.equal(collected.validProbeFiles,1);
+ assert.equal(collected.distinctWitnessRuns,1);
+ assert.equal(collected.witnesses.length,2);
+});
+test('an unavailable public Kalshi check later corroborated before expiry adds a second proof',async t=>{
+ const root=makeDir(t),out=path.join(root,RUN);
+ let now=START,count=0;
+ const r=await watchScheduledObserver({
+  outDirectory:out,clock:()=>now,wait:async ms=>{now+=ms},
+  pollIntervalMs:40000,maxRuntimeMs:130000,
+  observer:async()=>{
+   count++;
+   const e=event(EARLY,'WAIT');
+   if(count===1)e.exchangeAtWitness={state:'EXCHANGE_MARKET_UNAVAILABLE',
+    independentValidation:false};
+   return observation(now,[e]);
+  }
+ });
+ assert.equal(r.additionalImmutableProbeFiles,2);
+ assert.equal(fs.readdirSync(path.join(out,'probes')).length,2);
+ const first=JSON.parse(fs.readFileSync(path.join(out,'probes','001.json')));
+ const second=JSON.parse(fs.readFileSync(path.join(out,'probes','002.json')));
+ assert.equal(first.frozenEvidence[0].exchangeAtWitness.state,'EXCHANGE_MARKET_UNAVAILABLE');
+ assert.equal(second.frozenEvidence[0].exchangeAtWitness.state,'MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET');
+});
