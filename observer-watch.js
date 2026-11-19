@@ -45,7 +45,9 @@ async function watchScheduledObserver({
  const start=clock(),deadline=start+maxRuntimeMs;
  let best=null,rank=0,attempts=0,lastError=null,stopReason='TIME_BUDGET_EXHAUSTED';
  let validProbes=0,invalidProbes=0,emptyProbes=0,provisionalLateProbes=0,directLateProbes=0;
+ let probeArtifactsPreserved=0;
  const probeDir=path.join(outDirectory,'.probe');
+ const archiveDir=path.join(outDirectory,'probes');
  while(attempts<maxAttempts&&clock()<=deadline){
   attempts++;
   try{
@@ -53,6 +55,17 @@ async function watchScheduledObserver({
    // Revalidate every candidate using the existing external-witness
    // envelope rules. Invalid or unsafe responses cannot write artifacts.
    validObservation(r);
+   // Keep every valid pre-expiry observation, not just the selected "best".
+   // This preserves distinct WAIT and directional contracts with their own
+   // original runner timestamps and bounds artifacts at 20 x 200KB per run.
+   if(r.frozenEvidence.length){
+    const raw=JSON.stringify(r,null,2)+'\n';
+    if(Buffer.byteLength(raw)>200000)throw Error('Oversized observation probe');
+    fs.mkdirSync(archiveDir,{recursive:true});
+    fs.writeFileSync(path.join(archiveDir,String(attempts).padStart(3,'0')+'.json'),
+     raw,{flag:'wx',mode:0o600});
+    probeArtifactsPreserved++;
+   }
    validProbes++;
    if(!r.frozenEvidence.length)emptyProbes++;
    if(r.frozenEvidence.some(f=>f.model===LATE)&&!isReady(r))provisionalLateProbes++;
@@ -88,6 +101,9 @@ async function watchScheduledObserver({
   validProbes,invalidProbes,emptyProbes,provisionalLateProbes,directLateProbes,
   captureCompletenessProven:false,
   evidenceRecorded:best?.frozenEvidence?.length||0,
+  additionalImmutableProbeFiles:probeArtifactsPreserved,
+  probeArchiveIncludesAbstentions:true,
+  probeArchiveSelectionBasedOnOutcome:false,
   lateDirectionalRecorded:best?.frozenEvidence?.filter(x=>
    x.model===LATE&&['YES','NO'].includes(x.frozenSide)).length||0,
   directExchangeMatches:best?.directExchangeMatches||0,
@@ -105,6 +121,7 @@ async function watchScheduledObserver({
  console.log('CASH_WATCH_PROVISIONAL_LATE_PROBES='+provisionalLateProbes);
  console.log('CASH_WATCH_DIRECT_LATE_PROBES='+directLateProbes);
  console.log('CASH_WATCH_STOP_REASON='+stopReason);
+ console.log('CASH_WATCH_PRESERVED_PROBES='+probeArtifactsPreserved);
  console.log('CASH_WATCH_RECORDED='+summary.evidenceRecorded);
  console.log('CASH_WATCH_LATE_DIRECTIONAL='+summary.lateDirectionalRecorded);
  console.log('CASH_WATCH_DIRECT_MATCHES='+summary.directExchangeMatches);
