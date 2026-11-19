@@ -18,3 +18,11 @@ test('dashboard serves a read-only live assist and keeps the $10 server limit',(
  assert.match(html,/src="\/manual-assist-ui\.js"/);
  assert.doesNotMatch(fs.readFileSync('manual-assist-ui.js','utf8'),/fetch\([^\n]*method:\s*['"]POST/);
 });
+test('browser rejects expired, changed or inconsistent risk previews',()=>{
+ const ui=fs.readFileSync('manual-assist-ui.js','utf8');
+ assert.match(ui,/lastSuccessAt/);
+ assert.match(ui,/Date\.now\(\)-lastSuccessAt>20000/);
+ assert.match(ui,/r\.contracts!==Number\(qty\.value\)/);
+ assert.match(ui,/r\.estimatedMaxLossUsd>10/);
+ assert.match(ui,/qty\.addEventListener\('input'/);
+});
