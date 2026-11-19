@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const fs=require('node:fs'),path=require('node:path');
-const {summarizeCaptures,classifyCapture}=require('../late-observer-capture-health');
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const {summarizeCaptures,classifyCapture,runCreationToFirstWitness,firstOriginalWitnessAt}=require('../late-observer-capture-health');
 const BASE=Date.parse('2026-11-19T04:15:00Z');
 function r(i,overrides={}){
  return {id:String(44457000598+i),createdAt:new Date(BASE+i*900000).toISOString(),
@@ -203,4 +203,91 @@ test('a valid empty archived inventory has explicit zero conversion-bearing runs
  assert.equal(x.sourceToWitnessConversionDiagnostics.archivedRunsWithoutConversion,0);
  assert.equal(x.sourceToWitnessConversionDiagnostics.late.eligibleWithWitnessPolls,0);
  assert.equal(x.independentlyQualifiedCount,0);
+});
+
+test('first runner witness latency counts original archive RUNS by provenance not repeated polls or model outcomes',()=>{
+ const start='2026-11-19T04:00:00.000Z';
+ const row=(i,event,seconds,commitments=2)=>r(i,{
+  event,createdAt:start,commitments,
+  ...(seconds===undefined?{}:{firstWitnessAt:
+    seconds===null?null:new Date(Date.parse(start)+seconds*1000).toISOString()})
+ });
+ const x=runCreationToFirstWitness([
+  row(1,'schedule',0),row(2,'schedule',30),
+  row(3,'schedule',30.001),row(4,'schedule',90),
+  row(5,'schedule',90.001),row(6,'schedule',180),
+  row(7,'schedule',180.001),row(8,'schedule',undefined),
+  row(9,'schedule',null,0),
+  row(10,'workflow_run',35),row(11,'workflow_run',95),
+  row(12,'workflow_run',null,0)
+ ]);
+ assert.equal(x.schedule.runsWithWitness,8);
+ assert.equal(x.schedule.withTiming,7);
+ assert.equal(x.schedule.missingOriginalTime,1);
+ assert.equal(x.schedule.runsWithoutWitness,1);
+ assert.deepEqual([
+  x.schedule.atMost30s,x.schedule.over30To90s,
+  x.schedule.over90To180s,x.schedule.over180s
+ ],[2,2,2,1]);
+ assert.equal(x.schedule.medianSeconds,90);
+ assert.equal(x.schedule.minimumSeconds,0);
+ assert.equal(x.schedule.maximumSeconds,180.001);
+ assert.equal(x.workflow_run.withTiming,2);
+ assert.equal(x.workflow_run.medianSeconds,65);
+ assert.equal(x.workflow_run.runsWithoutWitness,1);
+});
+test('clock skew is separate from success; fabricated long negative GH run lead fails closed',()=>{
+ const start='2026-11-19T04:00:00.000Z';
+ const row=(ms)=>r(1,{createdAt:start,event:'schedule',
+  firstWitnessAt:new Date(Date.parse(start)+ms).toISOString()});
+ const mild=runCreationToFirstWitness([row(-5000)]);
+ assert.equal(mild.schedule.runnerClockBeforeRun,1);
+ assert.equal(mild.schedule.withTiming,0);
+ assert.equal(mild.schedule.medianSeconds,null);
+ assert.throws(()=>runCreationToFirstWitness([row(-5001)]),
+  /predates GitHub source run/);
+ assert.throws(()=>runCreationToFirstWitness([r(1,{
+  commitments:0,firstWitnessAt:start})]),
+  /Non-capture run cannot have/);
+ assert.throws(()=>runCreationToFirstWitness([r(1,{
+  firstWitnessAt:'not-a-clock'})]),
+  /Invalid original GitHub witness runtime clock/);
+});
+test('archived original first witness time prefers first qualifying immutable probe, not strongest later summary',t=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'cash-first-original-run-'));
+ t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ fs.mkdirSync(path.join(dir,'probes'));
+ const id='44573847706',sha='a'.repeat(40);
+ const obs=(when)=>({githubRunId:id,githubCommitSha:sha,
+  observedAtRunner:when,frozenEvidence:[{model:'KXBTC15M_SETTLEMENT_EARLY_V3'}]});
+ fs.writeFileSync(path.join(dir,'public-preexpiry-observation.json'),
+  JSON.stringify(obs('2026-11-19T17:11:36.839Z')));
+ fs.writeFileSync(path.join(dir,'probes','001.json'),
+  JSON.stringify(obs('2026-11-19T17:08:25.000Z')));
+ const manifest={sourceRunId:id,sourceHeadSha:sha,distinctCommitments:1,
+  sourceArtifactFiles:[
+   {file:'public-preexpiry-observation.json'},
+   {file:'probes/001.json'}]};
+ assert.equal(firstOriginalWitnessAt(dir,manifest),'2026-11-19T17:08:25.000Z');
+ assert.equal(firstOriginalWitnessAt(dir,{
+  ...manifest,distinctCommitments:0,sourceArtifactFiles:[]}),null);
+ assert.throws(()=>firstOriginalWitnessAt(dir,{
+  ...manifest,sourceHeadSha:'b'.repeat(40)}),/run identity changed/);
+ assert.throws(()=>firstOriginalWitnessAt(dir,{
+  ...manifest,sourceArtifactFiles:[]}),/Missing original frozen observation/);
+});
+test('archived runner witness timing is not called scheduling queue latency or qualified contracts',()=>{
+ const start='2026-11-19T04:00:00Z';
+ const x=summarizeCaptures([r(1,{event:'schedule',createdAt:start,
+  firstWitnessAt:'2026-11-19T04:00:31.000Z'}),
+  r(2,{event:'workflow_run',createdAt:start,
+   firstWitnessAt:'2026-11-19T04:01:05.000Z'}),
+  r(3,{event:'workflow_run',createdAt:start,commitments:0,
+   empty:5,firstWitnessAt:null})]);
+ assert.equal(x.githubRunCreationToFirstWitness.schedule.withTiming,1);
+ assert.equal(x.githubRunCreationToFirstWitness.workflow_run.runsWithoutWitness,1);
+ assert.equal(x.githubRunCreationToFirstWitness.workflow_run.medianSeconds,65);
+ assert.equal(x.independentlyQualifiedCount,0);
+ assert.equal(x.realMoneyOrdersEnabled,false);
+ assert.match(x.caveat,/cannot establish when GitHub scheduled/);
 });
