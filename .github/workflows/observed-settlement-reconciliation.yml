@@ -5,6 +5,9 @@ on:
   schedule:
     - cron: '21 * * * *' # UTC hourly, best effort; source remains read-only
   workflow_dispatch:
+concurrency:
+  group: cash-witness-reconciliation-api
+  cancel-in-progress: false
 permissions:
   contents: read
   actions: read
@@ -29,9 +32,21 @@ jobs:
           # 24 latest runs do NOT represent a full 24-hour witness window.
           since_day="$(date -u -d '1 day ago' +%Y-%m-%d)"
           today_day="$(date -u +%Y-%m-%d)"
-          gh api --paginate --slurp \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/preexpiry-observer.yml/runs?per_page=100&created=${since_day}..${today_day}" \
-            > audit/witness-runs-pages.json
+          # Fail closed when GitHub's API is unavailable. Bounded retries only;
+          # never fabricate a witness list or mark reconciliation successful.
+          for attempt in 1 2 3; do
+            if gh api --paginate --slurp \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/preexpiry-observer.yml/runs?per_page=100&created=${since_day}..${today_day}" \
+              > audit/witness-runs-pages.json; then
+              break
+            fi
+            rm -f audit/witness-runs-pages.json
+            if [[ "$attempt" -eq 3 ]]; then
+              echo 'CASH_RECON_WITNESS_FETCH_UNAVAILABLE=true' >&2
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
           node witness-run-window.js \
             audit/witness-runs-pages.json \
             audit/witness-runs.json \
