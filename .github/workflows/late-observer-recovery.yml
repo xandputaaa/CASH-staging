@@ -12,10 +12,6 @@ on:
 permissions:
   contents: read
   actions: read
-concurrency:
-  # The new recovery and routine append-only archive share ONE writer queue.
-  group: cash-late-public-witness-archive
-  cancel-in-progress: false
 jobs:
   review-witness-recovery:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -38,6 +34,11 @@ jobs:
           persist-credentials: false
       - run: node -e "const x=require('./late-observer-archive').inspectArchive('late-store');console.log('CASH_LATE_RECOVERY_OLD_RUNS='+x.runs);console.log('CASH_LATE_RECOVERY_QUALIFIED=0')"
   recover-original-witnesses:
+    # Only this privileged writer competes with the routine append-only job.
+    # Read-only PR validation must never enter the live writer queue.
+    concurrency:
+      group: cash-late-public-witness-archive
+      cancel-in-progress: false
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 25

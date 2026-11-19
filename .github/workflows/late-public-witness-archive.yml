@@ -9,9 +9,6 @@ on:
 permissions:
   actions: read
   contents: read
-concurrency:
-  group: cash-late-public-witness-archive
-  cancel-in-progress: false
 jobs:
   validate-public-observer-archive:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
@@ -36,6 +33,10 @@ jobs:
       - name: Audit existing archive without modifying it
         run: node -e "const x=require('./late-observer-archive').inspectArchive('late-store');console.log('CASH_LATE_PREEXPIRY_ARCHIVE_RUNS='+x.runs);console.log('CASH_LATE_PREEXPIRY_QUALIFIED=0')"
   archive-successful-public-observer:
+    # Serialize only the branch-mutating job, not read-only PR validators.
+    concurrency:
+      group: cash-late-public-witness-archive
+      cancel-in-progress: false
     # Privileged workflow_run NEVER executes code from the source run or PR,
     # only frozen main-branch verifier with public-origin artifact validation.
     if: >-

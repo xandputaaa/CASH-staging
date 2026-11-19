@@ -43,4 +43,7 @@ jobs:
           # Public original-run archive never supplies outcomes on its own.
           # Validate its exact original bytes/hashes before identity joining.
           node source/late-public-cohort-audit.js durable witnesses
+          # A green observer run may have witnessed NOTHING. Count those
+          # valid-but-empty original polls without claiming source outage.
+          node source/late-observer-capture-health.js durable
           echo CASH_CROSS_ARCHIVE_IDENTITY_AUDIT=PASS

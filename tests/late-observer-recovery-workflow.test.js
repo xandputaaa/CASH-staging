@@ -44,3 +44,17 @@ test('recovery never synthesizes a missing original receipt, still checks parent
  assert.match(recovery,/gh api "repos\/\$\{GITHUB_REPOSITORY\}\/actions\/runs\/\$parent"/);
  assert.match(recovery,/late-observer-archive\.js/);
 });
+
+test('only privileged archive writers are serialized; PR checks do not get cancelled by new scheduled observations',()=>{
+ for(const [yaml,writer] of [
+  [routine,'archive-successful-public-observer'],
+  [recovery,'recover-original-witnesses']
+ ]){
+  const header=yaml.split('jobs:')[0];
+  const readOnly=yaml.split('  '+writer+':')[0];
+  const writeOnly=yaml.split('  '+writer+':')[1];
+  assert.doesNotMatch(header,/concurrency:/);
+  assert.doesNotMatch(readOnly,/group: cash-late-public-witness-archive/);
+  assert.match(writeOnly,/    concurrency:\s*\n      group: cash-late-public-witness-archive\s*\n      cancel-in-progress: false/);
+ }
+});
