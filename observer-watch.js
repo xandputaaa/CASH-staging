@@ -22,6 +22,17 @@ function budgetForObserverEvent(eventName){
 const MAX_ATTEMPTS=20;
 const LATE='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1';
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+// Never archive raw thrown messages: network clients and malformed inputs can
+// embed credentials, query strings, public forecast payloads or local paths.
+function safeObserverError(error){
+ const message=String(error?.message||error||'');
+ if(/Oversized observation probe/.test(message))return 'PROBE_OVERSIZED';
+ if(/Invalid public eligibility diagnostic|Missing public eligibility diagnostic|Duplicate eligibility diagnostic/.test(message))
+  return 'SOURCE_DIAGNOSTIC_INVALID';
+ if(/Invalid observation|Unsafe|Unexpected|Inconsistent|Untrusted|Missing|mismatch|invalid|Invalid/.test(message))
+  return 'PROBE_VALIDATION_REJECTED';
+ return 'OBSERVER_POLL_FAILED';
+}
 function evidenceRank(x){
  if(!x||!Array.isArray(x.frozenEvidence))return 0;
  const late=x.frozenEvidence.filter(f=>f.model===LATE);
@@ -184,7 +195,7 @@ async function watchScheduledObserver({
    }
   }catch(e){
    invalidProbes++;
-   lastError=String(e?.message||e).slice(0,160);
+   lastError=safeObserverError(e);
   }
   const remaining=deadline-clock();
   if(remaining<=0)break;
@@ -248,5 +259,5 @@ if(require.main===module)
  });
 module.exports={watchScheduledObserver,evidenceRank,isReady,MAX_RUNTIME_MS,
  TRUSTED_SCHEDULE_COMPLETION_BUDGET_MS,budgetForObserverEvent,
- POLL_INTERVAL_MS,MAX_ATTEMPTS,emptyEligibilityBucket,recordEligibilityPoll,
+ POLL_INTERVAL_MS,MAX_ATTEMPTS,safeObserverError,emptyEligibilityBucket,recordEligibilityPoll,
  emptyConversionBucket,recordWitnessConversion};
