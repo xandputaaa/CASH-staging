@@ -16,7 +16,7 @@ const defaultDurable=(overrides={})=>({
 const defaultLegacy=(overrides={})=>({
  source:'ledger',model:early,marketId:MARKET,
  hash:HASH,side:'WAIT',close:CLOSE,directFinal:false,
- paperPriced:false,...overrides
+ paperPriced:false,winner:null,netConservativeUSD:null,...overrides
 });
 const run=(durableRows=[],legacyRows=[],runs=0)=>compareCohorts({
  durableRows,legacyRows,durableRunCount:runs,legacyFiles:legacyRows.length
@@ -73,7 +73,7 @@ test('WAIT can never become a settled win or priced hypothetical trade',()=>{
 test('a later legacy direct final for the SAME original YES counts once and never activates orders',()=>{
  const direct=defaultDurable({model:late,side:'YES',hash:HASH2});
  const final=defaultLegacy({model:late,side:'YES',hash:HASH2,
-  directFinal:true,paperPriced:true});
+  directFinal:true,paperPriced:true,winner:'YES',netConservativeUSD:0.015});
  const x=run([direct,direct],[final],1);
  assert.equal(x.overlap.identicalFrozenCommitments,1);
  assert.equal(x.overlap.durableDirectionalWithSeparateScheduledTwoReadFinal,1);
@@ -102,7 +102,7 @@ test('a same-market early and late forecast are two frozen model decisions but O
 });
 test('cross-archive market identity conflicts fail closed instead of selecting later correct side',()=>{
  for(const fields of [
-  {side:'YES',directFinal:true},{hash:'e'.repeat(64)},
+  {side:'YES',directFinal:true,winner:'YES'},{hash:'e'.repeat(64)},
   {close:'2026-11-19T04:45:00Z'}
  ]){
   const x=defaultLegacy(fields);
@@ -121,7 +121,7 @@ test('conflicting repeated original observations within archive fail before scor
 test('incomplete and older ledger-only directional records remain present but never treated as new durable proofs',()=>{
  const l=[
   defaultLegacy({model:late,side:'YES',hash:HASH2,
-   directFinal:true,paperPriced:false}),
+   directFinal:true,paperPriced:false,winner:'YES'}),
   defaultLegacy({model:late,marketId:SECOND,side:'NO',
    hash:'9'.repeat(64),directFinal:false})
  ];
@@ -166,4 +166,44 @@ test('existing cross-archive workflow runs the real committed branches in read-o
  assert.match(y,/  schedule:\s*\n/);
  assert.match(y,/contents: read/);
  assert.doesNotMatch(y,/contents: write/);
+});
+
+test('synthetic eight verified directional finals show hits distinct from fee-negative correct predictions',()=>{
+ const net=[-0.005,0.046,0.013,-0.008,0.017,0.019,-0.004,-0.009];
+ const records=net.map((p,i)=>defaultLegacy({
+  model:late,marketId:'KXBTC15M-26NOV18'+
+   String(i+1).padStart(2,'0')+'45-45',
+  hash:String(i+1).repeat(64),side:i%2?'NO':'YES',
+  winner:i%2?'NO':'YES',directFinal:true,
+  paperPriced:true,netConservativeUSD:p
+ }));
+ const x=run([],records,0);
+ assert.equal(x.scheduledLegacy.lateDirectionalPublishedFinals,8);
+ assert.equal(x.scheduledLegacy.lateDirectionalPublishedHits,8);
+ assert.equal(x.scheduledLegacy.lateDirectionalPublishedMisses,0);
+ assert.equal(x.scheduledLegacy.lateDirectionalPricedCounterfactuals,8);
+ assert.equal(x.scheduledLegacy.lateCorrectButNonpositiveConservativePaper,4);
+ assert.equal(x.scheduledLegacy.lateConservativeHypotheticalNetUSD,0.069);
+ assert.equal(x.durable.lateDirectional,0);
+ assert.equal(x.distinctUnion.uniqueKalshiContracts,8);
+ assert.equal(x.independentlyQualifiedCount,0);
+});
+test('a failed verified result counts a miss and negative hypothetical paper without being discarded',()=>{
+ const x=run([],[
+  defaultLegacy({model:late,side:'YES',winner:'NO',
+   directFinal:true,paperPriced:true,
+   netConservativeUSD:-0.44})
+ ],0);
+ assert.equal(x.scheduledLegacy.lateDirectionalPublishedHits,0);
+ assert.equal(x.scheduledLegacy.lateDirectionalPublishedMisses,1);
+ assert.equal(x.scheduledLegacy.lateConservativeHypotheticalNetUSD,-0.44);
+});
+test('inconsistent winner or missing conditional paper economics fails closed',()=>{
+ assert.throws(()=>run([],[defaultLegacy({
+  model:late,side:'YES',directFinal:true,winner:null})],0),
+ /Invalid immutable public cohort/);
+ assert.throws(()=>run([],[defaultLegacy({
+  model:late,side:'YES',winner:'YES',directFinal:true,
+  paperPriced:true,netConservativeUSD:null})],0),
+ /Invalid immutable public cohort/);
 });
