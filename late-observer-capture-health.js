@@ -117,6 +117,10 @@ function triggerConversionCoverage(rows){
   dest.withConversion++;
   for(const kind of ['early','late']){
    const c=r.witnessConversion[kind],d=dest[kind];
+   if(!c||!Number.isInteger(c.eligibleWithWitnessPolls)||
+      !Number.isInteger(c.eligibleWithoutWitnessPolls)||
+      c.eligibleWithWitnessPolls<0||c.eligibleWithoutWitnessPolls<0)
+    throw Error('Trigger conversion malformed original poll counters');
    const eligible=c.eligibleWithWitnessPolls+
     c.eligibleWithoutWitnessPolls;
    d.eligiblePolls+=eligible;
