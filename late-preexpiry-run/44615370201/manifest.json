@@ -1,0 +1,43 @@
+{
+  "version": "CASH_DURABLE_GITHUB_LATE_OBSERVER_ARCHIVE_V1",
+  "sourceRunId": "44615370201",
+  "sourceWorkflow": "CASH pre-expiry public research observer",
+  "sourceRunEvent": "workflow_run",
+  "sourceRepository": "xandputaaa/CASH-staging",
+  "sourceHeadSha": "fda24c8ec6888c6d9b5f6c3065e83e309693f7fc",
+  "sourceRunCreatedAt": "2026-11-19T21:06:16Z",
+  "sourceRunFinishedAt": "2026-11-19T21:09:29Z",
+  "validatedParentRunId": "44615281618",
+  "parentProvenance": "GITHUB_API_SUCCESSFUL_SCHEDULE_MAIN",
+  "sourceArtifactFiles": [
+    {
+      "file": "observer-origin.json",
+      "sha256": "eb84a8ec1f3d38061e04e68569d1a7f9bfd85beefe75ae0b7c1a82e46c72554d",
+      "sizeBytes": 798
+    },
+    {
+      "file": "observer-run-summary.json",
+      "sha256": "7f20f5d4ea5df1cc81f0661f8bba9110a0c84d1a6eaf36328cf6d6f0ef1738d8",
+      "sizeBytes": 1647
+    },
+    {
+      "file": "public-preexpiry-observation.json",
+      "sha256": "13123364d01ea341b644be85db9303c7f2c4b5b5b70adf32467c314b800b49d6",
+      "sizeBytes": 2281
+    },
+    {
+      "file": "probes/001.json",
+      "sha256": "13123364d01ea341b644be85db9303c7f2c4b5b5b70adf32467c314b800b49d6",
+      "sizeBytes": 2281
+    }
+  ],
+  "distinctCommitments": 1,
+  "directionalCommitments": 0,
+  "lateDirectionalCommitments": 0,
+  "abstentionCommitments": 1,
+  "publicKalshiDirectComparisons": 2,
+  "archivedAtGitHubRunner": "2026-11-19T21:09:42.805Z",
+  "independentQualificationCount": 0,
+  "ordersAllowed": false,
+  "limitation": "Commit captures past GitHub Actions public witness artifacts after direct GitHub API run and parent verification. Run creation/completion times are GitHub metadata, NOT a cryptographic third-party timestamp, a independently authenticated BRTI index, forecast accuracy, order fill or profit."
+}
