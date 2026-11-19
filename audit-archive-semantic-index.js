@@ -41,7 +41,8 @@ function inspectArchiveSemanticIndex({manifest,directory,activeJournalPath,limit
  for(const event of active)accept(event);
  const pendingIds=[...records].filter(([,x])=>!x.resolved).map(([id])=>id).sort();
  return Object.freeze({state:'ARCHIVE_SEMANTIC_INDEX_VERIFIED',
-  captures:records.size,resolutions:resolved,pendingIds:Object.freeze(pendingIds),
+  captures:records.size,resolutions:resolved,
+  capturedIds:Object.freeze([...records.keys()].sort()),pendingIds:Object.freeze(pendingIds),
   pending:pendingIds.length,archivedEvents:verified.totalEvents,activeEvents:active.length,
   evidenceStatus:'FILESYSTEM_JOURNAL_UNVERIFIED',mutatesStorage:false,
   liveStartupEnabled:false,automaticRolloverEnabled:false});
