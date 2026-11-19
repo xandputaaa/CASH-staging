@@ -1,0 +1,13 @@
+{
+  "version": "CASH_PUBLIC_LATE_GITHUB_OBSERVER_ORIGIN_V1",
+  "sourceWorkflow": "CASH pre-expiry public research observer",
+  "runId": "44620770106",
+  "event": "schedule",
+  "repository": "xandputaaa/CASH-staging",
+  "headBranch": "main",
+  "headSha": "09f8e12e7fd911400a3538c545b0f1fc9dff9725",
+  "parent": null,
+  "independentlyQualifiedCount": 0,
+  "ordersEnabled": false,
+  "note": "GitHub workflow-event metadata, cross-check with direct GitHub API before archiving. No independently certified trading prediction, inference-time BRTI calculation, executable quote, fill or profit."
+}
