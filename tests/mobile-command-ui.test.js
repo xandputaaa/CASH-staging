@@ -30,6 +30,7 @@ test('navigation is responsive, keyboard-accessible, and reduces motion',()=>{
  assert.match(page,/ArrowLeft/);
  assert.match(page,/ArrowRight/);
  assert.match(page,/main>section\.panel\{display:none!important\}/);
+ assert.match(page,/main>nav\.cash-mobile-bottom-nav\{display:grid!important\}/);
  assert.match(page,/style\.removeProperty\('display'\)/);
 });
 
