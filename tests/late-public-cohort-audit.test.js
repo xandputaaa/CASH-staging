@@ -241,3 +241,76 @@ test('UTC close normalization preserves a real one-second mismatch and rejects i
    /Invalid UTC contract close timestamp|Noncanonical UTC/);
  }
 });
+
+test('first GitHub witness lead bins are distinct model-market decisions, never duplicate polls',()=>{
+ const rows=[
+  defaultDurable({observedAt:'2026-11-19T04:29:45.000Z'}),
+  defaultDurable({observedAt:'2026-11-19T04:27:50.000Z'}),
+  defaultDurable({model:early,marketId:SECOND,hash:HASH2,
+   observedAt:'2026-11-19T04:29:00.000Z'}),
+  defaultDurable({model:late,hash:HASH2,
+   observedAt:'2026-11-19T04:28:00.000Z'}),
+  defaultDurable({model:late,hash:HASH2,
+   observedAt:'2026-11-19T04:29:55.000Z'})
+ ];
+ const x=run(rows,[],2);
+ const t=x.durable.firstWitnessLeadTiming;
+ assert.deepEqual(t.early,{
+  modelMarketDecisions:2,atMost30s:0,over30To60s:1,
+  over60To120s:0,over120s:1,
+  minimumLeadSeconds:60,medianLeadSeconds:95,maximumLeadSeconds:130
+ });
+ assert.deepEqual(t.late,{
+  modelMarketDecisions:1,atMost30s:0,over30To60s:0,
+  over60To120s:1,over120s:0,
+  minimumLeadSeconds:120,medianLeadSeconds:120,maximumLeadSeconds:120
+ });
+ assert.equal(x.durable.uniqueKalshiContracts,2);
+ assert.equal(x.durable.totalModelMarketDecisions,3);
+ assert.equal(x.independentlyQualifiedCount,0);
+ assert.equal(x.realMoneyOrdersAllowed,false);
+});
+test('witness lead categories treat exact boundaries consistently without time rounding',()=>{
+ const times=['2026-11-19T04:29:30.000Z','2026-11-19T04:29:29.999Z',
+  '2026-11-19T04:29:00.000Z','2026-11-19T04:28:59.999Z',
+  '2026-11-19T04:28:00.000Z','2026-11-19T04:27:59.999Z'];
+ const rows=times.map((observedAt,i)=>defaultDurable({
+  model:late,marketId:'KXBTC15M-26NOV1900'+String(i+1)+'0-00',
+  hash:String(i+1).repeat(64),observedAt
+ }));
+ const x=run(rows,[],1),t=x.durable.firstWitnessLeadTiming.late;
+ assert.equal(t.modelMarketDecisions,6);
+ assert.equal(t.atMost30s,1);
+ assert.equal(t.over30To60s,2);
+ assert.equal(t.over60To120s,2);
+ assert.equal(t.over120s,1);
+ assert.equal(t.minimumLeadSeconds,30);
+ assert.equal(t.maximumLeadSeconds,120.001);
+});
+test('empty durable inventory leaves witness medians null, not fabricated zero-second captures',()=>{
+ const x=run();
+ for(const kind of ['early','late']){
+  const t=x.durable.firstWitnessLeadTiming[kind];
+  assert.equal(t.modelMarketDecisions,0);
+  assert.equal(t.minimumLeadSeconds,null);
+  assert.equal(t.medianLeadSeconds,null);
+  assert.equal(t.maximumLeadSeconds,null);
+ }
+ assert.equal(x.validationGateMet,false);
+});
+test('first-witness timing never reads outcome or selects a later winner-dependent timestamp',()=>{
+ const x=run([
+  defaultDurable({model:late,side:'NO',hash:HASH2,
+   observedAt:'2026-11-19T04:28:30.000Z',
+   directPublicKalshiMatched:false}),
+  defaultDurable({model:late,side:'NO',hash:HASH2,
+   observedAt:'2026-11-19T04:29:48.000Z',
+   directPublicKalshiMatched:true})
+ ],[defaultLegacy({model:late,side:'NO',hash:HASH2,
+  winner:'NO',directFinal:true,paperPriced:false})],2);
+ assert.equal(x.durable.firstWitnessLeadTiming.late.medianLeadSeconds,90);
+ assert.equal(x.durable.directionalWithPublicExchangeMatch,1);
+ assert.equal(x.overlap.identicalFrozenCommitments,1);
+ assert.equal(x.independentlyQualifiedCount,0);
+ assert.equal(x.tradeFillsVerified,0);
+});

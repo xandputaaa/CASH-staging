@@ -164,6 +164,47 @@ function summary(byModelMarket){
  }
  return rows;
 }
+
+/*
+ * First captured GitHub-runner witness lead for each DISTINCT model/market,
+ * using the earliest original observedAtRunner. Never choose a better/earlier
+ * lead from settlement outcomes, duplicate polls, or later corroborations.
+ * Model decisions are NOT independent underlying contracts.
+ */
+function firstWitnessLeadTiming(originalDecisions){
+ const bins=()=>({modelMarketDecisions:0,atMost30s:0,
+  over30To60s:0,over60To120s:0,over120s:0,
+  minimumLeadSeconds:null,medianLeadSeconds:null,
+  maximumLeadSeconds:null});
+ const out={early:bins(),late:bins()};
+ const vals={early:[],late:[]};
+ for(const x of originalDecisions.values()){
+  const kind=x.model==='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1'?'late':'early';
+  const leadMs=Date.parse(x.close)-Date.parse(x.observedAt);
+  if(!Number.isSafeInteger(leadMs)||leadMs<=0)
+   throw Error('Invalid chronological first-witness pre-expiry lead');
+  vals[kind].push(leadMs);
+  const b=out[kind];b.modelMarketDecisions++;
+  if(leadMs<=30000)b.atMost30s++;
+  else if(leadMs<=60000)b.over30To60s++;
+  else if(leadMs<=120000)b.over60To120s++;
+  else b.over120s++;
+ }
+ for(const kind of ['early','late']){
+  const ms=vals[kind].sort((a,b)=>a-b);
+  if(!ms.length)continue;
+  const mid=Math.floor(ms.length/2);
+  const median=ms.length%2?ms[mid]:(ms[mid-1]+ms[mid])/2;
+  out[kind].minimumLeadSeconds=Number((ms[0]/1000).toFixed(3));
+  out[kind].medianLeadSeconds=Number((median/1000).toFixed(3));
+  out[kind].maximumLeadSeconds=Number((ms.at(-1)/1000).toFixed(3));
+  if(out[kind].atMost30s+out[kind].over30To60s+
+     out[kind].over60To120s+out[kind].over120s!==ms.length)
+   throw Error('Invalid first-witness timing bins');
+ }
+ return out;
+}
+
 function compareCohorts({durableRows=[],legacyRows=[],durableRunCount=0,
  legacyFiles=0}={}){
  if(!Number.isSafeInteger(durableRunCount)||durableRunCount<0||
@@ -202,6 +243,10 @@ function compareCohorts({durableRows=[],legacyRows=[],durableRunCount=0,
  overlap.durableOnlyModelMarketDecisions=d.size-
   overlap.identicalFrozenCommitments;
  const dur=summary(d),leg=summary(l),combined=summary(merged);
+ const witnessedLead=firstWitnessLeadTiming(d);
+ if(witnessedLead.early.modelMarketDecisions!==dur.earlyWait+dur.earlyDirectional||
+    witnessedLead.late.modelMarketDecisions!==dur.lateWait+dur.lateDirectional)
+  throw Error('First-witness timing identity count mismatch');
  const distinctDurableRuns=new Set(
   [...d.values()].flatMap(x=>[...x.runIds])
  ).size;
@@ -231,7 +276,8 @@ function compareCohorts({durableRows=[],legacyRows=[],durableRunCount=0,
  return {
   version:VERSION,
   archiveType:'PUBLIC_GITHUB_RESEARCH_CROSS_EVIDENCE_COHORT_ONLY',
-  durable:{...dur,originalArchiveRuns:durableRunCount,
+  durable:{...dur,firstWitnessLeadTiming:witnessedLead,
+   originalArchiveRuns:durableRunCount,
    runsWithAReadableFrozenDecision:distinctDurableRuns,
    publicExchangeMatchedModelMarketDecisions:[...d.values()].filter(x=>
     x.directPublicKalshiMatched).length,
@@ -257,7 +303,7 @@ function compareCohorts({durableRows=[],legacyRows=[],durableRunCount=0,
   independentValidationTarget:100,
   validationGateMet:false,
   historicalAuditCompletenessProven:false,
-  warning:'Records count unique model/contract frozen identities across two incomplete GitHub-hosted public-proxy evidence sets, not an independently sampled holdout. Early+late decisions for the same Kalshi contract are ONE market, not two independent contracts. Provisional ledger finals never retrospectively time-witness another forecast; original runner timestamps are not cryptographically notarized, BRTI index inputs/quotes and actual fills are not verified, and agreement does not establish trading profitability.'
+  warning:'First-witness lead-time bins show earliest available GitHub-observed pre-expiry timestamps for DISTINCT model/market decisions only. Repeated polls, later confirmations and settlement outcomes cannot increase the sample or select a more favorable timestamp. These are not full forecast coverage, authenticated exchange first-publication times, or unique underlying Kalshi contracts. Records count unique model/contract frozen identities across two incomplete GitHub-hosted public-proxy evidence sets, not an independently sampled holdout. Early+late decisions for the same Kalshi contract are ONE market, not two independent contracts. Provisional ledger finals never retrospectively time-witness another forecast; original runner timestamps are not cryptographically notarized, BRTI index inputs/quotes and actual fills are not verified, and agreement does not establish trading profitability.'
  };
 }
 function auditCombined(lateRoot,ledgerRoot){
@@ -272,6 +318,15 @@ if(require.main===module){
  console.log('CASH_COHORT_DURABLE_ORIGINAL_RUNS='+out.durable.originalArchiveRuns);
  console.log('CASH_COHORT_DURABLE_UNIQUE_CONTRACTS='+out.durable.uniqueKalshiContracts);
  console.log('CASH_COHORT_DURABLE_LATE_DIRECTIONAL='+out.durable.lateDirectional);
+ for(const kind of ['early','late']){
+  const x=out.durable.firstWitnessLeadTiming[kind];
+  console.log('CASH_COHORT_FIRST_WITNESS_'+kind.toUpperCase()+'_MODEL_DECISIONS='+x.modelMarketDecisions);
+  console.log('CASH_COHORT_FIRST_WITNESS_'+kind.toUpperCase()+'_AT_MOST_30S='+x.atMost30s);
+  console.log('CASH_COHORT_FIRST_WITNESS_'+kind.toUpperCase()+'_OVER_30_TO_60S='+x.over30To60s);
+  console.log('CASH_COHORT_FIRST_WITNESS_'+kind.toUpperCase()+'_OVER_60_TO_120S='+x.over60To120s);
+  console.log('CASH_COHORT_FIRST_WITNESS_'+kind.toUpperCase()+'_OVER_120S='+x.over120s);
+  console.log('CASH_COHORT_FIRST_WITNESS_'+kind.toUpperCase()+'_MEDIAN_LEAD_SECONDS='+x.medianLeadSeconds);
+ }
  console.log('CASH_COHORT_SCHEDULED_LEDGER_LATE_DIRECTIONAL='+out.scheduledLegacy.lateDirectional);
  console.log('CASH_COHORT_SCHEDULED_LEDGER_DIRECTIONAL_FINALS='+out.scheduledLegacy.directionalWithSeparateDirectFinal);
  console.log('CASH_COHORT_SCHEDULED_LEDGER_LATE_HITS='+out.scheduledLegacy.lateDirectionalPublishedHits);
@@ -285,4 +340,4 @@ if(require.main===module){
  console.log('CASH_COHORT_ORDERS_ENABLED=false');
 }
 module.exports={readDurableRows,readLegacyRows,compareCohorts,
- auditCombined,VERSION,summary,canonicalCloseUtc};
+ auditCombined,VERSION,summary,canonicalCloseUtc,firstWitnessLeadTiming};
