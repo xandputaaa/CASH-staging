@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const crypto=require('node:crypto');
-const {verifiedJournal,observeJournal,buildObservation}=require('../preexpiry-observer');
+const {verifiedJournal,observeJournal,buildObservation,diagnosePublicEligibility}=require('../preexpiry-observer');
 const SHA=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const market='KXBTC15M-26NOV171815-15';
 const at='2026-11-17T23:12:00Z',close='2026-11-17T23:15:00Z';
@@ -70,4 +70,90 @@ test('missing or malformed public exports report no witnessed predictions, not a
  assert.equal(r.frozenEvidence.length,0);
  assert.equal(r.sourcesUnavailableOrInvalid.length,2);
  assert.equal(r.claimedIndependentlyQualifiedCount,0);
+});
+
+function eligibilityFixture(items){
+ const journal=fixture('late');
+ journal.events=[];let prev='GENESIS';
+ for(const [i,patch] of items.entries()){
+  const data={...fixture('late').events[0].payload,
+   marketId:'KXBTC15M-26NOV1718'+String(i+20).padStart(2,'0')+'-15',
+   ...patch};
+  const recordedAt=patch.recordedAt||data.at;
+  delete data.recordedAt;
+  const event={sequence:i+1,type:'FORECAST',recordedAt,
+   payload:data,previousHash:prev};
+  event.hash=SHA(event);journal.events.push(event);prev=event.hash;
+ }
+ journal.headHash=prev;journal.records=items.length;journal.pending=items.length;
+ return journal;
+}
+test('public-source diagnostic partitions every verified forecast into exactly one reason',()=>{
+ const items=[
+  {at:'2026-11-17T23:12:00Z',endTime:'2026-11-17T23:15:00Z'},
+  {at:'2026-11-17T23:05:00Z',endTime:'2026-11-17T23:15:00Z'},
+  {at:'2026-11-17T23:12:45Z',endTime:'2026-11-17T23:15:45Z'},
+  {at:'2026-11-17T23:09:40Z',endTime:'2026-11-17T23:12:40Z'},
+  {at:'2026-11-17T23:12:00Z',endTime:'2026-11-17T23:15:00Z',
+   recordedAt:'2026-11-17T23:12:10Z'},
+  {at:'2026-11-17T23:12:00Z',endTime:'2026-11-17T23:15:00Z',
+   indexSourceType:'OFFICIAL_BRTI_LIVE'},
+  {at:'NOT_A_DATE',endTime:'2026-11-17T23:15:00Z'}
+ ];
+ const j=eligibilityFixture(items),t=Date.parse(observed);
+ assert.equal(verifiedJournal(j,'late').length,items.length);
+ const d=diagnosePublicEligibility(j,'late',t);
+ assert.equal(d.status,'VALID_SELF_HASHED_SOURCE_JOURNAL');
+ assert.equal(d.forecastCount,7);
+ for(const [key,val] of Object.entries(d.reasons))
+  assert.equal(val,1,'Expected one '+key);
+ assert.equal(Object.values(d.reasons).reduce((sum,n)=>sum+n,0),7);
+ assert.equal(d.eligibleBeforeThreeRecordCap,1);
+ assert.equal(observeJournal(j,'late',t).length,1);
+ assert.equal(d.independentQualifiedCount,0);
+ assert.equal(d.ordersEnabled,false);
+ assert.doesNotMatch(JSON.stringify(d),/KXBTC15M-|OFFICIAL_BRTI_LIVE|sampleWindow|spotPrice|privateKey/);
+});
+test('diagnostic mirrors actual original 3-event observation limit rather than claiming unlimited evidence',()=>{
+ const items=Array.from({length:6},()=>({
+  at:'2026-11-17T23:12:00Z',
+  endTime:'2026-11-17T23:15:00Z',
+  side:null
+ }));
+ const journal=eligibilityFixture(items),ts=Date.parse(observed);
+ const d=diagnosePublicEligibility(journal,'late',ts);
+ assert.equal(d.forecastCount,6);
+ assert.equal(d.eligibleBeforeThreeRecordCap,6);
+ assert.equal(d.retainedEligibleAfterThreeRecordCap,3);
+ assert.equal(d.publicProxyCommitmentsBeyondThreeRecordCap,3);
+ assert.equal(observeJournal(journal,'late',ts).length,3);
+ assert.equal(d.independentQualifiedCount,0);
+});
+test('unfetched and corrupted journal diagnostics never pretend eligibility or leak full source inputs',()=>{
+ const t=Date.parse(observed);
+ const absent=diagnosePublicEligibility(null,'late',t);
+ assert.equal(absent.status,'SOURCE_UNAVAILABLE_OR_UNFETCHED');
+ assert.equal(absent.forecastCount,null);
+ assert.equal(absent.reasons,null);
+ const corrupted=fixture('late');
+ corrupted.events[0].hash='0'.repeat(64);
+ const invalid=diagnosePublicEligibility(corrupted,'late',t);
+ assert.equal(invalid.status,'SOURCE_JOURNAL_INVALID');
+ assert.equal(invalid.forecastCount,null);
+ assert.equal(invalid.reasons,null);
+ assert.throws(()=>diagnosePublicEligibility(fixture('late'),'bad',t),/Invalid eligibility/);
+ assert.throws(()=>diagnosePublicEligibility(fixture('late'),'late',NaN),/Invalid eligibility/);
+});
+test('the diagnostic mirrors early-window model timing without rewriting any accepted side or hash',()=>{
+ const journal=fixture('early',{
+  at:'2026-11-17T23:03:00Z',endTime:'2026-11-17T23:15:00Z'
+ });
+ journal.events[0].recordedAt=journal.events[0].payload.at;
+ const {hash,...body}=journal.events[0];
+ journal.headHash=journal.events[0].hash=SHA(body);
+ const atEarly=Date.parse('2026-11-17T23:05:00Z');
+ const x=diagnosePublicEligibility(journal,'early',atEarly);
+ assert.equal(x.reasons.ELIGIBLE_PUBLIC_PROXY_PREEXPIRY,1);
+ assert.equal(x.independentQualifiedCount,0);
+ assert.equal(observeJournal(journal,'early',atEarly).length,1);
 });
