@@ -39,7 +39,13 @@ function normalize(row,source){
     (source==='ledger'&&
       (typeof row.directFinal!=='boolean'||typeof row.paperPriced!=='boolean'||
        (row.side==='WAIT'&&(row.directFinal||row.paperPriced))||
-       row.paperPriced&&!row.directFinal)))
+       row.paperPriced&&!row.directFinal||
+       (row.directFinal?!['YES','NO'].includes(row.winner):
+        row.winner!==null)||
+       (row.paperPriced?
+        (!Number.isFinite(row.netConservativeUSD)||
+         row.netConservativeUSD< -2||row.netConservativeUSD>1):
+        row.netConservativeUSD!==null))))
   throw Error('Invalid immutable public cohort identity or evidence class');
  return row;
 }
@@ -96,7 +102,10 @@ function readLegacyRows(root){
      source:'ledger',model,marketId:market,side:p.side,
      hash:p.frozenEventSha256,close:p.contractClosesAt,
      directFinal:r.directlyRecheckedFinal!==null,
-     paperPriced:r.conditionalPaper!==null
+     paperPriced:r.conditionalPaper!==null,
+     winner:r.directlyRecheckedFinal?.winner||null,
+     netConservativeUSD:
+      r.conditionalPaper?.assumedNetOneContractUSDConservativeCentFee??null
     },'ledger'));
    }
   }
@@ -194,6 +203,17 @@ function compareCohorts({durableRows=[],legacyRows=[],durableRunCount=0,
   x.side!=='WAIT'&&x.directFinal).length;
  const legacyDirectionalWithoutFinal=[...l.values()].filter(x=>
   x.side!=='WAIT'&&!x.directFinal).length;
+ const settledLate=[...l.values()].filter(x=>
+  x.model==='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1'&&
+  x.side!=='WAIT'&&x.directFinal);
+ const latePriced=settledLate.filter(x=>x.paperPriced);
+ const lateHits=settledLate.filter(x=>x.side===x.winner).length;
+ const lateMisses=settledLate.length-lateHits;
+ const lateCorrectNonpositive=latePriced.filter(x=>
+  x.side===x.winner&&x.netConservativeUSD<=0).length;
+ const lateNet=latePriced.length?
+  Number(latePriced.reduce((sum,x)=>sum+x.netConservativeUSD,0).toFixed(4)):
+  null;
  return {
   version:VERSION,
   archiveType:'PUBLIC_GITHUB_RESEARCH_CROSS_EVIDENCE_COHORT_ONLY',
@@ -207,7 +227,13 @@ function compareCohorts({durableRows=[],legacyRows=[],durableRunCount=0,
    directionalWithSeparateDirectFinal:legacyDirectionalWithFinal,
    directionalWithoutDirectFinal:legacyDirectionalWithoutFinal,
    directionalWithCounterfactualAsk:[...l.values()].filter(x=>
-    x.side!=='WAIT'&&x.paperPriced).length},
+    x.side!=='WAIT'&&x.paperPriced).length,
+   lateDirectionalPublishedFinals:settledLate.length,
+   lateDirectionalPublishedHits:lateHits,
+   lateDirectionalPublishedMisses:lateMisses,
+   lateDirectionalPricedCounterfactuals:latePriced.length,
+   lateCorrectButNonpositiveConservativePaper:lateCorrectNonpositive,
+   lateConservativeHypotheticalNetUSD:lateNet},
   overlap,
   distinctUnion:combined,
   inferenceTimeBRTIIndependentlyReplicated:false,
@@ -234,6 +260,11 @@ if(require.main===module){
  console.log('CASH_COHORT_DURABLE_LATE_DIRECTIONAL='+out.durable.lateDirectional);
  console.log('CASH_COHORT_SCHEDULED_LEDGER_LATE_DIRECTIONAL='+out.scheduledLegacy.lateDirectional);
  console.log('CASH_COHORT_SCHEDULED_LEDGER_DIRECTIONAL_FINALS='+out.scheduledLegacy.directionalWithSeparateDirectFinal);
+ console.log('CASH_COHORT_SCHEDULED_LEDGER_LATE_HITS='+out.scheduledLegacy.lateDirectionalPublishedHits);
+ console.log('CASH_COHORT_SCHEDULED_LEDGER_LATE_MISSES='+out.scheduledLegacy.lateDirectionalPublishedMisses);
+ console.log('CASH_COHORT_SCHEDULED_LEDGER_LATE_PRICED='+out.scheduledLegacy.lateDirectionalPricedCounterfactuals);
+ console.log('CASH_COHORT_SCHEDULED_LEDGER_LATE_NET_CONSERVATIVE_PAPER_USD='+out.scheduledLegacy.lateConservativeHypotheticalNetUSD);
+ console.log('CASH_COHORT_SCHEDULED_LEDGER_CORRECT_BUT_NONPOSITIVE_NET='+out.scheduledLegacy.lateCorrectButNonpositiveConservativePaper);
  console.log('CASH_COHORT_CROSS_ARCHIVE_MATCHES='+out.overlap.identicalFrozenCommitments);
  console.log('CASH_COHORT_UNION_UNIQUE_KALSHI_CONTRACTS='+out.distinctUnion.uniqueKalshiContracts);
  console.log('CASH_COHORT_INDEPENDENT_QUALIFIED=0');
