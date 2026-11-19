@@ -61,6 +61,64 @@ function verifiedJournal(obj,kind){
   throw Error('Journal summary count mismatch');
  return accepted;
 }
+/*
+ * Diagnostic-only, reason-partitioned view of the same VERIFIED public
+ * source journal the observer already uses. This never changes what
+ * observeJournal accepts, signs or publishes. Counts are aggregated only:
+ * no market IDs, prediction sides, prices, timestamps, keys or outcomes.
+ */
+const ELIGIBILITY_REASONS=Object.freeze([
+ 'INVALID_FORECAST_CLOCK','OUTSIDE_FROZEN_LEAD_WINDOW',
+ 'NOT_YET_FROZEN_AT_RUNNER','EXPIRED_OR_WITHIN_15S_CLOSE_GUARD',
+ 'FROZEN_RECORD_CLOCK_SKEW','NON_PUBLIC_SINGLE_EXCHANGE_SOURCE',
+ 'ELIGIBLE_PUBLIC_PROXY_PREEXPIRY'
+]);
+function diagnosePublicEligibility(snapshot,kind,observedMs){
+ if(!SPECS[kind]||!Number.isFinite(observedMs))
+  throw Error('Invalid eligibility diagnostic model or runner clock');
+ const empty=Object.fromEntries(ELIGIBILITY_REASONS.map(k=>[k,0]));
+ const unavailable={
+  model:SPECS[kind].model,status:'SOURCE_UNAVAILABLE_OR_UNFETCHED',
+  forecastCount:null,reasons:null,eligibleBeforeThreeRecordCap:null,
+  recordCap:3,independentQualifiedCount:0,ordersEnabled:false
+ };
+ if(!snapshot)return unavailable;
+ let verified;
+ try{verified=verifiedJournal(snapshot,kind)}
+ catch{return {...unavailable,status:'SOURCE_JOURNAL_INVALID'}}
+ const reasons={...empty};
+ const [minLead,maxLead]=SPECS[kind].leads;
+ for(const {e,p} of verified){
+  const frozen=Date.parse(p.at),recorded=Date.parse(e.recordedAt),
+   expiry=Date.parse(p.endTime);
+  let why;
+  if(!Number.isFinite(frozen)||!Number.isFinite(recorded)||
+     !Number.isFinite(expiry))
+   why='INVALID_FORECAST_CLOCK';
+  else if(expiry-frozen<minLead||expiry-frozen>maxLead)
+   why='OUTSIDE_FROZEN_LEAD_WINDOW';
+  else if(frozen>observedMs||recorded>observedMs)
+   why='NOT_YET_FROZEN_AT_RUNNER';
+  else if(expiry-observedMs<=15000)
+   why='EXPIRED_OR_WITHIN_15S_CLOSE_GUARD';
+  else if(Math.abs(frozen-recorded)>5000)
+   why='FROZEN_RECORD_CLOCK_SKEW';
+  else if(p.indexSourceType!=='SINGLE_EXCHANGE_PROXY')
+   why='NON_PUBLIC_SINGLE_EXCHANGE_SOURCE';
+  else why='ELIGIBLE_PUBLIC_PROXY_PREEXPIRY';
+  reasons[why]++;
+ }
+ const eligible=reasons.ELIGIBLE_PUBLIC_PROXY_PREEXPIRY;
+ return {
+  model:SPECS[kind].model,status:'VALID_SELF_HASHED_SOURCE_JOURNAL',
+  forecastCount:verified.length,reasons,
+  eligibleBeforeThreeRecordCap:eligible,
+  retainedEligibleAfterThreeRecordCap:Math.min(3,eligible),
+  publicProxyCommitmentsBeyondThreeRecordCap:Math.max(0,eligible-3),
+  recordCap:3,independentQualifiedCount:0,ordersEnabled:false
+ };
+}
+
 function observeJournal(obj,kind,observedMs){
  const eligible=verifiedJournal(obj,kind);
  const spec=SPECS[kind];
@@ -140,6 +198,13 @@ async function runObserver({
  const observedAt=new Date(clock()).toISOString();
  const initial=buildObservation({early,late,observedAt,
   runId:env.GITHUB_RUN_ID,repository:env.GITHUB_REPOSITORY,commitSha:env.GITHUB_SHA});
+ // These diagnostics cannot manufacture a witness; the observer envelope,
+ // model verdicts, contract selection and journal checks are unchanged.
+ for(const [kind,snapshot] of Object.entries({early,late})){
+  const aggregate=diagnosePublicEligibility(snapshot,kind,Date.parse(observedAt));
+  console.log('CASH_OBSERVER_PUBLIC_ELIGIBILITY_'+kind.toUpperCase()+'='+
+   JSON.stringify(aggregate));
+ }
  // A second, independent read-only network request made DIRECTLY by
  // GitHub to Kalshi. Failure must be reported, not silently considered
  // a verified public strike or proof that a trade could execute.
@@ -161,4 +226,5 @@ if(require.main===module)
   console.error('CASH observer: no verifiable public pre-expiry evidence; no order or certification');
   process.exitCode=1;
  });
-module.exports={verifiedJournal,observeJournal,buildObservation,runObserver};
+module.exports={verifiedJournal,observeJournal,buildObservation,runObserver,
+ diagnosePublicEligibility,ELIGIBILITY_REASONS};
