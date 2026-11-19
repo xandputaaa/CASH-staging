@@ -1,0 +1,63 @@
+'use strict';
+/*
+ * Bounded follow-up observation on the SAME GitHub runner.
+ * GitHub scheduled workflows can arrive late or be missed; this small
+ * retry window does not promise exact cadence or 100% market coverage.
+ *
+ * Each attempt fetches the complete public source independently, then the
+ * existing observer assigns a NEW GitHub runner clock AFTER response.
+ * A successful pre-expiry observation is never overwritten by later reads.
+ * The original one-observation-per-run archive schema is unchanged.
+ */
+const {runPublicShadowObserver}=require('./cash-shadow-public-observer-runner');
+const MAX_WAIT_MS=180000,DEFAULT_INTERVAL_MS=30000;
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function runBoundedShadowObserver({
+ runObserver=runPublicShadowObserver,
+ now=()=>Date.now(),sleep=wait,log=console.log,
+ maxWaitMs=MAX_WAIT_MS,intervalMs=DEFAULT_INTERVAL_MS,
+ observerOptions={}
+}={}){
+ if(typeof runObserver!=='function'||typeof now!=='function'||
+    typeof sleep!=='function'||typeof log!=='function'||
+    !Number.isInteger(maxWaitMs)||maxWaitMs<0||maxWaitMs>MAX_WAIT_MS||
+    !Number.isInteger(intervalMs)||intervalMs<1000||intervalMs>MAX_WAIT_MS||
+    !observerOptions||typeof observerOptions!=='object'||
+    Array.isArray(observerOptions))
+  throw Error('Unsafe bounded shadow observer configuration');
+ const started=now();
+ if(!Number.isSafeInteger(started))throw Error('Runner start clock invalid');
+ let attempts=0,result=null;
+ // This guard also protects tests and the runner from a clock that stalls.
+ const maxAttempts=Math.floor(maxWaitMs/intervalMs)+1;
+ while(attempts<maxAttempts){
+  result=await runObserver(observerOptions);
+  attempts++;
+  if(!result||!Number.isSafeInteger(result.observedBeforeExpiryCount)||
+    result.observedBeforeExpiryCount<0||
+    typeof result.status!=='string'||
+    (result.status==='OBSERVED_PREEXPIRY'&&
+     result.observedBeforeExpiryCount<1))
+   throw Error('Shadow source observer returned inconsistent evidence');
+  if(result.status==='OBSERVED_PREEXPIRY')break;
+  const elapsed=now()-started;
+  if(!Number.isFinite(elapsed)||elapsed<0)
+   throw Error('GitHub runner time moved backwards');
+  const remaining=maxWaitMs-elapsed;
+  if(remaining<intervalMs)break;
+  await sleep(intervalMs);
+ }
+ const elapsed=Math.max(0,now()-started);
+ log('CASH_SHADOW_BOUNDED_OBSERVER_ATTEMPTS='+attempts);
+ log('CASH_SHADOW_BOUNDED_OBSERVER_ELAPSED_MS='+elapsed);
+ log('CASH_SHADOW_BOUNDED_OBSERVER_FINAL_STATUS='+result.status);
+ log('CASH_SHADOW_BOUNDED_OBSERVER_PREEXPIRY='+result.observedBeforeExpiryCount);
+ log('CASH_SHADOW_BOUNDED_OBSERVER_QUALIFIED=0');
+ log('CASH_SHADOW_BOUNDED_OBSERVER_ORDERS=false');
+ return {result,attempts,elapsedMs:elapsed,maxWaitMs};
+}
+if(require.main===module)runBoundedShadowObserver().catch(error=>{
+ console.error('CASH shadow observer bounded retry stopped without attestation');
+ process.exitCode=1;
+});
+module.exports={runBoundedShadowObserver,MAX_WAIT_MS,DEFAULT_INTERVAL_MS};
