@@ -106,7 +106,7 @@ function validateSummary(summary){
     summary.additionalImmutableProbeFiles>MAX_PROBES||
     !Number.isInteger(summary.evidenceRecorded)||summary.evidenceRecorded<0||
     summary.evidenceRecorded>6||
-    summary.independentlyQualifiedCount!==0||
+    summary.independentQualifiedCount!==0||
     summary.ordersEnabled!==false||
     summary.captureCompletenessProven!==false||
     summary.probeArchiveIncludesAbstentions!==true||
