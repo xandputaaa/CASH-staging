@@ -5,8 +5,10 @@
  * cannot compensate for GitHub jobs that never start.
  *
  * Each poll uses the existing full self-hash verification and direct
- * public Kalshi market check. Keep only a single strongest BEFORE-CLOSE
- * observation per run, preserving its original runner observedAt time.
+ * public Kalshi market check. Preserve each distinct BEFORE-CLOSE probe with
+ * its original runner timestamp; keep the legacy strongest summary separately.
+ * An opportunistic trusted scheduled-parent trigger uses a 3-minute budget;
+ * the existing scheduled observer retains its 12-minute maximum.
  */
 const fs=require('node:fs'),path=require('node:path');
 const {runObserver}=require('./preexpiry-observer');
