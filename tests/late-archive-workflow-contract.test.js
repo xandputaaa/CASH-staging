@@ -31,3 +31,10 @@ test('untrusted PR reads cannot write to permanent late archive',()=>{
  assert.doesNotMatch(block,/contents: write/);
  assert.match(flow,/if: github\.event_name == 'pull_request' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
 });
+
+test('routine witness archive only serializes live writer and never read-only PR audit jobs',()=>{
+ assert.doesNotMatch(flow.split('jobs:')[0],/concurrency:/);
+ const [readOnly,writer]=flow.split('  archive-successful-public-observer:');
+ assert.doesNotMatch(readOnly,/group: cash-late-public-witness-archive/);
+ assert.match(writer,/    concurrency:\s*\n      group: cash-late-public-witness-archive\s*\n      cancel-in-progress: false/);
+});
