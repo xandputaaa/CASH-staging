@@ -1,0 +1,21 @@
+{
+  "version": "CASH_SCHEDULED_WITNESS_WATCH_V1",
+  "attempts": 5,
+  "stopReason": "TIME_BUDGET_EXHAUSTED",
+  "validProbes": 5,
+  "invalidProbes": 0,
+  "emptyProbes": 0,
+  "provisionalLateProbes": 0,
+  "directLateProbes": 0,
+  "captureCompletenessProven": false,
+  "evidenceRecorded": 1,
+  "additionalImmutableProbeFiles": 1,
+  "probeArchiveIncludesAbstentions": true,
+  "probeArchiveSelectionBasedOnOutcome": false,
+  "lateDirectionalRecorded": 0,
+  "directExchangeMatches": 1,
+  "firstObservedAtRunner": "2026-11-19T04:51:02.479Z",
+  "independentQualifiedCount": 0,
+  "ordersEnabled": false,
+  "lastError": null
+}
