@@ -18,25 +18,62 @@ function safeJson(p,maxBytes=2500000){
 function collectWitnesses(dir,runs){
  if(!Array.isArray(runs?.workflow_runs))throw Error('Missing authentic GitHub run listing');
  const byId=new Map(runs.workflow_runs.map(x=>[String(x.id),x]));
- const witnesses=[],excluded=[];
- for(const id of fs.existsSync(dir)?fs.readdirSync(dir):[]){
+ const witnesses=[],excluded=[],byContract=new Map();
+ let validProbeFiles=0,invalidProbeFiles=0;
+ for(const id of fs.existsSync(dir)?fs.readdirSync(dir).sort():[]){
   if(!/^\d{8,16}$/.test(id))continue;
-  const f=path.join(dir,id,'public-preexpiry-observation.json');
+  const top=path.join(dir,id),f=path.join(top,'public-preexpiry-observation.json');
   if(!fs.existsSync(f))continue;
-  try{
-   const w=safeJson(f,200000),run=byId.get(id);
-   const observed=Date.parse(w.observedAtRunner);
-   const started=Date.parse(run?.created_at),finished=Date.parse(run?.updated_at);
-   if(w.githubRunId!==id||w.githubRepo!=='xandputaaa/CASH-staging'||
-    run?.conclusion!=='success'||!Number.isFinite(observed)||
-    !Number.isFinite(started)||!Number.isFinite(finished)||
-    observed<started-5000||observed>finished+180000){
-     excluded.push({run:id,reason:'GITHUB_RUN_PROVENANCE_MISMATCH'});continue;
+  const probeDir=path.join(top,'probes'),probeFiles=[];
+  if(fs.existsSync(probeDir)){
+   const ds=fs.lstatSync(probeDir);
+   if(!ds.isDirectory()||ds.isSymbolicLink())
+    throw Error('Unsafe observer probe directory');
+   const names=fs.readdirSync(probeDir).sort();
+   if(names.length>20||names.some(n=>!/^0(?:0[1-9]|1[0-9]|20)\.json$/.test(n)))
+    throw Error('Invalid observer probe names or count');
+   for(const name of names)probeFiles.push(path.join(probeDir,name));
+  }
+  // Validate every original GitHub runner timestamp, including abstentions.
+  // Never select later WINs over an earlier WAIT or a conflicting side.
+  for(const file of [...probeFiles,f]){
+   const isProbe=file!==f;
+   try{
+    const st=fs.lstatSync(file);
+    if(!st.isFile()||st.isSymbolicLink()||st.size<100||st.size>200000)
+     throw Error('Unsafe witness file');
+    const w=safeJson(file,200000),run=byId.get(id);
+    const observed=Date.parse(w.observedAtRunner);
+    const started=Date.parse(run?.created_at),finished=Date.parse(run?.updated_at);
+    if(w.githubRunId!==id||w.githubRepo!=='xandputaaa/CASH-staging'||
+       run?.conclusion!=='success'||!Number.isFinite(observed)||
+       !Number.isFinite(started)||!Number.isFinite(finished)||
+       observed<started-5000||observed>finished+180000)
+      throw Error('GITHUB_RUN_PROVENANCE_MISMATCH');
+    require('./observed-settlement-reconciler').validObservation(w);
+    for(const x of w.frozenEvidence){
+     const key=x.model+':'+x.marketId,prior=byContract.get(key);
+     if(prior&&(prior.frozenEventHash!==x.frozenEventHash||
+        prior.frozenSide!==x.frozenSide||prior.frozenAt!==x.frozenAt||
+        prior.contractClosesAt!==x.contractClosesAt))
+      throw Error('Contradictory independent pre-expiry probe commitments');
+     byContract.set(key,x);
+    }
+    witnesses.push(w);
+    if(isProbe)validProbeFiles++;
+   }catch(err){
+    if(String(err?.message||'').includes('Contradictory independent'))
+     throw err;
+    if(isProbe)invalidProbeFiles++;
+    excluded.push({run:id,reason:isProbe?
+     'INVALID_INDIVIDUAL_PROBE':'INVALID_PRIMARY_WITNESS'});
    }
-   witnesses.push(w);
-  }catch{excluded.push({run:id,reason:'UNREADABLE_WITNESS'})}
+  }
  }
- return {witnesses,excluded};
+ witnesses.sort((a,b)=>Date.parse(a.observedAtRunner)-
+  Date.parse(b.observedAtRunner)||Number(a.githubRunId)-Number(b.githubRunId));
+ return {witnesses,excluded,validProbeFiles,invalidProbeFiles,
+  distinctWitnessRuns:new Set(witnesses.map(x=>x.githubRunId)).size};
 }
 async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath,checkDirectFinal=auditDirectFinal}){
  const runs=safeJson(runListPath,1000000);
@@ -64,7 +101,10 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
   early,late,reconciliation:withWitnessQuoteEvidence
  });
  const report={...withWitnessQuoteEvidence,witnessCoverage,githubRunCrossCheck:{
-  witnessArtifactsReviewed:collected.witnesses.length,
+  witnessArtifactsReviewed:collected.distinctWitnessRuns,
+  witnessObservationRecordsReviewed:collected.witnesses.length,
+  preservedProbeRecordsReviewed:collected.validProbeFiles,
+  rejectedProbeRecords:collected.invalidProbeFiles,
   rejectedArtifacts:collected.excluded,
   searchWindowStartedAt:runs.windowStartedAt||null,
   searchWindowEndedAt:runs.windowEndedAt||null,
@@ -76,8 +116,7 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
   runSelectionTruncated:typeof runs.runSelectionTruncated==='boolean'?
     runs.runSelectionTruncated:null,
   selectedRunsWithNoReadableWitnessArtifact:Math.max(0,
-    runs.workflow_runs.length-collected.witnesses.length-
-     collected.excluded.length),
+    runs.workflow_runs.length-collected.distinctWitnessRuns),
   archivalCompletenessProven:false,
   witnessRunMetadataSource:'GitHub Actions API workflow runs; runner job creation/completion timestamps',
   reportProducedBy:'CASH_GITHUB_RECONCILIATION_WORKFLOW',
@@ -127,6 +166,9 @@ async function buildReport({witnessDir,runListPath,earlyPath,latePath,outputPath
  console.log('CASH_WITNESS_QUERY_PAGES='+report.githubRunCrossCheck.githubRunQueryPages);
  console.log('CASH_WITNESS_QUERY_SELECTED_RUNS='+report.githubRunCrossCheck.successfulRunsSelected);
  console.log('CASH_WITNESS_QUERY_TRUNCATED='+report.githubRunCrossCheck.runSelectionTruncated);
+ console.log('CASH_WITNESS_OBSERVATION_PROBES_READ='+collected.validProbeFiles);
+ console.log('CASH_WITNESS_OBSERVATION_PROBES_REJECTED='+collected.invalidProbeFiles);
+ console.log('CASH_WITNESS_OBSERVATION_RECORDS_READ='+collected.witnesses.length);
  console.log('CASH_WITNESS_ARTIFACTS_READ='+report.githubRunCrossCheck.witnessArtifactsReviewed);
  console.log('CASH_PUBLIC_WITNESS_ASKS_AVAILABLE='+
   report.witnessMarketQuoteCoverage.witnessedPublicAsksAvailable);
