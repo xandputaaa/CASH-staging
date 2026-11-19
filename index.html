@@ -53,6 +53,21 @@ body[data-cash-mode="simple"] #livePaperLab .notice{font-size:13px;line-height:1
  .simple-directions{grid-template-columns:1fr}
 }
 @media(max-width:340px){.simple-metrics{grid-template-columns:1fr}}
+/* CASH GLASS SYSTEM — restrained, readable, reduced-motion aware */
+:root{color-scheme:dark;--cash-glow:rgba(150,165,188,.17);--cash-edge:rgba(255,255,255,.18)}
+body{background:#08090b;color:#f4f5f6;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',Inter,system-ui,sans-serif;letter-spacing:-.012em;isolation:isolate}
+body::before{content:'';position:fixed;inset:-25%;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 30% 20%,var(--cash-glow),transparent 48%),radial-gradient(ellipse at 80% 80%,rgba(230,230,240,.07),transparent 45%);filter:blur(42px);transition:background 1.2s ease}
+body[data-market-mood='up']{--cash-glow:rgba(88,170,134,.24)}
+body[data-market-mood='down']{--cash-glow:rgba(170,78,90,.24)}
+body[data-market-mood='neutral']{--cash-glow:rgba(155,165,190,.16)}
+main{max-width:1080px;padding:clamp(16px,3vw,36px) 16px 90px}
+h1{font-size:clamp(28px,4vw,46px);font-weight:650;letter-spacing:-.06em}
+.panel,.venue-card,.metrics>div,.shadow-metrics>div{background:linear-gradient(145deg,rgba(255,255,255,.115),rgba(255,255,255,.035));border:1px solid var(--cash-edge);border-radius:24px;box-shadow:inset 0 1px rgba(255,255,255,.1),0 18px 46px rgba(0,0,0,.17);backdrop-filter:blur(26px) saturate(135%);-webkit-backdrop-filter:blur(26px) saturate(135%)}
+button{background:rgba(255,255,255,.075);border:1px solid rgba(255,255,255,.17);color:#f4f5f6;border-radius:16px;font-weight:600}
+button.active,button.primary{background:#f1f1ee;border-color:#f1f1ee;color:#151515}
+small,.muted,.notice{color:#bdc0c6}.tag{color:#e7e8ea;border-color:rgba(255,255,255,.24)}
+.good{color:#9cdbb6}.bad{color:#e9a2a9}
+@media(prefers-reduced-motion:reduce){body::before{transition:none}}
 </style></head><body data-cash-mode="simple"><main><header><div><small>CASH / LIVE PAPER MONITOR</small><h1>CASH</h1></div><div class="orb" aria-hidden="true"></div></header><div class="mode-toolbar"><div class="mode-caption"><strong>Choose your view</strong><div id="modeHelp">Simple Mode · just the essentials, explained clearly.</div></div><div class="mode-segment" role="group" aria-label="CASH display mode"><button id="modeSimple" type="button" class="selected" aria-pressed="true">Simple</button><button id="modeAdvanced" type="button" aria-pressed="false">Advanced</button></div></div><div class="mode-toolbar" style="display:block;margin-top:10px">
  <div class="row"><div class="mode-caption"><strong>Live connection check</strong><div id="connectionResult" role="status" aria-live="polite">Checking website and public market data…</div></div>
  <button id="connectionCheck" type="button" style="font-size:12px;flex-shrink:0;min-height:42px">Test live feeds</button></div>
@@ -232,4 +247,4 @@ if(typeof fetch==='function'){
   if(typeof setInterval==='function'){setInterval(refreshSpot,5000);setInterval(()=>{refreshVenue('Kalshi');refreshVenue('Polymarket')},12000);setInterval(()=>{showCountdown('Kalshi');showCountdown('Polymarket')},1000)}
   if(typeof document.addEventListener==='function')document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshSpot()});
 }
-</script><script src="/live-paper.js"></script><script src="/shadow-browser-archive.js"></script><script src="/shadow-browser-archive-ui.js"></script><script src="/evaluation-ui.js"></script><script src="/shadow-ui.js"></script><script src="/diagnostics-ui.js"></script><script src="/cognition-ui.js"></script><script src="/kalshi15-ui.js"></script><script src="/view-mode.js"></script><script src="/simple-ui.js"></script><script src="/live-check-ui.js"></script><script src="/prospective-ui.js"></script><script src="/late-checkpoint-ui.js"></script><script src="/prospective-browser-archive.js"></script><script src="/prospective-browser-archive-ui.js"></script><script src="/settlement-call-ui.js"></script><script src="/order-verify-ui.js"></script></body></html>
+</script><script src="/live-paper.js"></script><script src="/shadow-browser-archive.js"></script><script src="/shadow-browser-archive-ui.js"></script><script src="/evaluation-ui.js"></script><script src="/shadow-ui.js"></script><script src="/diagnostics-ui.js"></script><script src="/cognition-ui.js"></script><script src="/kalshi15-ui.js"></script><script src="/view-mode.js"></script><script src="/simple-ui.js"></script><script src="/live-check-ui.js"></script><script src="/prospective-ui.js"></script><script src="/late-checkpoint-ui.js"></script><script src="/prospective-browser-archive.js"></script><script src="/prospective-browser-archive-ui.js"></script><script src="/settlement-call-ui.js"></script><script src="/order-verify-ui.js"></script><script src="/ambient-market-mood.js"></script></body></html>
