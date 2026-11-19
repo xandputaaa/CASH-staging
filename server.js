@@ -18,6 +18,8 @@ const kalshi15Script=fs.readFileSync('kalshi15-ui.js');
 const viewModeScript=fs.readFileSync('view-mode.js');
 const simpleUiScript=fs.readFileSync('simple-ui.js');
 const {assessKalshi15}=require('./kalshi15-readiness');
+const {manualAssist}=require('./manual-live-assist');
+const manualAssistScript=fs.readFileSync('manual-assist-ui.js');
 const {createKalshiFeeFeed}=require('./kalshi-fees');
 const {assessCognition}=require('./cash-cognition');
 const {createDiagnostics}=require('./diagnostics');
@@ -250,6 +252,25 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/kalshi15-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(kalshi15Script);return;
+  }
+  if(req.method==='GET'&&req.url==='/manual-assist-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(manualAssistScript);return;
+  }
+  if(req.method==='GET'&&req.url?.startsWith('/api/manual-assist?')){
+    try{
+      const params=new URL(req.url,'http://localhost').searchParams;
+      const side=params.get('side');
+      const rawContracts=params.get('contracts');
+      const contracts=/^[1-9][0-9]{0,4}$/.test(rawContracts||'')?Number(rawContracts):0;
+      const [quote,fees]=await Promise.all([venueFeeds.query('Kalshi'),kalshiFeeFeed.query()]);
+      const report=manualAssist({quote,fees,side,contracts,maxLossUsd:10});
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+      res.end(JSON.stringify(report));
+    }catch{
+      res.writeHead(503,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+      res.end(JSON.stringify({mode:'MANUAL_INFORMATION_ONLY',status:'BLOCKED',blockers:['FEED_UNAVAILABLE'],realOrdersEnabled:false,executionAuthorized:false}));
+    }return;
   }
   if(req.method==='GET'&&req.url==='/api/kalshi15'){
     try{
