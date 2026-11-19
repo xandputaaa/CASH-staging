@@ -61,17 +61,13 @@ test('timeout checks wall-clock budget after source HTTP fetch, no extra 30-seco
 test('unsafe retry configurations fail before invoking source or any side effect',async()=>{
  for(const overrides of [
   {maxWaitMs:MAX_WAIT_MS+1},{maxWaitMs:-1},{intervalMs:0},
-  {intervalMs:100},{now:()=>NaN},{now:()=>10},
+  {intervalMs:100},{now:()=>NaN},
   {runObserver:null},{observerOptions:null}
  ]){
   let calls=0;
   const cfg={runObserver:async()=>{calls++;return sample('OBSERVED_PREEXPIRY')},
    now:()=>1000,log:()=>{},...overrides};
-  if(overrides.now===undefined || overrides.now().toString()!=='10'){
-   if(overrides.now===undefined || !Number.isFinite(overrides.now()))
-    await assert.rejects(()=>runBoundedShadowObserver(cfg));
-  }
-  // Valid integer clocks are accepted, including very small synthetic times.
+  await assert.rejects(()=>runBoundedShadowObserver(cfg));
   assert.equal(calls,0);
  }
 });
