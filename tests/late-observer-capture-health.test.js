@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
-const {summarizeCaptures,classifyCapture,runCreationToFirstWitness,firstOriginalWitnessAt}=require('../late-observer-capture-health');
+const {summarizeCaptures,classifyCapture,runCreationToFirstWitness,firstOriginalWitnessAt,triggerConversionCoverage}=require('../late-observer-capture-health');
 const BASE=Date.parse('2026-11-19T04:15:00Z');
 function r(i,overrides={}){
  return {id:String(44457000598+i),createdAt:new Date(BASE+i*900000).toISOString(),
@@ -290,4 +290,50 @@ test('archived runner witness timing is not called scheduling queue latency or q
  assert.equal(x.independentlyQualifiedCount,0);
  assert.equal(x.realMoneyOrdersEnabled,false);
  assert.match(x.caveat,/cannot establish when GitHub scheduled/);
+});
+
+test('trigger conversion separates direct scheduled and parent-triggered run and poll denominators',()=>{
+ const conversion=(yes,no)=>({diagnosticPolls:yes+no,
+  diagnosticsMissingPolls:0,eligibleWithWitnessPolls:yes,
+  eligibleWithoutWitnessPolls:no,eligibleWithDirectMatchPolls:yes,
+  witnessWithoutEligibilityPolls:0});
+ const rows=[
+  r(1,{event:'schedule',witnessConversion:{
+   early:conversion(2,1),late:conversion(0,2)}}),
+  r(2,{event:'workflow_run',witnessConversion:{
+   early:conversion(1,0),late:conversion(1,0)}}),
+  r(3,{event:'schedule'}),
+  r(4,{event:'workflow_run',witnessConversion:{
+   early:conversion(0,2),late:conversion(0,0)}})
+ ];
+ const d=triggerConversionCoverage(rows);
+ assert.equal(d.schedule.archivedRuns,2);
+ assert.equal(d.schedule.withConversion,1);
+ assert.equal(d.schedule.withoutConversion,1);
+ assert.deepEqual(d.schedule.early,{
+  eligiblePolls:3,eligibleWithoutWitnessPolls:1,
+  eligibleWithWitnessPolls:2,runsWithEligiblePolls:1,
+  runsWithUnwitnessedEligiblePolls:1});
+ assert.equal(d.schedule.late.runsWithUnwitnessedEligiblePolls,1);
+ assert.equal(d.workflow_run.withConversion,2);
+ assert.equal(d.workflow_run.early.eligiblePolls,3);
+ assert.equal(d.workflow_run.early.eligibleWithoutWitnessPolls,2);
+ assert.equal(d.workflow_run.early.runsWithEligiblePolls,2);
+ assert.equal(d.workflow_run.early.runsWithUnwitnessedEligiblePolls,1);
+ assert.equal(d.workflow_run.late.eligiblePolls,1);
+ assert.equal(d.workflow_run.late.runsWithUnwitnessedEligiblePolls,0);
+});
+test('trigger conversion excludes historical unknowns and fails closed on impossible counts',()=>{
+ const empty=triggerConversionCoverage([r(1,{event:'schedule'})]);
+ assert.equal(empty.schedule.withConversion,0);
+ assert.equal(empty.schedule.withoutConversion,1);
+ assert.equal(empty.schedule.early.eligiblePolls,0);
+ assert.throws(()=>triggerConversionCoverage([r(1,{event:'manual'})]),
+  /Unknown original observer trigger/);
+ const bad={diagnosticPolls:1,diagnosticsMissingPolls:0,
+  eligibleWithWitnessPolls:2,eligibleWithoutWitnessPolls:-1,
+  eligibleWithDirectMatchPolls:0,witnessWithoutEligibilityPolls:0};
+ assert.throws(()=>triggerConversionCoverage([r(1,{
+  witnessConversion:{early:bad,late:bad}})]),
+  /Trigger conversion/);
 });
