@@ -154,6 +154,8 @@ test('invalid file, symlink and unknown filename are rejected, not skipped',t=>{
  fs.writeFileSync(path.join(dir,'unexpected.txt'),'{}');
  assert.throws(()=>inspectShadowExchangeArchive(root),/Unexpected/);
  fs.unlinkSync(path.join(dir,'unexpected.txt'));
+ const b=fixture('WAIT','44405660609',OBS+60000);
+ put(root,b.observation);
  fs.symlinkSync(path.join(dir,RUN+'.json'),path.join(dir,'44405660609.json'));
  assert.throws(()=>inspectShadowExchangeArchive(root),/Unsafe/);
 });
