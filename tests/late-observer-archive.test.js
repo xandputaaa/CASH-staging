@@ -173,7 +173,7 @@ test('altered frozen side, late runner clock, changed original GH run or missing
  ]){
   const x=fixture(t),file=path.join(x.artifact,'public-preexpiry-observation.json');
   const o=JSON.parse(fs.readFileSync(file));mutation(x,o);put(file,o);
-  assert.throws(()=>archive(x),/run|Pre-expiry|Forecast|outside|witness|match|archive|Unsafe/i);
+  assert.throws(()=>archive(x),/run|Pre-expiry|Forecast|outside|witness|match|archive|Unsafe|Conflicting/i);
  }
  const x=fixture(t);
  fs.unlinkSync(path.join(x.artifact,'public-preexpiry-observation.json'));
