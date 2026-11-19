@@ -5,6 +5,19 @@ const {inspectArchiveSemanticIndex}=require('./audit-archive-semantic-index');
 const {recoverPendingShadowCaptures}=require('./audit-archive-pending-replay');
 const {isValidCaptureEvidence}=require('./shadow-monitor');
 function verifyArchiveRecoveryConsistency({manifest,directory,activeJournalPath,limit=650,minimumLeadMs=60000}){
+ // Anchor the active journal before any independent replay pass. Otherwise
+ // both passes can agree on a different journal than the one present at entry.
+ const {createHash}=require('node:crypto');
+ function activeDigest(){
+  if(!path.isAbsolute(activeJournalPath||''))throw Error('Absolute active journal required');
+  const stat=fs.lstatSync(activeJournalPath);
+  if(!stat.isFile()||stat.isSymbolicLink()||stat.size>12*1024*1024)
+   throw Error('Active journal changed during recovery');
+  const raw=fs.readFileSync(activeJournalPath);
+  if(raw.length!==stat.size)throw Error('Active journal changed during recovery');
+  return createHash('sha256').update(raw).digest('hex');
+ }
+ const initialDigest=activeDigest();
  const index=inspectArchiveSemanticIndex({manifest,directory,activeJournalPath,limit,minimumLeadMs});
  const pending=recoverPendingShadowCaptures({manifest,directory,activeJournalPath,limit});
  if(index.captures!==pending.capturedCount||
@@ -23,18 +36,14 @@ function verifyArchiveRecoveryConsistency({manifest,directory,activeJournalPath,
    throw Error('Pending capture fails semantic recovery validation');
  }
  // Fail closed if active journal changes during either verification pass.
- const stat=fs.lstatSync(activeJournalPath);
- if(!stat.isFile()||stat.isSymbolicLink()||stat.size>12*1024*1024)
-  throw Error('Active journal changed during recovery');
- const raw=fs.readFileSync(activeJournalPath);
- const {createHash}=require('node:crypto');
- const tip=createHash('sha256').update(raw).digest('hex');
+ const tip=activeDigest();
+ if(tip!==initialDigest)throw Error('Active journal changed during recovery');
  const check=inspectArchiveSemanticIndex({manifest,directory,activeJournalPath,limit,minimumLeadMs});
  if(check.captures!==index.captures||check.resolutions!==index.resolutions||
     check.pendingIds.join('\n')!==index.pendingIds.join('\n')||
     check.archivedEvents!==index.archivedEvents||check.activeEvents!==index.activeEvents)
   throw Error('Archive recovery state changed during verification');
- const after=createHash('sha256').update(fs.readFileSync(activeJournalPath)).digest('hex');
+ const after=activeDigest();
  if(tip!==after)throw Error('Active journal changed during recovery');
  return Object.freeze({state:'ARCHIVE_RECOVERY_CONSISTENT',
   capturedIds:index.capturedIds,pending:pending.pending,
