@@ -122,7 +122,7 @@ function hasVerifiedEvidence(result,record){
 }
 
 function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=MIN_LEAD_MS,
- maxRecords=MAX_RECORDS,maxEvents=MAX_EVENTS,journal=null,spot=null,archivedIdentityState=null}={}){
+ maxRecords=MAX_RECORDS,maxEvents=MAX_EVENTS,journal=null,spot=null,archivedIdentityState=null,archivedPendingState=null}={}){
  if(!quotes||!results)throw Error('Shadow monitor needs read-only quote and result providers');
  if(archivedIdentityState!==null){
   if(!archivedIdentityState||archivedIdentityState.state!=='ARCHIVE_SEMANTIC_INDEX_VERIFIED'
@@ -194,6 +194,34 @@ function createShadowMonitor({quotes,results,clock=()=>Date.now(),minimumLeadMs=
   }
  }
  loadSavedHistory();
+ // Experimental offline-only hydration. A real archive manifest still blocks
+ // createAuditJournal startup; callers cannot bypass durable startup guards.
+ if(archivedPendingState!==null){
+  if(archivedIdentityState!==null||
+     !archivedPendingState||archivedPendingState.state!=='ARCHIVED_PENDING_HYDRATION_PLANNED'||
+     !Array.isArray(archivedPendingState.capturedIds)||
+     !Array.isArray(archivedPendingState.pendingRecords)||
+     archivedPendingState.capturedIds.length!==archivedPendingState.capturedCount||
+     archivedPendingState.pendingRecords.length!==archivedPendingState.pendingCount||
+     new Set(archivedPendingState.capturedIds).size!==archivedPendingState.capturedCount||
+     archivedPendingState.capturedIds.some(id=>typeof id!=='string'||!id)||
+     archivedPendingState.pendingCount>maxRecords||
+     archivedPendingState.pendingCount>maxEvents-events.length||
+     observations.length!==0||events.length!==0)
+   throw Error('Archived pending hydration requires verified identity state and empty active journal');
+  const historicalIds=new Set(archivedPendingState.capturedIds);
+  const pendingIds=new Set();
+  for(const record of archivedPendingState.pendingRecords){
+   if(!record||record.status!=='PENDING'||!historicalIds.has(record.id)||
+      pendingIds.has(record.id)||!isValidCaptureEvidence(record,minimumLeadMs))
+    throw Error('Archived pending hydration has invalid or duplicate capture');
+   pendingIds.add(record.id);
+  }
+  for(const record of archivedPendingState.pendingRecords)
+   observations.push({...record,observedAsks:{...record.observedAsks},
+    spotCandidate:record.spotCandidate?{...record.spotCandidate}:null});
+  for(const id of historicalIds)ids.add(id);
+ }
 
  function append(type,payload){
   if(events.length>=maxEvents)return null;
