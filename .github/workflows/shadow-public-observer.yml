@@ -47,6 +47,17 @@ jobs:
           path: audit/shadow-source-observation-coverage.json
           retention-days: 7
           if-no-files-found: error
+      - name: Smoke-test public exchange corroboration using new runner clock, no branch writes
+        run: |
+          node cash-shadow-public-observer-runner.js
+          node cash-shadow-exchange-corroboration.js
+      - name: Retain read-only PR public exchange corroboration diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-shadow-exchange-check-pr-${{ github.run_id }}
+          path: witness/shadow-exchange-check.json
+          retention-days: 7
+          if-no-files-found: error
   capture-shadow-public:
     if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'schedule' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)) }}
     permissions:
@@ -66,6 +77,15 @@ jobs:
           node-version: '22'
       - name: Observe public shadow journal using runner UTC after fetch
         run: node cash-shadow-public-observer-runner.js
+      - name: Independently check frozen contract public Kalshi strike and rule before expiry
+        run: node cash-shadow-exchange-corroboration.js
+      - name: Retain second-source Kalshi public market diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-shadow-public-exchange-check-${{ github.run_id }}
+          path: witness/shadow-exchange-check.json
+          retention-days: 90
+          if-no-files-found: error
       - name: Retain observable run diagnostics even if endpoint is unavailable
         uses: actions/upload-artifact@v4
         with:
@@ -86,6 +106,8 @@ jobs:
           node <<'NODE'
           const fs=require('node:fs');
           const o=JSON.parse(fs.readFileSync('witness/shadow-public-observation.json','utf8'));
+          const exchange=JSON.parse(fs.readFileSync('witness/shadow-exchange-check.json','utf8'));
+          require('./cash-shadow-exchange-corroboration').validateExchangeCheck(exchange,o);
           const run=process.env.CASH_RUN_ID;
           if(!/^\d{8,16}$/.test(run))throw Error('Invalid GitHub run identity');
           if(o.version!=='CASH_SHADOW_GITHUB_PUBLIC_OBSERVATION_V1'||
@@ -116,16 +138,22 @@ jobs:
           fs.mkdirSync('witness-store/public-shadow-witness',{recursive:true});
           if(fs.existsSync(target))throw Error('Append-only public witness file already exists');
           fs.copyFileSync('witness/shadow-public-observation.json',target);
+          fs.mkdirSync('witness-store/public-shadow-exchange-checks',{recursive:true});
+          const exchangeTarget='witness-store/public-shadow-exchange-checks/'+run+'.json';
+          if(fs.existsSync(exchangeTarget))throw Error('Append-only public exchange file already exists');
+          fs.copyFileSync('witness/shadow-exchange-check.json',exchangeTarget);
+          console.log('CASH_SHADOW_EXCHANGE_PREEXPIRY_CHECKS_ARCHIVED='+exchange.marketChecksAttempted);
+          console.log('CASH_SHADOW_EXCHANGE_PREEXPIRY_MATCHES_ARCHIVED='+exchange.preExpiryPublicExchangeMatches);
           console.log('CASH_SHADOW_ARCHIVE_PREEXPIRY_RECORDS='+o.observedForecasts.length);
           NODE
           cd witness-store
-          if [[ -z "$(git status --porcelain -- public-shadow-witness)" ]]; then
+          if [[ -z "$(git status --porcelain -- public-shadow-witness public-shadow-exchange-checks)" ]]; then
             echo 'CASH_SHADOW_NO_PREEXPIRY_EVIDENCE_TO_COMMIT=true'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- public-shadow-witness/
+          git add -- public-shadow-witness/ public-shadow-exchange-checks/
           git commit -m "Archive GitHub-observed public shadow pre-expiry evidence (run $CASH_RUN_ID)"
           git push origin HEAD:cash-shadow-public-witness
           echo 'CASH_SHADOW_PUBLIC_WITNESS_ARCHIVED=true'
