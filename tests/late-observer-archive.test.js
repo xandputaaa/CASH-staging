@@ -282,3 +282,50 @@ test('forged, inconsistent or sensitive eligibility poll rollups fail closed',t=
   assert.equal(inspectArchive(a.root).runs,0);
  }
 });
+
+function withConversionSummary(x){
+ const file=path.join(x.artifact,'observer-run-summary.json');
+ const v=JSON.parse(fs.readFileSync(file));
+ const bucket=(valid,eligible,expired)=>({
+  validSourcePolls:valid,unavailableSourcePolls:0,invalidSourcePolls:0,
+  eligibleForecastPolls:eligible,expiredOnlyPolls:expired,
+  otherIneligiblePolls:0,emptyJournalPolls:0});
+ v.eligibilityPolls={early:bucket(2,0,2),late:bucket(2,1,1)};
+ v.witnessConversion={
+  early:{diagnosticPolls:2,diagnosticsMissingPolls:0,
+   eligibleWithWitnessPolls:0,eligibleWithoutWitnessPolls:0,
+   eligibleWithDirectMatchPolls:0,witnessWithoutEligibilityPolls:0},
+  late:{diagnosticPolls:2,diagnosticsMissingPolls:0,
+   eligibleWithWitnessPolls:1,eligibleWithoutWitnessPolls:0,
+   eligibleWithDirectMatchPolls:1,witnessWithoutEligibilityPolls:0}
+ };
+ put(file,v);
+ return {file,summary:v};
+}
+test('new source conversion is durably archived byte-for-byte without changing historical witness',t=>{
+ const x=fixture(t),{summary}=withConversionSummary(x);
+ archive(x);
+ const retained=JSON.parse(fs.readFileSync(path.join(
+  x.root,'late-preexpiry-run',RUN,'observer-run-summary.json')));
+ assert.deepEqual(retained.witnessConversion,summary.witnessConversion);
+ assert.equal(inspectArchive(x.root).independentlyQualifiedCount,0);
+ const witness=JSON.parse(fs.readFileSync(path.join(
+  x.root,'late-preexpiry-run',RUN,'public-preexpiry-observation.json')));
+ assert.equal(witness.frozenEvidence[0].frozenSide,'YES');
+ assert.equal(Object.hasOwn(witness,'witnessConversion'),false);
+});
+test('inflated or inconsistent conversion counters fail before durable append',t=>{
+ const mutations=[
+  v=>{v.witnessConversion.early.diagnosticPolls=3;},
+  v=>{v.witnessConversion.late.eligibleWithoutWitnessPolls=1;},
+  v=>{v.witnessConversion.late.eligibleWithDirectMatchPolls=2;},
+  v=>{v.witnessConversion.late.diagnosticsMissingPolls=1;},
+  v=>{v.witnessConversion.late.privatePrice=65000;}
+ ];
+ for(const change of mutations){
+  const x=fixture(t),{file,summary}=withConversionSummary(x);
+  change(summary);put(file,summary);
+  assert.throws(()=>archive(x),/Inconsistent witness conversion|extra provenance/);
+  assert.equal(inspectArchive(x.root).runs,0);
+ }
+});
