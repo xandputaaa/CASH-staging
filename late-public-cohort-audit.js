@@ -20,6 +20,19 @@ const MODELS=new Set([
 const RUN=/^\d{8,16}$/;
 const KEY=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
 const SHA=/^[a-f0-9]{64}$/;
+// Source API close stamps sometimes omit the mathematically zero .000.
+// Compare UTC instants, never their serialization; reject non-UTC or
+// noncanonical free-form dates to avoid weakening identity checks.
+function canonicalCloseUtc(value){
+ if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value))
+  throw Error('Invalid UTC contract close timestamp');
+ const ms=Date.parse(value);
+ if(!Number.isFinite(ms))throw Error('Invalid UTC contract close timestamp');
+ const utc=new Date(ms).toISOString();
+ if(value!==utc&&value!==utc.replace('.000Z','Z'))
+  throw Error('Noncanonical UTC contract close timestamp');
+ return utc;
+}
 function readSafe(p,cap=200000){
  const stat=fs.lstatSync(p);
  if(!stat.isFile()||stat.isSymbolicLink()||stat.size<10||stat.size>cap)
@@ -27,6 +40,7 @@ function readSafe(p,cap=200000){
  return JSON.parse(fs.readFileSync(p,'utf8'));
 }
 function normalize(row,source){
+ const canonicalClose=canonicalCloseUtc(row?.close);
  if(!row||!MODELS.has(row.model)||!KEY.test(row.marketId||'')||
     !['YES','NO','WAIT'].includes(row.side)||
     !SHA.test(row.hash||'')||
@@ -47,7 +61,7 @@ function normalize(row,source){
          row.netConservativeUSD< -2||row.netConservativeUSD>1):
         row.netConservativeUSD!==null))))
   throw Error('Invalid immutable public cohort identity or evidence class');
- return row;
+ return {...row,close:canonicalClose};
 }
 function readDurableRows(root){
  const inventory=inspectArchive(root);
@@ -271,4 +285,4 @@ if(require.main===module){
  console.log('CASH_COHORT_ORDERS_ENABLED=false');
 }
 module.exports={readDurableRows,readLegacyRows,compareCohorts,
- auditCombined,VERSION,summary};
+ auditCombined,VERSION,summary,canonicalCloseUtc};
