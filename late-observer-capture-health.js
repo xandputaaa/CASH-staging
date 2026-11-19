@@ -49,10 +49,41 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
   noValidPolls:0,mixedOrIncomplete:0,directScheduled:0,backupTriggered:0,
   totalAttempts:0,validPolls:0,emptyPolls:0,invalidPolls:0
  };
+ const eligibility={
+  archivedRunsWithDiagnostics:0,archivedRunsWithoutDiagnostics:0,
+  early:{validSourcePolls:0,unavailableSourcePolls:0,invalidSourcePolls:0,
+   eligibleForecastPolls:0,expiredOnlyPolls:0,otherIneligiblePolls:0,
+   emptyJournalPolls:0},
+  late:{validSourcePolls:0,unavailableSourcePolls:0,invalidSourcePolls:0,
+   eligibleForecastPolls:0,expiredOnlyPolls:0,otherIneligiblePolls:0,
+   emptyJournalPolls:0}
+ };
  let longestEmpty=0,streak=0,runStart=null,longestSpan=null;
  let lastCapturedAt=null,lastDirectionalAt=null,lastEmptyAt=null;
  const gapSamples=[];
  for(const r of ordered){
+  if(r.eligibilityPolls===undefined){
+   eligibility.archivedRunsWithoutDiagnostics++;
+  }else{
+   if(!r.eligibilityPolls||typeof r.eligibilityPolls!=='object'||
+      Array.isArray(r.eligibilityPolls)||
+      Object.keys(r.eligibilityPolls).sort().join(',')!=='early,late')
+    throw Error('Malformed original eligibility diagnostic');
+   for(const kind of ['early','late']){
+    const src=r.eligibilityPolls[kind],dest=eligibility[kind];
+    if(!src||typeof src!=='object'||Array.isArray(src)||
+       Object.keys(src).sort().join(',')!==Object.keys(dest).sort().join(',')||
+       Object.keys(dest).some(k=>!Number.isInteger(src[k])||
+        src[k]<0||src[k]>r.attempts)||
+       src.validSourcePolls+src.unavailableSourcePolls+
+        src.invalidSourcePolls>r.attempts||
+       src.eligibleForecastPolls+src.expiredOnlyPolls+
+        src.otherIneligiblePolls+src.emptyJournalPolls!==src.validSourcePolls)
+     throw Error('Malformed original eligibility diagnostic');
+    for(const k of Object.keys(dest))dest[k]+=src[k];
+   }
+   eligibility.archivedRunsWithDiagnostics++;
+  }
   if(r.event==='schedule')counts.directScheduled++;
   else counts.backupTriggered++;
   counts.totalAttempts+=r.attempts;
@@ -109,6 +140,7 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
   runsWithMixedOrIncompleteProbes:counts.mixedOrIncomplete,
   directScheduleRuns:counts.directScheduled,
   successfulScheduledParentRuns:counts.backupTriggered,
+  sourceEligibilityDiagnostics:eligibility,
   originalPolls:{attempted:counts.totalAttempts,valid:counts.validPolls,
    empty:counts.emptyPolls,invalid:counts.invalidPolls},
   longestConsecutiveArchivedValidEmptyRuns:longestEmpty,
@@ -123,7 +155,7 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
   independentlyQualifiedCount:0,
   actualFillsVerified:0,
   realMoneyOrdersEnabled:false,
-  caveat:'Runs and polls are not independent markets. A valid empty probe says no publicly eligible UNEXPIRED single-exchange-proxy commitment was preserved at that GitHub runner time; it does NOT prove the source was offline, no prediction was generated, the model lost accuracy, or that licensed-index / other nonpublic forecasts were absent. Only originally archived runs are included. An archived YES/NO is not automatically a checked final, fills or a qualified forecast.'
+  caveat:'Runs and polls are not independent markets. A valid empty probe says no publicly eligible UNEXPIRED single-exchange-proxy commitment was preserved at that GitHub runner time; it does NOT prove the source was offline, no prediction was generated, the model lost accuracy, or that licensed-index / other nonpublic forecasts were absent. Only originally archived runs are included. Eligibility diagnostic totals cover only runs that originally recorded that optional field; legacy runs are explicitly excluded, not interpreted as zero. An archived YES/NO is not automatically a checked final, fills or a qualified forecast.'
  };
 }
 function safeJson(file,max){
@@ -154,7 +186,8 @@ function auditCaptureHealth(root){
     id,createdAt:m.sourceRunCreatedAt,event:m.sourceRunEvent,
     attempts:s.attempts,valid:s.validProbes,empty:s.emptyProbes,
     invalid:s.invalidProbes,commitments:m.distinctCommitments,
-    directional:m.directionalCommitments
+    directional:m.directionalCommitments,
+    ...(s.eligibilityPolls===undefined?{}:{eligibilityPolls:s.eligibilityPolls})
    });
   }
  }
@@ -176,6 +209,12 @@ if(require.main===module){
  console.log('CASH_ORIGINAL_CAPTURE_EMPTY_POLL_ATTEMPTS='+s.originalPolls.empty);
  console.log('CASH_ORIGINAL_CAPTURE_LONGEST_EMPTY_RUN_STREAK='+s.longestConsecutiveArchivedValidEmptyRuns);
  console.log('CASH_ORIGINAL_CAPTURE_LATEST_DIRECTIONAL='+String(s.lastDirectionalRunAt));
+ console.log('CASH_ORIGINAL_ELIGIBILITY_DIAGNOSTIC_RUNS='+s.sourceEligibilityDiagnostics.archivedRunsWithDiagnostics);
+ console.log('CASH_ORIGINAL_ELIGIBILITY_LEGACY_RUNS='+s.sourceEligibilityDiagnostics.archivedRunsWithoutDiagnostics);
+ for(const kind of ['early','late']){
+  for(const [key,value] of Object.entries(s.sourceEligibilityDiagnostics[kind]))
+   console.log('CASH_ORIGINAL_ELIGIBILITY_'+kind.toUpperCase()+'_'+key+'='+value);
+ }
  console.log('CASH_ORIGINAL_CAPTURE_QUALIFIED=0');
  console.log('CASH_ORIGINAL_CAPTURE_ORDERS=false');
 }
