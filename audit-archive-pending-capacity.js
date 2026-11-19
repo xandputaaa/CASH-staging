@@ -11,7 +11,8 @@ function assessArchivedPendingCapacity(options){
  // A resolution is one durable event even when its capture is in an archive.
  // Active history already consumes event slots, including existing resolutions.
  const availableEvents=Math.max(0,maxEvents-plan.activeEvents);
- const canReserve=pending<=availableEvents;
+ const activeFits=plan.activeEvents<=maxEvents;
+ const canReserve=activeFits&&pending<=availableEvents;
  const recordSlots=Math.max(0,maxRecords-pending);
  const safeNewCaptures=canReserve?Math.max(0,Math.min(recordSlots,
   Math.floor((availableEvents-pending)/2))):0;
@@ -20,7 +21,8 @@ function assessArchivedPendingCapacity(options){
   pending,activeEvents:plan.activeEvents,availableEvents,
   requiredResolutionEvents:pending,remainingRecordSlots:recordSlots,
   safeNewCaptures:pending<=maxRecords?safeNewCaptures:0,
-  reason:pending>maxRecords?'PENDING_EXCEEDS_RECORD_CAPACITY':
+  reason:plan.activeEvents>maxEvents?'ACTIVE_EXCEEDS_EVENT_CAPACITY':
+   pending>maxRecords?'PENDING_EXCEEDS_RECORD_CAPACITY':
    !canReserve?'PENDING_EXCEEDS_EVENT_CAPACITY':null,
   evidenceStatus:'FILESYSTEM_JOURNAL_UNVERIFIED',
   mutatesStorage:false,liveStartupEnabled:false,automaticRolloverEnabled:false});
