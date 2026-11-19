@@ -314,3 +314,70 @@ test('first-witness timing never reads outcome or selects a later winner-depende
  assert.equal(x.independentlyQualifiedCount,0);
  assert.equal(x.tradeFillsVerified,0);
 });
+
+test('original source claimed freeze-to-first-witness delay is measured only once per model-market',()=>{
+ const first=defaultDurable({model:late,side:'NO',hash:HASH2,
+  frozenAt:'2026-11-19T04:26:50.000Z',
+  observedAt:'2026-11-19T04:26:52.317Z',
+  directPublicKalshiMatched:false});
+ const later=defaultDurable({model:late,side:'NO',hash:HASH2,
+  frozenAt:'2026-11-19T04:26:50.000Z',
+  observedAt:'2026-11-19T04:27:45.000Z',
+  directPublicKalshiMatched:true});
+ const x=run([later,first],[defaultLegacy({model:late,side:'NO',hash:HASH2,
+  winner:'YES',directFinal:true,paperPriced:false})],2);
+ const m=x.durable.claimedFreezeToFirstWitnessDelay.late;
+ assert.equal(m.witnessedModelMarketDecisions,1);
+ assert.equal(m.withClaimedFreezeTimestamp,1);
+ assert.equal(m.missingClaimedFreezeTimestamp,0);
+ assert.equal(m.atMost5s,1);
+ assert.equal(m.medianSeconds,2.317);
+ assert.equal(x.durable.firstWitnessLeadTiming.late.modelMarketDecisions,1);
+ assert.equal(x.durable.directionalWithPublicExchangeMatch,1);
+ assert.equal(x.independentlyQualifiedCount,0);
+ assert.equal(x.tradeFillsVerified,0);
+});
+test('self-reported source-freeze delay bins preserve millisecond boundaries and median',()=>{
+ const millis=[0,5000,5001,30000,30001,120000,120001];
+ const rows=millis.map((ms,i)=>defaultDurable({
+  model:late,hash:String(i+1).repeat(64),
+  marketId:'KXBTC15M-26NOV1900'+String(i+1)+'0-00',
+  frozenAt:new Date(Date.parse(BEFORE)-ms).toISOString()
+ }));
+ const x=run(rows,[],1),d=x.durable.claimedFreezeToFirstWitnessDelay.late;
+ assert.equal(d.withClaimedFreezeTimestamp,7);
+ assert.equal(d.atMost5s,2);
+ assert.equal(d.over5To30s,2);
+ assert.equal(d.over30To120s,2);
+ assert.equal(d.over120s,1);
+ assert.equal(d.minimumSeconds,0);
+ assert.equal(d.medianSeconds,30);
+ assert.equal(d.maximumSeconds,120.001);
+ assert.equal(x.validationGateMet,false);
+});
+test('legacy missing frozenAt is unknown rather than implying instant public publication',()=>{
+ const x=run([defaultDurable(),
+  defaultDurable({model:late,hash:HASH2,
+   frozenAt:'2026-11-19T04:26:00.000Z'})],[],1);
+ const e=x.durable.claimedFreezeToFirstWitnessDelay.early;
+ assert.equal(e.witnessedModelMarketDecisions,1);
+ assert.equal(e.missingClaimedFreezeTimestamp,1);
+ assert.equal(e.withClaimedFreezeTimestamp,0);
+ assert.equal(e.medianSeconds,null);
+ const l=x.durable.claimedFreezeToFirstWitnessDelay.late;
+ assert.equal(l.medianSeconds,52.317);
+ assert.equal(l.missingClaimedFreezeTimestamp,0);
+ assert.equal(x.independentlyQualifiedCount,0);
+});
+test('future, malformed, or contradictory claimed freeze timestamps fail closed',()=>{
+ for(const frozenAt of ['2026-11-19T04:29:30.000Z',
+  '2026-11-19 04:26:00Z','2026-11-19T04:26:00-07:00',
+  '2026-11-19T04:26:00.02Z','2026-02-29T04:26:00Z']){
+  assert.throws(()=>run([defaultDurable({frozenAt})],[],1),
+   /Invalid immutable public cohort/);
+ }
+ assert.throws(()=>run([
+  defaultDurable({frozenAt:'2026-11-19T04:26:10.000Z'}),
+  defaultDurable({frozenAt:'2026-11-19T04:26:12.000Z'})
+ ],[],1),/Conflicting frozen forecast identity/);
+});

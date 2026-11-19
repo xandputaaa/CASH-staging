@@ -49,7 +49,15 @@ function normalize(row,source){
     (source==='durable'&&
       (!Number.isFinite(Date.parse(row.observedAt))||
        !RUN.test(row.githubRunId||'')||
-       Date.parse(row.observedAt)>=Date.parse(row.close)))||
+       Date.parse(row.observedAt)>=Date.parse(row.close)||
+       (row.frozenAt!==undefined&&
+        (typeof row.frozenAt!=='string'||
+         !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(row.frozenAt)||
+         !Number.isFinite(Date.parse(row.frozenAt))||
+         (row.frozenAt!==new Date(Date.parse(row.frozenAt)).toISOString()&&
+          row.frozenAt!==new Date(Date.parse(row.frozenAt)).toISOString().replace('.000Z','Z'))||
+         Date.parse(row.frozenAt)>Date.parse(row.observedAt)||
+         Date.parse(row.frozenAt)>=Date.parse(row.close)))))||
     (source==='ledger'&&
       (typeof row.directFinal!=='boolean'||typeof row.paperPriced!=='boolean'||
        (row.side==='WAIT'&&(row.directFinal||row.paperPriced))||
@@ -87,6 +95,7 @@ function readDurableRows(root){
     rows.push(normalize({
      source:'durable',model:f.model,marketId:f.marketId,
      hash:f.frozenEventHash,side:f.frozenSide,close:f.contractClosesAt,
+     frozenAt:f.frozenAt,
      observedAt:obs.observedAtRunner,githubRunId:id,
      directPublicKalshiMatched:
       f.exchangeAtWitness?.state==='MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET'
@@ -135,7 +144,8 @@ function distinct(rows,source){
   const before=byModelMarket.get(k);
   if(before){
    if(before.hash!==x.hash||before.side!==x.side||
-      before.close!==x.close)
+      before.close!==x.close||
+      (source==='durable'&&before.frozenAt!==x.frozenAt))
     throw Error('Conflicting frozen forecast identity within '+source);
    if(source==='durable'){
     if(Date.parse(x.observedAt)<Date.parse(before.observedAt))
@@ -205,6 +215,56 @@ function firstWitnessLeadTiming(originalDecisions){
  return out;
 }
 
+
+/*
+ * The source's frozenAt clock is self-reported. Subtract it from the
+ * earliest original GitHub observedAtRunner only for a READ-ONLY delay
+ * diagnostic; this is NOT independently proven source publication delay.
+ * Missing original freeze fields remain unknown (legacy/synthetic inputs).
+ */
+function claimedFreezeToFirstWitnessDelay(originalDecisions){
+ const blank=()=>({
+  witnessedModelMarketDecisions:0,withClaimedFreezeTimestamp:0,
+  missingClaimedFreezeTimestamp:0,
+  atMost5s:0,over5To30s:0,over30To120s:0,over120s:0,
+  minimumSeconds:null,medianSeconds:null,maximumSeconds:null
+ });
+ const out={early:blank(),late:blank()};
+ const values={early:[],late:[]};
+ for(const x of originalDecisions.values()){
+  const kind=x.model==='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1'?'late':'early';
+  const b=out[kind];b.witnessedModelMarketDecisions++;
+  if(x.frozenAt===undefined){
+   b.missingClaimedFreezeTimestamp++;
+   continue;
+  }
+  const ms=Date.parse(x.observedAt)-Date.parse(x.frozenAt);
+  if(!Number.isSafeInteger(ms)||ms<0)
+   throw Error('Invalid source-claimed freeze-to-first-witness interval');
+  b.withClaimedFreezeTimestamp++;
+  values[kind].push(ms);
+  if(ms<=5000)b.atMost5s++;
+  else if(ms<=30000)b.over5To30s++;
+  else if(ms<=120000)b.over30To120s++;
+  else b.over120s++;
+ }
+ for(const kind of ['early','late']){
+  const b=out[kind],ms=values[kind].sort((a,c)=>a-c);
+  if(b.withClaimedFreezeTimestamp+b.missingClaimedFreezeTimestamp!==
+      b.witnessedModelMarketDecisions||
+     b.atMost5s+b.over5To30s+b.over30To120s+b.over120s!==
+      b.withClaimedFreezeTimestamp)
+   throw Error('Invalid frozen-to-witness diagnostic denominators');
+  if(!ms.length)continue;
+  const mid=Math.floor(ms.length/2);
+  const med=ms.length%2?ms[mid]:(ms[mid-1]+ms[mid])/2;
+  b.minimumSeconds=Number((ms[0]/1000).toFixed(3));
+  b.medianSeconds=Number((med/1000).toFixed(3));
+  b.maximumSeconds=Number((ms.at(-1)/1000).toFixed(3));
+ }
+ return out;
+}
+
 function compareCohorts({durableRows=[],legacyRows=[],durableRunCount=0,
  legacyFiles=0}={}){
  if(!Number.isSafeInteger(durableRunCount)||durableRunCount<0||
@@ -244,6 +304,12 @@ function compareCohorts({durableRows=[],legacyRows=[],durableRunCount=0,
   overlap.identicalFrozenCommitments;
  const dur=summary(d),leg=summary(l),combined=summary(merged);
  const witnessedLead=firstWitnessLeadTiming(d);
+ const claimedFreezeDelay=claimedFreezeToFirstWitnessDelay(d);
+ if(claimedFreezeDelay.early.witnessedModelMarketDecisions!==
+     witnessedLead.early.modelMarketDecisions||
+    claimedFreezeDelay.late.witnessedModelMarketDecisions!==
+     witnessedLead.late.modelMarketDecisions)
+  throw Error('Self-reported freeze-to-witness diagnostic model denominator mismatch');
  if(witnessedLead.early.modelMarketDecisions!==dur.earlyWait+dur.earlyDirectional||
     witnessedLead.late.modelMarketDecisions!==dur.lateWait+dur.lateDirectional)
   throw Error('First-witness timing identity count mismatch');
@@ -277,6 +343,7 @@ function compareCohorts({durableRows=[],legacyRows=[],durableRunCount=0,
   version:VERSION,
   archiveType:'PUBLIC_GITHUB_RESEARCH_CROSS_EVIDENCE_COHORT_ONLY',
   durable:{...dur,firstWitnessLeadTiming:witnessedLead,
+   claimedFreezeToFirstWitnessDelay:claimedFreezeDelay,
    originalArchiveRuns:durableRunCount,
    runsWithAReadableFrozenDecision:distinctDurableRuns,
    publicExchangeMatchedModelMarketDecisions:[...d.values()].filter(x=>
@@ -303,7 +370,7 @@ function compareCohorts({durableRows=[],legacyRows=[],durableRunCount=0,
   independentValidationTarget:100,
   validationGateMet:false,
   historicalAuditCompletenessProven:false,
-  warning:'First-witness lead-time bins show earliest available GitHub-observed pre-expiry timestamps for DISTINCT model/market decisions only. Repeated polls, later confirmations and settlement outcomes cannot increase the sample or select a more favorable timestamp. These are not full forecast coverage, authenticated exchange first-publication times, or unique underlying Kalshi contracts. Records count unique model/contract frozen identities across two incomplete GitHub-hosted public-proxy evidence sets, not an independently sampled holdout. Early+late decisions for the same Kalshi contract are ONE market, not two independent contracts. Provisional ledger finals never retrospectively time-witness another forecast; original runner timestamps are not cryptographically notarized, BRTI index inputs/quotes and actual fills are not verified, and agreement does not establish trading profitability.'
+  warning:'Freeze-to-first-witness delay is measured since the original SOURCE-REPORTED frozenAt, not a verified public publication timestamp, actual network latency, or GitHub scheduling delay. It cannot assign fault to the source server or prove when external observers could first access the forecast. First-witness lead-time bins show earliest available GitHub-observed pre-expiry timestamps for DISTINCT model/market decisions only. Repeated polls, later confirmations and settlement outcomes cannot increase the sample or select a more favorable timestamp. These are not full forecast coverage, authenticated exchange first-publication times, or unique underlying Kalshi contracts. Records count unique model/contract frozen identities across two incomplete GitHub-hosted public-proxy evidence sets, not an independently sampled holdout. Early+late decisions for the same Kalshi contract are ONE market, not two independent contracts. Provisional ledger finals never retrospectively time-witness another forecast; original runner timestamps are not cryptographically notarized, BRTI index inputs/quotes and actual fills are not verified, and agreement does not establish trading profitability.'
  };
 }
 function auditCombined(lateRoot,ledgerRoot){
@@ -326,6 +393,14 @@ if(require.main===module){
   console.log('CASH_COHORT_FIRST_WITNESS_'+kind.toUpperCase()+'_OVER_60_TO_120S='+x.over60To120s);
   console.log('CASH_COHORT_FIRST_WITNESS_'+kind.toUpperCase()+'_OVER_120S='+x.over120s);
   console.log('CASH_COHORT_FIRST_WITNESS_'+kind.toUpperCase()+'_MEDIAN_LEAD_SECONDS='+x.medianLeadSeconds);
+  const f=out.durable.claimedFreezeToFirstWitnessDelay[kind];
+  console.log('CASH_COHORT_CLAIMED_FREEZE_'+kind.toUpperCase()+'_TIMED_DECISIONS='+f.withClaimedFreezeTimestamp);
+  console.log('CASH_COHORT_CLAIMED_FREEZE_'+kind.toUpperCase()+'_UNKNOWN='+f.missingClaimedFreezeTimestamp);
+  console.log('CASH_COHORT_CLAIMED_FREEZE_'+kind.toUpperCase()+'_WITHIN_5S='+f.atMost5s);
+  console.log('CASH_COHORT_CLAIMED_FREEZE_'+kind.toUpperCase()+'_OVER_5_TO_30S='+f.over5To30s);
+  console.log('CASH_COHORT_CLAIMED_FREEZE_'+kind.toUpperCase()+'_OVER_30_TO_120S='+f.over30To120s);
+  console.log('CASH_COHORT_CLAIMED_FREEZE_'+kind.toUpperCase()+'_OVER_120S='+f.over120s);
+  console.log('CASH_COHORT_CLAIMED_FREEZE_'+kind.toUpperCase()+'_MEDIAN_DELAY_SECONDS='+f.medianSeconds);
  }
  console.log('CASH_COHORT_SCHEDULED_LEDGER_LATE_DIRECTIONAL='+out.scheduledLegacy.lateDirectional);
  console.log('CASH_COHORT_SCHEDULED_LEDGER_DIRECTIONAL_FINALS='+out.scheduledLegacy.directionalWithSeparateDirectFinal);
@@ -340,4 +415,5 @@ if(require.main===module){
  console.log('CASH_COHORT_ORDERS_ENABLED=false');
 }
 module.exports={readDurableRows,readLegacyRows,compareCohorts,
- auditCombined,VERSION,summary,canonicalCloseUtc,firstWitnessLeadTiming};
+ auditCombined,VERSION,summary,canonicalCloseUtc,firstWitnessLeadTiming,
+ claimedFreezeToFirstWitnessDelay};
