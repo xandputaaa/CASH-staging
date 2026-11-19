@@ -1,0 +1,27 @@
+{
+  "version": "CASH_PUBLIC_UNWITNESSED_SESSION_RECORD_V1",
+  "provenanceClass": "UNVERIFIED_RAILWAY_JOURNAL_EXPORTED_DURING_GITHUB_SCHEDULE",
+  "prediction": {
+    "sessionFirstEventSha256": "a6379f8a691b9a21039eca415099158ef0148890178c1ba88d8fd337d7e3ce9c",
+    "model": "KXBTC15M_SETTLEMENT_EARLY_V3",
+    "marketId": "KXBTC15M-26NOV182315-15",
+    "side": "WAIT",
+    "claimedFrozenAt": "2026-11-19T04:02:08.967Z",
+    "contractClosesAt": "2026-11-19T04:15:00.000Z",
+    "selfHashedForecastEventSha256": "b461e9b8f0bc9bd45325ffb1f41b3895e86adbfee9796da12f6070ac2f7782d7",
+    "selfHashedForecastSequence": 51,
+    "sourceType": "SINGLE_EXCHANGE_PROXY"
+  },
+  "outcome": null,
+  "firstReadOnlyBackup": {
+    "runId": "44456958871",
+    "headSha": "8d50793804bc7083612a001c03c32fa4664925d0",
+    "createdAt": "2026-11-19T04:14:39.000Z",
+    "completedAt": "2026-11-19T04:14:58.000Z",
+    "snapshotExportSha256": "d09d92a5b53d030931f1ebf3e46a17076e4009d58099333933bdbdb9cc0d092e"
+  },
+  "limitations": "Server-generated hash chain and claimed freeze timestamp, not proof of pre-expiry GitHub witnessing, exact CF BRTI, original market input integrity, tradeable odds, fill, or independently qualified accuracy.",
+  "independentQualifiedCount": 0,
+  "ordersEnabled": false,
+  "actualFillsVerified": 0
+}
