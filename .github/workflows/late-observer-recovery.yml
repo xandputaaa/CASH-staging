@@ -1,0 +1,138 @@
+name: CASH recover original late public witness artifacts
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/late-observer-recovery.yml'
+  schedule:
+    - cron: '5 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  # The new recovery and routine append-only archive share ONE writer queue.
+  group: cash-late-public-witness-archive
+  cancel-in-progress: false
+jobs:
+  review-witness-recovery:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Validate bounded chronological run selection, provenance and workflow security
+        run: node --test tests/late-observer-recovery-select.test.js tests/late-observer-recovery-workflow.test.js
+      - name: Verify the existing original public archive is well-formed, read-only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cash-late-public-witness
+          path: late-store
+          persist-credentials: false
+      - run: node -e "const x=require('./late-observer-archive').inspectArchive('late-store');console.log('CASH_LATE_RECOVERY_OLD_RUNS='+x.runs);console.log('CASH_LATE_RECOVERY_QUALIFIED=0')"
+  recover-original-witnesses:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout only vetted default branch validator
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Locate recently completed genuine GitHub observer runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit/recovery
+          start_day="$(date -u -d '2 days ago' +%Y-%m-%d)"
+          today_day="$(date -u +%Y-%m-%d)"
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/preexpiry-observer.yml/runs?per_page=100&created=${start_day}..${today_day}" \
+            > audit/recovery/observer-run-pages.json
+          node late-observer-recovery-select.js \
+            audit/recovery/observer-run-pages.json \
+            audit/recovery/selected-source-run-ids.txt
+      - name: Checkout immutable public late evidence branch, serialize with normal writer
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cash-late-public-witness
+          path: late-store
+          persist-credentials: true
+      - name: Verify existing and original source-run evidence before appending
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const x=require('./late-observer-archive').inspectArchive('late-store');console.log('CASH_LATE_RECOVERY_BEFORE='+x.runs)"
+          while IFS= read -r id; do
+            if [[ ! "$id" =~ ^[0-9]{8,16}$ ]]; then
+              echo 'CASH_LATE_RECOVERY_BAD_RUN_ID=true'
+              exit 1
+            fi
+            if [[ -f "late-store/late-preexpiry-run/$id/manifest.json" ]]; then
+              echo "CASH_LATE_RECOVERY_ALREADY_ARCHIVED=$id"
+              continue
+            fi
+            mkdir -p "audit/recovery/source/$id" "audit/recovery/metadata/$id"
+            if ! gh run download "$id" \
+              -n "cash-preexpiry-observation-$id" \
+              -D "audit/recovery/source/$id"; then
+              echo "CASH_LATE_RECOVERY_MISSING_OR_EXPIRED_ORIGINAL_ARTIFACT=$id"
+              continue
+            fi
+            if [[ ! -s "audit/recovery/source/$id/observer-origin.json" ||
+                  ! -s "audit/recovery/source/$id/observer-run-summary.json" ]]; then
+              echo "CASH_LATE_RECOVERY_ORIGINAL_PROVENANCE_NOT_PRESENT=$id"
+              continue
+            fi
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$id" \
+              > "audit/recovery/metadata/$id/source.json"
+            parent="$(node -e "const fs=require('node:fs');const o=JSON.parse(fs.readFileSync(process.argv[1]));process.stdout.write(o.parent?.id||'NONE')" "audit/recovery/source/$id/observer-origin.json")"
+            parent_file='NONE'
+            if [[ "$parent" =~ ^[0-9]{8,16}$ ]]; then
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$parent" \
+                > "audit/recovery/metadata/$id/parent.json"
+              parent_file="audit/recovery/metadata/$id/parent.json"
+            elif [[ "$parent" != "NONE" ]]; then
+              echo "CASH_LATE_RECOVERY_BAD_PARENT_ID=$id"
+              exit 1
+            fi
+            # Validates original timestamp, metadata, parent scheduling, all
+            # frozen WAIT/YES/NO, public Kalshi fields, and full archive history.
+            node late-observer-archive.js \
+              "audit/recovery/source/$id" \
+              "audit/recovery/metadata/$id/source.json" \
+              "$parent_file" late-store
+            echo "CASH_LATE_RECOVERY_AUTHENTIC_ORIGINAL_APPENDED=$id"
+          done < audit/recovery/selected-source-run-ids.txt
+          node -e "const x=require('./late-observer-archive').inspectArchive('late-store');console.log('CASH_LATE_RECOVERY_AFTER='+x.runs);console.log('CASH_LATE_RECOVERY_DIRECTIONAL='+x.lateDirectional);console.log('CASH_LATE_RECOVERY_QUALIFIED=0')"
+      - name: Commit only original artifacts and hashes to separate branch
+        shell: bash
+        working-directory: late-store
+        run: |
+          set -euo pipefail
+          if [[ -z "$(git status --porcelain -- late-preexpiry-run)" ]]; then
+            echo 'CASH_LATE_RECOVERY_NO_NEW_ORIGINAL_EVIDENCE=true'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- late-preexpiry-run
+          git commit -m "Recover verified original GitHub pre-expiry observer artifacts"
+          git push origin HEAD:cash-late-public-witness
+          echo 'CASH_LATE_RECOVERY_ORIGINAL_BYTES_PRESERVED=true'
