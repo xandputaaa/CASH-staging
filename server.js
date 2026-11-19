@@ -6,6 +6,7 @@ const {createResolver}=require('./resolution-feed');
 const {createShadowMonitor}=require('./shadow-monitor');
 const {createAuditJournal}=require('./audit-journal');
 const page=fs.readFileSync('index.html');
+const ambientMarketMoodScript=fs.readFileSync('ambient-market-mood.js');
 const livePaperScript=fs.readFileSync('live-paper.js');
 const shadowScript=fs.readFileSync('shadow-ui.js');
 const shadowArchiveScript=fs.readFileSync('shadow-browser-archive.js');
@@ -241,6 +242,10 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/simple-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(simpleUiScript);return;
+  }
+  if(req.method==='GET'&&req.url==='/ambient-market-mood.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
+    res.end(ambientMarketMoodScript);return;
   }
   if(req.method==='GET'&&req.url==='/kalshi15-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
