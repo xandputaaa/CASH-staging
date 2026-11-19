@@ -26,3 +26,18 @@ test('browser rejects expired, changed or inconsistent risk previews',()=>{
  assert.match(ui,/r\.estimatedMaxLossUsd>10/);
  assert.match(ui,/qty\.addEventListener\('input'/);
 });
+
+test('manual preview rejects stale or missing fee observation even with live state',()=>{
+ const now=Date.parse('2026-11-19T20:00:00Z');
+ const quote={venue:'Kalshi',marketId:'KXBTC15M-26NOV192000',status:'live',refreshFailed:false,
+  fetchedAt:new Date(now-1000).toISOString(),endTime:new Date(now+300000).toISOString(),
+  contractRuleStatus:'BRTI_60S_RULE_TEXT_PRESENT',strikeType:'greater_or_equal',tieGoesToYes:true,yesAsk:0.4,noAsk:0.62};
+ const fees={state:'SERIES_METADATA_LIVE',feeType:'quadratic',feeMultiplier:1,refreshedAt:new Date(now-1000).toISOString()};
+ assert.equal(manualAssist({quote,fees,side:'YES',contracts:2,now}).status,'INFORMATION_ONLY');
+ for(const refreshedAt of [undefined,'invalid',new Date(now-300001).toISOString(),new Date(now+3000).toISOString()]){
+  const result=manualAssist({quote,fees:{...fees,refreshedAt},side:'YES',contracts:2,now});
+  assert.equal(result.status,'BLOCKED');
+  assert.ok(result.blockers.includes('UNVERIFIED_FEE_METADATA'));
+  assert.equal(result.executionAuthorized,false);
+ }
+});
