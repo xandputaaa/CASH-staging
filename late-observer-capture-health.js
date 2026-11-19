@@ -28,6 +28,70 @@ function classifyCapture(row){
  if(row.valid===0)return 'NO_VALID_OBSERVER_POLLS';
  return 'INCOMPLETE_OR_MIXED_OBSERVATION';
 }
+
+/*
+ * For witness-bearing original GitHub runs only, measure elapsed time from
+ * GH API run creation to the EARLIEST original archived runner observation.
+ * This includes runner startup/setup/network/polling, NOT cron trigger queue
+ * time or source-publication latency. No settlement-dependent selection.
+ */
+function runCreationToFirstWitness(rows){
+ const fresh=()=>({runsWithWitness:0,withTiming:0,
+  missingOriginalTime:0,runnerClockBeforeRun:0,runsWithoutWitness:0,
+  atMost30s:0,over30To90s:0,over90To180s:0,over180s:0,
+  minimumSeconds:null,medianSeconds:null,maximumSeconds:null});
+ const out={schedule:fresh(),workflow_run:fresh()};
+ const samples={schedule:[],workflow_run:[]};
+ for(const r of rows){
+  const x=out[r.event];
+  if(!x)throw Error('Invalid observer run provenance for timing');
+  if(r.commitments===0){
+   if(r.firstWitnessAt!==undefined&&r.firstWitnessAt!==null)
+    throw Error('Non-capture run cannot have first witness timestamp');
+   x.runsWithoutWitness++;
+   continue;
+  }
+  x.runsWithWitness++;
+  if(r.firstWitnessAt===undefined||r.firstWitnessAt===null){
+   x.missingOriginalTime++;
+   continue;
+  }
+  const start=Date.parse(r.createdAt),first=Date.parse(r.firstWitnessAt);
+  if(!Number.isFinite(start)||!Number.isFinite(first))
+   throw Error('Invalid original GitHub witness runtime clock');
+  const elapsed=first-start;
+  if(elapsed<0){
+   if(elapsed < -5000)
+    throw Error('Witness predates GitHub source run by unsafe margin');
+   x.runnerClockBeforeRun++;
+   continue;
+  }
+  if(!Number.isSafeInteger(elapsed))
+   throw Error('Unsafe GitHub run-to-witness interval');
+  x.withTiming++;
+  samples[r.event].push(elapsed);
+  if(elapsed<=30000)x.atMost30s++;
+  else if(elapsed<=90000)x.over30To90s++;
+  else if(elapsed<=180000)x.over90To180s++;
+  else x.over180s++;
+ }
+ for(const kind of ['schedule','workflow_run']){
+  const x=out[kind],ms=samples[kind].sort((a,b)=>a-b);
+  if(x.runsWithWitness!==x.withTiming+x.missingOriginalTime+
+       x.runnerClockBeforeRun||
+     x.withTiming!==x.atMost30s+x.over30To90s+
+       x.over90To180s+x.over180s)
+   throw Error('Run-to-witness timing denominator mismatch');
+  if(!ms.length)continue;
+  const mid=Math.floor(ms.length/2);
+  const median=ms.length%2?ms[mid]:(ms[mid-1]+ms[mid])/2;
+  x.minimumSeconds=Number((ms[0]/1000).toFixed(3));
+  x.medianSeconds=Number((median/1000).toFixed(3));
+  x.maximumSeconds=Number((ms.at(-1)/1000).toFixed(3));
+ }
+ return out;
+}
+
 function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
  if(!Array.isArray(rows)||rows.length>MAX_RUNS||
    !Number.isInteger(expectedRunCount)||expectedRunCount<0||
@@ -185,6 +249,7 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
   successfulScheduledParentRuns:counts.backupTriggered,
   sourceEligibilityDiagnostics:eligibility,
   sourceToWitnessConversionDiagnostics:conversion,
+  githubRunCreationToFirstWitness:runCreationToFirstWitness(ordered),
   originalPolls:{attempted:counts.totalAttempts,valid:counts.validPolls,
    empty:counts.emptyPolls,invalid:counts.invalidPolls},
   longestConsecutiveArchivedValidEmptyRuns:longestEmpty,
@@ -199,7 +264,7 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
   independentlyQualifiedCount:0,
   actualFillsVerified:0,
   realMoneyOrdersEnabled:false,
-  caveat:'Runs and polls are not independent markets. A valid empty probe says no publicly eligible UNEXPIRED single-exchange-proxy commitment was preserved at that GitHub runner time; it does NOT prove the source was offline, no prediction was generated, the model lost accuracy, or that licensed-index / other nonpublic forecasts were absent. Only originally archived runs are included. Eligibility and source-to-witness conversion diagnostic totals cover only runs that originally recorded each optional field; historical missing fields are explicitly excluded, not interpreted as zero. Each source-to-witness number is a POLL count, not a distinct model contract or evidence qualification. An archived YES/NO is not automatically a checked final, fills or a qualified forecast.'
+  caveat:'Runs and polls are not independent markets. A valid empty probe says no publicly eligible UNEXPIRED single-exchange-proxy commitment was preserved at that GitHub runner time; it does NOT prove the source was offline, no prediction was generated, the model lost accuracy, or that licensed-index / other nonpublic forecasts were absent. Only originally archived runs are included. GitHub run creation-to-first-witness timing is only for captured original observer RUNS and includes runner execution, checkout, network and polling: it cannot establish when GitHub scheduled the job, when the journal became publicly available, or timing for non-capture runs. Eligibility and source-to-witness conversion diagnostic totals cover only runs that originally recorded each optional field; historical missing fields are explicitly excluded, not interpreted as zero. Each source-to-witness number is a POLL count, not a distinct model contract or evidence qualification. An archived YES/NO is not automatically a checked final, fills or a qualified forecast.'
  };
 }
 function safeJson(file,max){
@@ -207,6 +272,32 @@ function safeJson(file,max){
  if(!st.isFile()||st.isSymbolicLink()||st.size<=0||st.size>max)
   throw Error('Unsafe archived capture summary or manifest');
  return JSON.parse(fs.readFileSync(file,'utf8'));
+}
+// Re-read only original, SHA-verified archive observations to find the FIRST
+// GitHub-runner timestamp, not the selected later/stronger legacy summary.
+function firstOriginalWitnessAt(runDir,manifest){
+ let earliest=null,found=0;
+ for(const item of manifest.sourceArtifactFiles){
+  if(item.file!=='public-preexpiry-observation.json'&&
+     !/^probes\/0(?:0[1-9]|1[0-9]|20)\.json$/.test(item.file))
+   continue;
+  const obs=safeJson(path.join(runDir,item.file),200000);
+  if(obs.githubRunId!==manifest.sourceRunId||
+     obs.githubCommitSha!==manifest.sourceHeadSha||
+     !Array.isArray(obs.frozenEvidence))
+   throw Error('Original GH witness run identity changed');
+  if(!obs.frozenEvidence.length)continue;
+  found++;
+  const time=Date.parse(obs.observedAtRunner);
+  if(!Number.isFinite(time))
+   throw Error('Invalid original archived first-witness timestamp');
+  if(earliest===null||time<earliest)earliest=time;
+ }
+ if(manifest.distinctCommitments>0&&found===0)
+  throw Error('Missing original frozen observation for archive commitments');
+ if(manifest.distinctCommitments===0&&found>0)
+  throw Error('Unexpected frozen observation in empty original run');
+ return earliest===null?null:new Date(earliest).toISOString();
 }
 function auditCaptureHealth(root){
  const inspected=inspectArchive(root);
@@ -228,6 +319,7 @@ function auditCaptureHealth(root){
     throw Error('Invalid empty summary incompatible with frozen evidence');
    rows.push({
     id,createdAt:m.sourceRunCreatedAt,event:m.sourceRunEvent,
+    firstWitnessAt:firstOriginalWitnessAt(path.join(base,id),m),
     attempts:s.attempts,valid:s.validProbes,empty:s.emptyProbes,
     invalid:s.invalidProbes,commitments:m.distinctCommitments,
     directional:m.directionalCommitments,
@@ -267,7 +359,18 @@ if(require.main===module){
   for(const [key,value] of Object.entries(s.sourceToWitnessConversionDiagnostics[kind]))
    console.log('CASH_ORIGINAL_CONVERSION_'+kind.toUpperCase()+'_'+key+'='+value);
  }
+ for(const kind of ['schedule','workflow_run']){
+  const x=s.githubRunCreationToFirstWitness[kind];
+  console.log('CASH_ORIGINAL_GH_CREATED_TO_FIRST_WITNESS_'+kind.toUpperCase()+'_TIMED_RUNS='+x.withTiming);
+  console.log('CASH_ORIGINAL_GH_CREATED_TO_FIRST_WITNESS_'+kind.toUpperCase()+'_MISSING_RUNS='+x.missingOriginalTime);
+  console.log('CASH_ORIGINAL_GH_CREATED_TO_FIRST_WITNESS_'+kind.toUpperCase()+'_AT_MOST_30S='+x.atMost30s);
+  console.log('CASH_ORIGINAL_GH_CREATED_TO_FIRST_WITNESS_'+kind.toUpperCase()+'_OVER_30_TO_90S='+x.over30To90s);
+  console.log('CASH_ORIGINAL_GH_CREATED_TO_FIRST_WITNESS_'+kind.toUpperCase()+'_OVER_90_TO_180S='+x.over90To180s);
+  console.log('CASH_ORIGINAL_GH_CREATED_TO_FIRST_WITNESS_'+kind.toUpperCase()+'_OVER_180S='+x.over180s);
+  console.log('CASH_ORIGINAL_GH_CREATED_TO_FIRST_WITNESS_'+kind.toUpperCase()+'_MEDIAN_SECONDS='+x.medianSeconds);
+ }
  console.log('CASH_ORIGINAL_CAPTURE_QUALIFIED=0');
  console.log('CASH_ORIGINAL_CAPTURE_ORDERS=false');
 }
-module.exports={classifyCapture,summarizeCaptures,auditCaptureHealth,VERSION};
+module.exports={classifyCapture,summarizeCaptures,auditCaptureHealth,
+ runCreationToFirstWitness,firstOriginalWitnessAt,VERSION};
