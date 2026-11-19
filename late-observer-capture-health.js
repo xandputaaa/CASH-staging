@@ -281,6 +281,19 @@ function summarizeCaptures(rows,{expectedRunCount=rows?.length}={}){
   start:runStart,end:null,emptyRunCount:streak,
   recoveredTo:'NOT_YET_CAPTURED_IN_ARCHIVED_RUNS'
  });
+ // Archived runs may individually contain safe integers whose aggregate exceeds
+ // JS exact-integer precision. Reject the whole audit rather than publish a
+ // rounded denominator or an apparently precise conversion ratio.
+ for(const [label,group] of Object.entries({counts,eligibility,conversion,
+  triggerCoverage:triggerConversionCoverage(ordered)})){
+  const check=(value,key)=>{
+   if(typeof value==='number'&&(!Number.isSafeInteger(value)||value<0))
+    throw Error('Unsafe aggregated observer denominator: '+key);
+   if(value&&typeof value==='object')
+    for(const [k,v] of Object.entries(value))check(v,key+'.'+k);
+  };
+  check(group,label);
+ }
  const processed=counts.capturedDirectional+counts.capturedWaitOnly+
   counts.validNoForecast+counts.noValidPolls+counts.mixedOrIncomplete;
  if(processed!==ordered.length||
