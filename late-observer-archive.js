@@ -86,6 +86,7 @@ function validateSource(origin,run,parent){
 }
 function validateSummary(summary){
  const hasEligibility=Object.hasOwn(summary,'eligibilityPolls');
+ const hasConversion=Object.hasOwn(summary,'witnessConversion');
  const summaryKeys=[
   'version','attempts','stopReason','validProbes','invalidProbes',
   'emptyProbes','provisionalLateProbes','directLateProbes',
@@ -97,7 +98,11 @@ function validateSummary(summary){
  ];
  // Existing original archives predate the new optional diagnostic. Do not
  // retroactively rewrite them or silently reinterpret missing data as zero.
- strictKeys(summary,hasEligibility?[...summaryKeys,'eligibilityPolls']:summaryKeys);
+ if(hasConversion&&!hasEligibility)
+  throw Error('Witness conversion requires source eligibility diagnostics');
+ strictKeys(summary,[...summaryKeys,
+  ...(hasEligibility?['eligibilityPolls']:[]),
+  ...(hasConversion?['witnessConversion']:[])]);
  if(summary.version!=='CASH_SCHEDULED_WITNESS_WATCH_V1'||
     !Number.isInteger(summary.attempts)||summary.attempts<1||
     summary.attempts>20||!Number.isInteger(summary.validProbes)||
@@ -134,6 +139,27 @@ function validateSummary(summary){
       x.eligibleForecastPolls+x.expiredOnlyPolls+
       x.otherIneligiblePolls+x.emptyJournalPolls!==x.validSourcePolls)
     throw Error('Inconsistent public eligibility poll summary');
+  }
+ }
+ if(hasConversion){
+  strictKeys(summary.witnessConversion,['early','late']);
+  const keys=['diagnosticPolls','diagnosticsMissingPolls',
+   'eligibleWithWitnessPolls','eligibleWithoutWitnessPolls',
+   'eligibleWithDirectMatchPolls','witnessWithoutEligibilityPolls'];
+  for(const kind of ['early','late']){
+   const x=summary.witnessConversion[kind],source=summary.eligibilityPolls[kind];
+   strictKeys(x,keys);
+   if(keys.some(k=>!Number.isInteger(x[k])||x[k]<0||
+      x[k]>summary.validProbes)||
+      x.diagnosticPolls+x.diagnosticsMissingPolls!==summary.validProbes||
+      x.diagnosticPolls!==source.validSourcePolls+
+       source.unavailableSourcePolls+source.invalidSourcePolls||
+      x.eligibleWithWitnessPolls+x.eligibleWithoutWitnessPolls!==
+       source.eligibleForecastPolls||
+      x.eligibleWithDirectMatchPolls>x.eligibleWithWitnessPolls||
+      x.witnessWithoutEligibilityPolls>
+       x.diagnosticPolls-source.eligibleForecastPolls)
+    throw Error('Inconsistent witness conversion diagnostic');
   }
  }
 }

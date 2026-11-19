@@ -129,3 +129,19 @@ After PR #66, GitHub observer logs distinguish a valid but already-expired sourc
 This is **poll-level coverage telemetry**, not contract-level opportunity counts: repeated polling of the same frozen WAIT must not be counted as multiple predictions, forecast outcomes, or qualified observations. Counts are aggregated from locally verified journal reads; no market IDs, prices, sides, source payloads or credentials are added to the summary. The observer's original pre-expiry acceptance windows, frozen event hashes, direct public Kalshi checks, polling interval, independent qualification (0), and order permissions (disabled) do not change. The existing archive validator requires an exact small numeric schema and rejects extra or inconsistent fields. A run without callback diagnostics reports zeros only for the new counters (not proof that any journal was empty); continue to consult the separately recorded attempt and error counts.
 
 Use comparisons **between future scheduled runs** to identify whether source exposure, expiry timing or missed eligibility dominates. Any change to sampling cadence must be justified by newly observed coverage and budget tradeoffs, not by selecting outcomes or loosening the >=15-second pre-expiry guard. GitHub scheduling, private BRTI inputs, executable quotes and calibrated trading performance remain unproven.
+
+
+## Validated source eligibility versus actual GitHub witness (November 19, 2026)
+
+Scheduled observer summaries now include the **optional** `witnessConversion` aggregate for each original early/late model. These are per-**poll** counters, not distinct contracts, resolved forecast samples, YES/NO directional signals, accuracy or executable trades:
+
+- `diagnosticPolls`: valid original observation envelopes whose source eligibility was diagnosed;
+- `diagnosticsMissingPolls`: valid observation envelopes without matching source diagnostics; their source state is **unknown**, not assumed empty;
+- `eligibleWithWitnessPolls`: an eligible public-proxy source forecast and at least one *timely recorded* witness for that model in the same validated probe;
+- `eligibleWithoutWitnessPolls`: an eligible source forecast but no preserved witness for that model in the validated probe (investigate, not an incorrect forecast);
+- `eligibleWithDirectMatchPolls`: eligible-and-witnessed probes also corroborated directly with the public Kalshi market API;
+- `witnessWithoutEligibilityPolls`: a recorded witness with no matching eligible source diagnostic in that probe (an inconsistency to investigate, not silently recategorize).
+
+The watcher stages both sets of source and conversion counters, committing them **only after successful observation-envelope verification and artifact recording**; failures cannot inflate eligible-poll coverage. The privileged GitHub archive validator checks exact numeric fields, model-by-model arithmetic consistency, per-run probe bounds, and zero independent qualification, and rejects malformed or extra sensitive fields. The frozen observation itself remains byte-for-byte in its original independent artifact; no confidence, side, prediction timestamp, source data or benchmark result is rewritten. Older durable summaries lacking `witnessConversion` remain valid and their conversion rates are explicitly **unknown**.
+
+The counters identify a *source-to-witness evidence capture gap* separately from an unavailable journal, stale runner timing or lack of direct Kalshi corroboration. Repeated 40-second polls of a single WAIT count as repeated polls, **not** additional contracts or qualifications. No automatic trading permission, private BRTI validation, settlement correctness, fee-adjusted profitability, changes to cadence or paid services are implied.

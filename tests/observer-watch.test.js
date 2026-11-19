@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
-const {watchScheduledObserver,evidenceRank,MAX_RUNTIME_MS,emptyEligibilityBucket,recordEligibilityPoll}=require('../observer-watch');
+const {watchScheduledObserver,evidenceRank,MAX_RUNTIME_MS,emptyEligibilityBucket,recordEligibilityPoll,emptyConversionBucket,recordWitnessConversion}=require('../observer-watch');
 const EARLY='KXBTC15M_SETTLEMENT_EARLY_V3';
 const LATE='KXBTC15M_LATE_CHECKPOINT_SHADOW_V1';
 const close='2026-11-18T02:15:00Z';
@@ -197,5 +197,79 @@ test('real scheduled watcher persists only aggregate public eligibility, never m
   path.join(dir,'public-preexpiry-observation.json')));
  assert.equal(observed.frozenEvidence[0].frozenSide,'WAIT');
  assert.equal(Object.hasOwn(observed,'eligibilityPolls'),false);
+ fs.rmSync(dir,{recursive:true,force:true});
+});
+
+test('conversion counts distinguish source eligibility, witnessed evidence and direct exchange checks',()=>{
+ const c={early:emptyConversionBucket(),late:emptyConversionBucket()};
+ const diag=(eligible)=>({status:'VALID_SELF_HASHED_SOURCE_JOURNAL',
+  eligibleBeforeThreeRecordCap:eligible});
+ const t=Date.parse('2026-11-18T02:12:00Z');
+ recordWitnessConversion(c,{early:diag(1),late:diag(1)},
+  response(t,[e(EARLY,Date.parse('2026-11-18T02:03:00Z'),'WAIT',false)]));
+ recordWitnessConversion(c,{early:diag(1),late:diag(1)},
+  response(t,[e(EARLY,Date.parse('2026-11-18T02:03:00Z'),'WAIT',true,t+1000),
+   e(LATE,Date.parse('2026-11-18T02:11:32Z'),'NO',true,t+1000)]));
+ recordWitnessConversion(c,null,response(t,[]));
+ assert.deepEqual(c.early,{
+  diagnosticPolls:2,diagnosticsMissingPolls:1,
+  eligibleWithWitnessPolls:2,eligibleWithoutWitnessPolls:0,
+  eligibleWithDirectMatchPolls:1,witnessWithoutEligibilityPolls:0});
+ assert.deepEqual(c.late,{
+  diagnosticPolls:2,diagnosticsMissingPolls:1,
+  eligibleWithWitnessPolls:1,eligibleWithoutWitnessPolls:1,
+  eligibleWithDirectMatchPolls:1,witnessWithoutEligibilityPolls:0});
+ assert.doesNotMatch(JSON.stringify(c),/KXBTC15M-|spotPrice|privateKey|frozenSide/);
+});
+test('watcher commits only valid poll diagnostics and preserves missing as unknown',async()=>{
+ const dir=temp(),start=Date.parse('2026-11-18T02:12:00Z');let t=start,calls=0;
+ const valid=(eligible)=>({status:'VALID_SELF_HASHED_SOURCE_JOURNAL',
+  forecastCount:1,eligibleBeforeThreeRecordCap:eligible,
+  reasons:{EXPIRED_OR_WITHIN_15S_CLOSE_GUARD:eligible?0:1}});
+ const r=await watchScheduledObserver({outDirectory:dir,clock:()=>t,
+  wait:async ms=>{t+=ms;},pollIntervalMs:40000,maxRuntimeMs:80000,
+  observer:async({onEligibility})=>{
+   calls++;
+   if(calls===1){
+    onEligibility({early:valid(1),late:valid(0)});
+    return response(t,[e(EARLY,Date.parse('2026-11-18T02:03:00Z'),'WAIT',false)]);
+   }
+   if(calls===2){
+    onEligibility({early:valid(1),late:valid(1)});
+    return response(t,[e(EARLY,Date.parse('2026-11-18T02:03:00Z'),'WAIT',false)]);
+   }
+   return response(t,[]);
+  }});
+ assert.equal(calls,3);
+ assert.equal(r.validProbes,3);
+ assert.equal(r.witnessConversion.early.diagnosticPolls,2);
+ assert.equal(r.witnessConversion.early.eligibleWithWitnessPolls,2);
+ assert.equal(r.witnessConversion.late.eligibleWithoutWitnessPolls,1);
+ assert.equal(r.witnessConversion.late.diagnosticsMissingPolls,1);
+ assert.equal(r.eligibilityPolls.late.eligibleForecastPolls,1);
+ assert.equal(r.independentQualifiedCount,0);
+ const summary=JSON.parse(fs.readFileSync(path.join(dir,'observer-run-summary.json')));
+ assert.deepEqual(summary.witnessConversion,r.witnessConversion);
+ const original=JSON.parse(fs.readFileSync(path.join(dir,'public-preexpiry-observation.json')));
+ assert.equal(Object.hasOwn(original,'witnessConversion'),false);
+ assert.equal(original.frozenEvidence[0].frozenSide,'WAIT');
+ fs.rmSync(dir,{recursive:true,force:true});
+});
+test('invalid observer envelope cannot fabricate source eligibility success',async()=>{
+ const dir=temp();let t=Date.parse('2026-11-18T02:12:00Z');
+ const r=await watchScheduledObserver({outDirectory:dir,clock:()=>t,
+  wait:async ms=>{t+=ms;},pollIntervalMs:40000,maxRuntimeMs:80000,
+  observer:async({onEligibility})=>{
+   onEligibility({early:{status:'VALID_SELF_HASHED_SOURCE_JOURNAL',
+    forecastCount:1,eligibleBeforeThreeRecordCap:1,
+    reasons:{EXPIRED_OR_WITHIN_15S_CLOSE_GUARD:0}},
+    late:{status:'SOURCE_UNAVAILABLE_OR_UNFETCHED'}});
+   return {...response(t,[]),claimedIndependentlyQualifiedCount:100};
+  }});
+ assert.equal(r.validProbes,0);
+ assert.ok(r.invalidProbes>0);
+ assert.equal(r.eligibilityPolls.early.eligibleForecastPolls,0);
+ assert.equal(r.witnessConversion.early.diagnosticPolls,0);
+ assert.equal(r.independentQualifiedCount,0);
  fs.rmSync(dir,{recursive:true,force:true});
 });
