@@ -30,7 +30,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cash-preexpiry-observation-${{ github.run_id }}
-          path: witness/public-preexpiry-observation.json
+          # Keep the legacy top-level summary and every valid observation
+          # probe from a delayed scheduled run, preserving original timestamps.
+          # Hidden .probe/ scratch outputs are not uploaded by default.
+          path: witness/
           retention-days: 30
           if-no-files-found: ignore
 
