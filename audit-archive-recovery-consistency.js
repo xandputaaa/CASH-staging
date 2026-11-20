@@ -26,6 +26,9 @@ function verifyArchiveRecoveryConsistency({manifest,directory,activeJournalPath,
     index.archivedEvents!==pending.archivedEvents||
     index.activeEvents!==pending.activeEvents)
   throw Error('Archive recovery views disagree on event counts');
+ const archivedIds=new Set(index.archivedCaptureIds);
+ if(pending.archiveBoundaryPending.some(item=>!archivedIds.has(item.id)))
+  throw Error('Archive boundary contains non-archived capture');
  const indexIds=index.pendingIds;
  const pendingIds=pending.pending.map(x=>x.id);
  if(indexIds.length!==pendingIds.length||
@@ -49,6 +52,7 @@ function verifyArchiveRecoveryConsistency({manifest,directory,activeJournalPath,
  if(tip!==after)throw Error('Active journal changed during recovery');
  return Object.freeze({state:'ARCHIVE_RECOVERY_CONSISTENT',
   capturedIds:index.capturedIds,pending:pending.pending,
+  archiveBoundaryPending:pending.archiveBoundaryPending,
   archivedCaptureIds:index.archivedCaptureIds,activeCaptureIds:index.activeCaptureIds,
   capturedCount:index.captures,resolvedCount:index.resolutions,
   pendingCount:index.pending,archivedEvents:index.archivedEvents,
