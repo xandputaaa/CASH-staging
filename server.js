@@ -34,6 +34,9 @@ const simpleUiScript=fs.readFileSync('simple-ui.js');
 const {assessKalshi15}=require('./kalshi15-readiness');
 const {manualAssist}=require('./manual-live-assist');
 const {makeManualCalls}=require('./manual-entry-exit-calls');
+const {createCashV3ChartFeed}=require('./cash-v3-chart-feed');
+const cashV3Css=fs.readFileSync('cash-v3.css');
+const cashV3Js=fs.readFileSync('cash-v3.js');
 const manualCallsScript=fs.readFileSync('manual-calls-ui.js');
 const manualAssistScript=fs.readFileSync('manual-assist-ui.js');
 const {createKalshiFeeFeed}=require('./kalshi-fees');
@@ -61,6 +64,7 @@ const port=3000; // Staging public domain is explicitly routed to port 3000
 const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
 const kalshiFeeFeed=createKalshiFeeFeed();
+const cashV3ChartFeed=createCashV3ChartFeed();
 const resolver=createResolver();
 // Archive recovery is explicit and only permitted for a single, shared audit volume.
 // Legacy journals still refuse an un-recovered manifest and never rotate automatically.
@@ -276,6 +280,62 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/kalshi15-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(kalshi15Script);return;
+  }
+  if(req.method==='GET'&&req.url==='/cash-v3.css'){
+    res.writeHead(200,{'Content-Type':'text/css; charset=utf-8',
+     'Cache-Control':'private, no-store'});res.end(cashV3Css);return;
+  }
+  if(req.method==='GET'&&req.url==='/cash-v3.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8',
+     'Cache-Control':'private, no-store'});res.end(cashV3Js);return;
+  }
+  if(req.method==='GET'&&req.url==='/api/cash-v3/market'){
+    try{
+      const [quote,spotQuote,fees]=await Promise.all([
+       venueFeeds.query('Kalshi'),feed.update(),kalshiFeeFeed.query()]);
+      const official=brtiFeed.forecastingEnabled()?brtiFeed.internal():null;
+      const manual=makeManualCalls({quote,spot:official||spotQuote,fees});
+      const chart=await cashV3ChartFeed.query({quote,spot:spotQuote});
+      const qTime=Date.parse(quote?.fetchedAt);
+      const qFresh=quote.status==='live'&&!quote.refreshFailed&&
+       Number.isFinite(qTime)&&qTime<=Date.now()+2000&&
+       Date.now()-qTime<=12000;
+      const safe=n=>Number.isFinite(n)?n:null;
+      const payload={
+       version:'CASH_MOBILE_V3_MARKET_V1',at:new Date().toISOString(),
+       mode:'PRIVATE_RESEARCH_ONLY',
+       quote:{
+        marketId:typeof quote.marketId==='string'?quote.marketId:null,
+        status:qFresh?'LIVE':'STALE_OR_UNAVAILABLE',
+        fetchedAt:qFresh?quote.fetchedAt:null,
+        endTime:quote.endTime||null,targetPrice:safe(quote.targetPrice),
+        targetVerified:quote.targetSource==='KALSHI_FLOOR_STRIKE'&&
+         quote.contractRuleStatus==='BRTI_60S_RULE_TEXT_PRESENT',
+        yesAsk:qFresh?safe(quote.yesAsk):null,
+        noAsk:qFresh?safe(quote.noAsk):null,
+        yesBid:qFresh?safe(quote.yesBid):null,
+        noBid:qFresh?safe(quote.noBid):null
+       },
+       spot:{
+        status:spotQuote.status,price:spotQuote.status==='live'?safe(spotQuote.price):null,
+        fetchedAt:spotQuote.fetchedAt||null,source:spotQuote.source||null,
+        isSettlementIndex:false
+       },
+       chart,manual,
+       forecastValidation:{qualified:0,required:100},
+       ordersEnabled:false,executionAuthorized:false
+      };
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8',
+       'Cache-Control':'private, no-store'});
+      res.end(JSON.stringify(payload));
+    }catch{
+      res.writeHead(503,{'Content-Type':'application/json; charset=utf-8',
+       'Cache-Control':'private, no-store'});
+      res.end(JSON.stringify({version:'CASH_MOBILE_V3_MARKET_V1',
+       state:'UNAVAILABLE',ordersEnabled:false,executionAuthorized:false,
+       chart:null,manual:{call:'WAIT'},quote:null,spot:null}));
+    }
+    return;
   }
   if(req.method==='GET'&&req.url==='/manual-calls-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8',
