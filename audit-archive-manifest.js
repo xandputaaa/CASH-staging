@@ -6,7 +6,12 @@ const SHA=/^[a-f0-9]{64}$/;
 function readSegment(file,{limit=650}={}){
  // Bind verification to one opened inode. A path-only lstat/read pair can
  // follow a swapped symlink or read a different file between those calls.
- const fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
+ let fd;
+ try{fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW)}
+ catch(error){
+  if(error?.code==='ELOOP')throw Error('Unsafe archive segment: symbolic link refused');
+  throw error;
+ }
  let bytes;
  try{
   const before=fs.fstatSync(fd);
