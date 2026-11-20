@@ -6,6 +6,6 @@ test('production start does not run test suites against mounted live audit data'
  assert.equal(pkg.scripts.start,'node server.js');
  assert.match(pkg.scripts.test,/node --test tests\/\*\.test\.js/);
  const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
- assert.match(server,/runStartupSmoke\(\{port\}\)/);
+ assert.match(server,/runStartupSmoke\(\{port,authorization:/);
  assert.match(server,/createShadowLiveFeed\(\{quotes:venueFeeds,spot:feed\}\)/);
 });

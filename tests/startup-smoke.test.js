@@ -31,3 +31,32 @@ test('missing script and forged trading gate fail startup smoke independently of
  assert.ok(r.failedPaths.some(x=>x.includes('/live-paper.js')));
  assert.ok(r.failedPaths.some(x=>x.includes('/api/live-check')));
 });
+
+test('private startup smoke forwards credentials to all seven loopback checks',async()=>{
+ const authorization='Basic '+Buffer.from('cash:valid-test-only').toString('base64');
+ let calls=0;
+ const r=await runStartupSmoke({authorization,read:async(port,path,timeoutMs,passed)=>{
+  assert.equal(passed,authorization);
+  assert.equal(timeoutMs,12000);
+  calls++;
+  return fake(port,path);
+ }});
+ assert.equal(r.passed,true);
+ assert.equal(calls,7);
+});
+test('readLocal transmits optional authorization over loopback only',async()=>{
+ const http=require('node:http');
+ const {readLocal}=require('../startup-smoke');
+ const auth='Basic '+Buffer.from('cash:loopback-only').toString('base64');
+ const server=http.createServer((req,res)=>{
+  res.writeHead(req.headers.authorization===auth?200:401,
+   {'Content-Type':'text/plain'});
+  res.end('status');
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ try{
+  const port=server.address().port;
+  assert.equal((await readLocal(port,'/smoke',3000,auth)).status,200);
+  assert.equal((await readLocal(port,'/smoke',3000)).status,401);
+ }finally{await new Promise(resolve=>server.close(resolve))}
+});

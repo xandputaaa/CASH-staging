@@ -5,10 +5,11 @@
  * requirement for the service to start. No public exchange orders or keys.
  */
 const http=require('node:http');
-function readLocal(port,path,timeoutMs=12000){
+function readLocal(port,path,timeoutMs=12000,authorization){
  return new Promise((resolve,reject)=>{
   const req=http.get({hostname:'127.0.0.1',port,path,
-   headers:{'User-Agent':'CASH-local-startup-smoke/1.0'}},res=>{
+   headers:{'User-Agent':'CASH-local-startup-smoke/1.0',
+    ...(authorization?{Authorization:authorization}:{})}},res=>{
    let buf='';res.setEncoding('utf8');
    res.on('data',chunk=>{buf+=chunk;if(buf.length>450000)req.destroy(new Error('Oversized response'))});
    res.on('end',()=>resolve({status:res.statusCode,
@@ -18,7 +19,7 @@ function readLocal(port,path,timeoutMs=12000){
   req.on('error',reject);
  });
 }
-async function runStartupSmoke({port=3000,read=readLocal}={}){
+async function runStartupSmoke({port=3000,read=readLocal,authorization}={}){
  const routes=[
   {path:'/',accept:x=>x.status===200&&x.body.includes('id="cashSimple"')&&
    x.body.includes('id="modeAdvanced"')&&x.body.includes('id="livePaperLab"')},
@@ -40,7 +41,7 @@ async function runStartupSmoke({port=3000,read=readLocal}={}){
  const failures=[];let live=null;
  for(const route of routes){
   try{
-   const response=await read(port,route.path);
+   const response=await read(port,route.path,12000,authorization);
    if(!route.accept(response))failures.push(route.path+' rejected');
    if(route.path==='/api/live-check'&&response.status===200)
     live=JSON.parse(response.body);
