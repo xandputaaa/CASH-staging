@@ -1,0 +1,20 @@
+{
+  "version": "CASH_PUBLIC_LATE_GITHUB_OBSERVER_ORIGIN_V1",
+  "sourceWorkflow": "CASH pre-expiry public research observer",
+  "runId": "44690897847",
+  "event": "workflow_run",
+  "repository": "xandputaaa/CASH-staging",
+  "headBranch": "main",
+  "headSha": "b949b8b43daaa81b38d9a70b898ddfac7621cf69",
+  "parent": {
+    "id": "44690863171",
+    "name": "CASH Model Lab shadow public settlement recheck",
+    "event": "schedule",
+    "conclusion": "success",
+    "headBranch": "main",
+    "headRepository": "xandputaaa/CASH-staging"
+  },
+  "independentlyQualifiedCount": 0,
+  "ordersEnabled": false,
+  "note": "GitHub workflow-event metadata, cross-check with direct GitHub API before archiving. No independently certified trading prediction, inference-time BRTI calculation, executable quote, fill or profit."
+}
