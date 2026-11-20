@@ -49,3 +49,37 @@ test('offline factory fails closed for corrupted active journal and releases lea
   assert.equal(fs.existsSync(path.join(x.directory,'.shadow-journal-writer.lock')),false);
  }finally{fs.rmSync(x.directory,{recursive:true,force:true})}
 });
+
+test('offline factory preserves distinct archived and active pending identities',()=>{
+ const x=fixture();
+ try{
+  const marketId='KXBTC15M-TEST-654321';
+  const capture={id:'Kalshi:'+marketId,venue:'Kalshi',marketId,slug:null,
+   baselineName:'PUBLIC_MARKET_FAVORED_ASK_V1',baselineSide:'YES',
+   quoteSource:'Kalshi public YES/NO asks',normalizedMarketShare:0.6,
+   observedAsks:{YES:0.6,NO:0.4},spotCandidate:null,
+   serverCapturedAt:'2026-11-19T20:00:00.000Z',
+   quoteFetchedAt:'2026-11-19T19:59:59.000Z',
+   endTime:'2026-11-19T20:02:00.000Z',leadMs:120000};
+  const body={sequence:1,type:'CAPTURE',recordedAt:'2026-11-19T20:04:00.000Z',
+   payload:capture,previousHash:'GENESIS'};
+  const event={...body,hash:hashEvent(body)};
+  fs.writeFileSync(x.activeJournalPath,JSON.stringify(event)+'\n');
+  const result=createOfflineRecoveredMonitor({...x,maxEvents:4,maxRecords:2,
+   clock:()=>Date.parse('2026-11-19T20:05:00Z')});
+  assert.equal(result.snapshot.pending,2);
+  assert.equal(result.snapshot.archivedHistoricalCaptures,1);
+  assert.equal(result.snapshot.headHash,event.hash);
+  assert.equal(result.snapshot.capacity.pendingResolutionReservations,2);
+  assert.equal(fs.existsSync(path.join(x.directory,'.shadow-journal-writer.lock')),false);
+ }finally{fs.rmSync(x.directory,{recursive:true,force:true})}
+});
+test('offline factory refuses insufficient event and record capacity before exposing snapshot',()=>{
+ const x=fixture();
+ try{
+  for(const limits of [{maxEvents:0,maxRecords:2},{maxEvents:4,maxRecords:0}]){
+   assert.throws(()=>createOfflineRecoveredMonitor({...x,...limits}),/capacity|Invalid monitor capacity limits/i);
+   assert.equal(fs.existsSync(path.join(x.directory,'.shadow-journal-writer.lock')),false);
+  }
+ }finally{fs.rmSync(x.directory,{recursive:true,force:true})}
+});
