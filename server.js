@@ -33,6 +33,8 @@ const viewModeScript=fs.readFileSync('view-mode.js');
 const simpleUiScript=fs.readFileSync('simple-ui.js');
 const {assessKalshi15}=require('./kalshi15-readiness');
 const {manualAssist}=require('./manual-live-assist');
+const {makeManualCalls}=require('./manual-entry-exit-calls');
+const manualCallsScript=fs.readFileSync('manual-calls-ui.js');
 const manualAssistScript=fs.readFileSync('manual-assist-ui.js');
 const {createKalshiFeeFeed}=require('./kalshi-fees');
 const {assessCognition}=require('./cash-cognition');
@@ -274,6 +276,50 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/kalshi15-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
     res.end(kalshi15Script);return;
+  }
+  if(req.method==='GET'&&req.url==='/manual-calls-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8',
+      'Cache-Control':'no-store'});
+    res.end(manualCallsScript);return;
+  }
+  if(['GET','POST'].includes(req.method)&&req.url==='/api/manual-calls'){
+    res.setHeader('Cache-Control','no-store, private');
+    const reply=(status,obj)=>{
+      res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});
+      res.end(JSON.stringify(obj));
+    };
+    let position=null;
+    if(req.method==='POST'){
+      if(req.headers['sec-fetch-site']==='cross-site'){reply(403,{error:'CROSS_SITE_REQUEST_REJECTED'});return}
+      if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')){
+        reply(415,{error:'JSON_REQUIRED'});return;
+      }
+      try{
+        let buf='';for await(const chunk of req){
+          buf+=chunk;
+          if(buf.length>800){reply(413,{error:'REQUEST_TOO_LARGE'});return}
+        }
+        const body=JSON.parse(buf);
+        if(!body||typeof body!=='object'||Array.isArray(body)||
+           !Object.hasOwn(body,'position'))throw Error('Invalid request');
+        position=body.position;
+      }catch{reply(400,{error:'INVALID_MANUAL_POSITION'});return}
+    }
+    try{
+      const [quote,fees,spotQuote]=await Promise.all([
+        venueFeeds.query('Kalshi'),kalshiFeeFeed.query(),feed.update()]);
+      // Official BRTI is internal-only and never serialized as raw prices.
+      const official=brtiFeed.forecastingEnabled()?brtiFeed.internal():null;
+      const report=makeManualCalls({quote,fees,spot:official||spotQuote,position});
+      reply(200,report);
+    }catch{
+      reply(503,{version:'CASH_MANUAL_CALLS_V1',call:'WAIT',
+        mode:'EXPERIMENTAL_MANUAL_RESEARCH_ONLY',
+        blockers:['SOURCE_UNAVAILABLE'],entry:null,position:null,
+        automaticTradingEnabled:false,ordersPlaced:0,
+        tradingAuthorization:false,calibratedWinProbability:null,expectedValue:null});
+    }
+    return;
   }
   if(req.method==='GET'&&req.url==='/manual-assist-ui.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});
