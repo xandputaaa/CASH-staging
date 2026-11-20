@@ -19,6 +19,12 @@ const {assessArchivedPendingCapacity}=require('./audit-archive-pending-capacity'
 function withLeasedArchiveRecovery(options,operation){
  if(!options||typeof options!=='object')throw Error('Archive recovery options required');
  if(typeof operation!=='function')throw Error('Synchronous recovery consumer required');
+ // A lock only protects the directory where cooperating writers append.
+ // Never claim protection while reading a different active journal.
+ if(!path.isAbsolute(options.directory||'')||
+    !path.isAbsolute(options.activeJournalPath||'')||
+    path.resolve(options.activeJournalPath)!==path.join(path.resolve(options.directory),'shadow-events.jsonl'))
+  throw Error('Leased recovery active journal must belong to locked directory');
  return withExclusiveJournalLease({directory:options.directory},()=>{
   const initialDigest=digestActive(options.activeJournalPath);
   const plan=planArchivedPendingHydration(options);
