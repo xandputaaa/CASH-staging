@@ -26,7 +26,7 @@ jobs:
           if [[ -n "${CASH_RESEARCH_PASSWORD:-}" ]]; then
             auth=(--user "cash:${CASH_RESEARCH_PASSWORD}")
           fi
-          status="$(curl --silent --show-error --location \
+          status="$(curl --silent --show-error --max-redirs 0 \
             --connect-timeout 10 --max-time 30 --retry 2 \
             --max-filesize 2621440 "${auth[@]}" \
             --write-out '%{http_code}' \
@@ -117,7 +117,7 @@ jobs:
           if [[ -n "${CASH_RESEARCH_PASSWORD:-}" ]]; then
             auth=(--user "cash:${CASH_RESEARCH_PASSWORD}")
           fi
-          if curl --fail --silent --show-error --location \
+          if curl --fail --silent --show-error --max-redirs 0 \
             --connect-timeout 10 --max-time 30 --retry 1 \
             --max-filesize 2621440 "${auth[@]}" \
             'https://cash-simulation-web-staging.up.railway.app/api/late-checkpoint/export' \
