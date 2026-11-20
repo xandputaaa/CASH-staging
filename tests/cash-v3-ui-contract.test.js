@@ -28,7 +28,7 @@ test('new market chart does not embed fictitious price candles or demo chart gen
  const js=read('cash-v3.js'),html=read('index.html');
  assert.match(js,/fetch\('\/api\/cash-v3\/market'/);
  assert.match(js,/Number\.isFinite\(p\?\.t\)/);
- assert.match(js,/NO entry/);
+ assert.match(js,/No entry/);
  assert.match(html,/No synthetic market motion/);
  assert.doesNotMatch(js,/Math\.random\(/);
  assert.doesNotMatch(js,/Math\.sin\(/);
