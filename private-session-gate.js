@@ -5,6 +5,43 @@ const {createHmac,randomBytes,timingSafeEqual}=require('node:crypto');
 const {authorized}=require('./private-access-gate');
 const COOKIE='cash_session',DURATION=7*24*60*60*1000;
 const failures=new Map();
+
+const CSRF_COOKIE='cash_login_csrf',CSRF_TTL=20*60*1000;
+function csrfMac(payload,secret){
+ return createHmac('sha256',secret).update('CASH_LOGIN_CSRF_V1\0'+payload).digest();
+}
+function newCsrfToken(secret,now=Date.now()){
+ const payload=Buffer.from(JSON.stringify({
+  version:1,issued:now,nonce:randomBytes(20).toString('hex')
+ })).toString('base64url');
+ return payload+'.'+csrfMac(payload,secret).toString('base64url');
+}
+function verifyCsrfToken(token,secret,now=Date.now()){
+ if(typeof token!=='string'||token.length>512||
+  !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token))return false;
+ const [payload,rawMac]=token.split('.');
+ let mac,data;
+ try{
+  mac=Buffer.from(rawMac,'base64url');
+  data=JSON.parse(Buffer.from(payload,'base64url').toString('utf8'));
+ }catch{return false}
+ const expected=csrfMac(payload,secret);
+ return mac.length===expected.length&&timingSafeEqual(mac,expected)&&
+  data?.version===1&&Number.isSafeInteger(data.issued)&&
+  now-data.issued>=-60000&&now-data.issued<=CSRF_TTL&&
+  typeof data.nonce==='string'&&/^[0-9a-f]{40}$/.test(data.nonce);
+}
+function checkLoginCsrf(req,formToken,secret,now=Date.now()){
+ const cookieHeader=req.headers.cookie;
+ if(typeof cookieHeader!=='string'||cookieHeader.length>8192)return false;
+ const cookies=cookieHeader.split(';').map(x=>x.trim()).filter(x=>x.startsWith(CSRF_COOKIE+'='));
+ if(cookies.length!==1)return false;
+ const cookieToken=cookies[0].slice(CSRF_COOKIE.length+1);
+ if(!verifyCsrfToken(formToken,secret,now)||!verifyCsrfToken(cookieToken,secret,now))return false;
+ const a=Buffer.from(formToken),b=Buffer.from(cookieToken);
+ return a.length===b.length&&timingSafeEqual(a,b);
+}
+
 function makeMAC(body,secret){
  return createHmac('sha256',secret).update('CASH_PRIVATE_SESSION_V1\0'+body).digest();
 }
@@ -45,8 +82,9 @@ function securityHeaders(res){
  res.setHeader('Content-Security-Policy',
   "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
 }
-function loginPage({error=false,throttled=false}={}){
+function loginPage({error=false,throttled=false,csrfExpired=false,csrfToken=''}={}){
  const notice=throttled?'Too many attempts. Please try again in a minute.':
+  csrfExpired?'This sign-in page expired. Reload it and enter your password again.':
   error?'Incorrect password. Check your saved CASH passphrase and try again.':'';
  return '<!doctype html><html lang="en"><head><meta charset="utf-8">'+
  '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'+
@@ -64,7 +102,9 @@ function loginPage({error=false,throttled=false}={}){
  '<div class="brand"><div class="orb">C·</div><div><div class="name">CASH</div><div class="sub">PRIVATE MARKET INTELLIGENCE</div></div></div>'+
  '<h1>Private access.</h1><p>Enter the CASH family-and-friends research passphrase to open your dashboard.</p>'+
  (notice?'<div role="alert" class="msg">'+notice+'</div>':'')+
- '<form method="post" action="/cash-login"><label for="password">CASH PASSWORD</label>'+
+ '<form method="post" action="/cash-login">'+
+ '<input type="hidden" name="csrf" value="'+csrfToken+'">'+
+ '<label for="password">CASH PASSWORD</label>'+
  '<input id="password" type="password" name="password" autocomplete="current-password" required maxlength="512" placeholder="Enter your passphrase">'+
  '<button type="submit">Unlock CASH</button></form>'+
  '<div class="foot">Private research only · No automatic trading<br>Secure session · Your password is never displayed</div>'+
@@ -73,7 +113,10 @@ function loginPage({error=false,throttled=false}={}){
 function loginResponse(res,status,options={}){
  securityHeaders(res);
  if(options.throttled)res.setHeader('Retry-After','60');
- res.writeHead(status);res.end(loginPage(options));
+ const csrfToken=newCsrfToken(options.secret,options.now??Date.now());
+ res.setHeader('Set-Cookie',CSRF_COOKIE+'='+csrfToken+
+  '; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=1200');
+ res.writeHead(status);res.end(loginPage({...options,csrfToken}));
 }
 function redirect(res,{setCookie=null}={}){
  res.setHeader('Cache-Control','no-store, private');
@@ -114,15 +157,14 @@ async function privateSessionGate(req,res,secret){
  const basic=authorized(req.headers.authorization,secret);
  const valid=sessionCookie(req,secret);
  if(path==='/cash-login'&&req.method==='POST'){
-  if(!sameOrigin(req)){
-   res.setHeader('Cache-Control','no-store');res.writeHead(403);res.end('Forbidden');return true;
-  }
+  // Safari and embedded browser origin headers vary. Require a browser-bound
+  // signed form token instead of rejecting legitimate same-site submissions.
   const now=Date.now();
   if(tooManyAttempts(req,now)){
-   loginResponse(res,429,{throttled:true});return true;
+   loginResponse(res,429,{throttled:true,secret,now});return true;
   }
   if(!/^application\/x-www-form-urlencoded(?:;|$)/i.test(req.headers['content-type']||'')){
-   loginResponse(res,415,{error:true});return true;
+   loginResponse(res,415,{error:true,secret,now});return true;
   }
   let text='',overflow=false;
   try{
@@ -135,6 +177,9 @@ async function privateSessionGate(req,res,secret){
    res.setHeader('Cache-Control','no-store');res.writeHead(413);res.end('Request too large');return true;
   }
   const form=new URLSearchParams(text);
+  if(!checkLoginCsrf(req,form.get('csrf'),secret,now)){
+   loginResponse(res,403,{csrfExpired:true,secret,now});return true;
+  }
   const attempted=form.get('password');
   if(typeof attempted==='string'&&attempted.length<=512&&
    authorized('Basic '+Buffer.from('cash:'+attempted).toString('base64'),secret)){
@@ -143,7 +188,7 @@ async function privateSessionGate(req,res,secret){
     '; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800'});
   }else{
    failedAttempt(req,now);
-   loginResponse(res,401,{error:true});
+   loginResponse(res,401,{error:true,secret,now});
   }
   return true;
  }
@@ -162,7 +207,7 @@ async function privateSessionGate(req,res,secret){
   return false;
  }
  if((path==='/'||path==='/cash-login')&&req.method==='GET'){
-  loginResponse(res,200);return true;
+  loginResponse(res,200,{secret});return true;
  }
  // Do not send WWW-Authenticate: Safari must not reopen a Basic dialog.
  res.setHeader('Cache-Control','no-store, private');
@@ -170,4 +215,4 @@ async function privateSessionGate(req,res,secret){
  res.writeHead(401);res.end('{"error":"CASH_LOGIN_REQUIRED"}');
  return true;
 }
-module.exports={newToken,checkToken,loginPage,privateSessionGate};
+module.exports={newToken,checkToken,newCsrfToken,verifyCsrfToken,checkLoginCsrf,loginPage,privateSessionGate};
