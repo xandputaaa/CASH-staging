@@ -12,7 +12,7 @@ function digestActive(file){
   throw Error('Unsafe active journal during leased recovery');
  const bytes=fs.readFileSync(file);
  if(bytes.length!==stat.size)throw Error('Active journal changed during leased recovery');
- return createHash('sha256').update(bytes).digest('hex');
+ return [stat.dev,stat.ino,createHash('sha256').update(bytes).digest('hex')].join(':');
 }
 function archiveDigests(options){
  const {verifyArchiveManifest}=require('./audit-archive-manifest');
@@ -23,7 +23,7 @@ function archiveDigests(options){
   if(!stat.isFile()||stat.isSymbolicLink())throw Error('Unsafe archive segment during leased recovery');
   const bytes=fs.readFileSync(file);
   if(bytes.length!==stat.size)throw Error('Archive segment changed during leased recovery');
-  return createHash('sha256').update(bytes).digest('hex');
+  return [stat.dev,stat.ino,createHash('sha256').update(bytes).digest('hex')].join(':');
  }).join(':');
 }
 const {planArchivedPendingHydration}=require('./audit-archive-pending-hydration-plan');
