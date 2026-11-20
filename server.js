@@ -1,5 +1,6 @@
 'use strict';
 const http=require('node:http'),fs=require('node:fs');
+const {privateAccessGate}=require('./private-access-gate');
 const {createMarketFeed}=require('./market-feed');
 const {createVenueFeeds}=require('./venue-feeds');
 const {createResolver}=require('./resolution-feed');
@@ -61,6 +62,7 @@ const lateCheckpoint=createLateCheckpointMonitor({
 const earlyMove=createEarlyMoveMonitor({quotes:venueFeeds,spot:feed});
 const shadowModelLab=createShadowLiveFeed({quotes:venueFeeds,spot:feed});
 const server=http.createServer(async(req,res)=>{
+  if(privateAccessGate(req,res,process.env.CASH_PRIVATE_ACCESS_PASSWORD))return;
   res.setHeader('Cache-Control','no-store');
   res.setHeader('Referrer-Policy','no-referrer');
   res.setHeader('X-Content-Type-Options','nosniff');
