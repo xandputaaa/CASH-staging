@@ -14,7 +14,7 @@ test('recovery cannot lease one directory while inspecting another active journa
    ()=>{called=true}),/must belong to locked directory/);
   assert.equal(called,false);
   assert.equal(fs.existsSync(path.join(locked,'.shadow-journal-writer.lock')),false);
- });
+ }
  finally{fs.rmSync(root,{recursive:true,force:true})}
 });
 test('recovery refuses unexpected active journal filename even in locked directory',()=>{
