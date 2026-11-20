@@ -1,6 +1,8 @@
 'use strict';
 const http=require('node:http'),fs=require('node:fs');
 const {privateAccessGate}=require('./private-access-gate');
+const {assertSafeStartupConfiguration}=require('./startup-configuration-gate');
+assertSafeStartupConfiguration();
 const {createMarketFeed}=require('./market-feed');
 const {createVenueFeeds}=require('./venue-feeds');
 const {createResolver}=require('./resolution-feed');
