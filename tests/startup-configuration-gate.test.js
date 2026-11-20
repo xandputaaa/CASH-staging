@@ -20,3 +20,8 @@ test('startup refuses archive manifest even when directory is external to audit 
   assert.throws(()=>assertSafeStartupConfiguration({CASH_ARCHIVE_DIR:dir}),/External archived manifest/);
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
+
+test('cutover cannot be selected without exclusive live recovery flags',()=>{
+ assert.throws(()=>assertSafeStartupConfiguration({CASH_ONE_TIME_ARCHIVE_CUTOVER:'yes'}),/Invalid/);
+ assert.throws(()=>assertSafeStartupConfiguration({CASH_ONE_TIME_ARCHIVE_CUTOVER:'1'}),/requires explicit exclusive/);
+});
