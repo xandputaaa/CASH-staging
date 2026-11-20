@@ -66,6 +66,7 @@ function withLeasedArchiveRecovery(options,operation){
    liveStartupEnabled:false,automaticRolloverEnabled:false}));
   if(result&&typeof result.then==='function')
    throw Error('Async archive recovery consumer unsupported');
+  assertManifestStable();
   if(digestActive(options.activeJournalPath)!==initialDigest)
    throw Error('Active journal changed during leased recovery');
   if(archiveDigests(options)!==initialArchiveDigests)
