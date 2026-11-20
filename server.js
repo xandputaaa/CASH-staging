@@ -2,6 +2,7 @@
 const http=require('node:http'),fs=require('node:fs');
 const {privateAccessGate}=require('./private-access-gate');
 const {privateSessionGate}=require('./private-session-gate');
+const {runPrivateLoginSmoke}=require('./private-login-smoke');
 const {assertSafeStartupConfiguration}=require('./startup-configuration-gate');
 if(process.env.CASH_ONE_TIME_ARCHIVE_CUTOVER==='1'){
   if(process.env.CASH_ARCHIVE_LIVE_RECOVERY!=='1'||
@@ -628,6 +629,11 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
       ', orders=DISABLED, validated=0/100'+
       (r.failedPaths.length?' failed='+r.failedPaths.join(','):''));
   }).catch(()=>console.log('CASH HTTP startup smoke: UNAVAILABLE, trading=DISABLED'));
+  runPrivateLoginSmoke({port,password:process.env.CASH_PRIVATE_ACCESS_PASSWORD})
+   .then(r=>console.log('CASH browser login smoke: '+r.steps+'/'+r.checks+
+    ', state='+r.state+', orders=DISABLED'+
+    (r.failedSteps.length?' failed='+r.failedSteps.join(','):'')))
+   .catch(()=>console.log('CASH browser login smoke: UNVERIFIED, orders=DISABLED'));
 
 });
 module.exports={server};
