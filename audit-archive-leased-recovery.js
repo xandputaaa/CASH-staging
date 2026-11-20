@@ -38,14 +38,27 @@ function withLeasedArchiveRecovery(options,operation){
     path.resolve(options.activeJournalPath)!==path.join(path.resolve(options.directory),'shadow-events.jsonl'))
   throw Error('Leased recovery active journal must belong to locked directory');
  return withExclusiveJournalLease({directory:options.directory},()=>{
+  // Recovery must not accept changes to the caller-provided manifest between
+  // its independent verification passes or while the consumer is running.
+  const manifestSnapshot=JSON.stringify(options.manifest);
+  if(typeof manifestSnapshot!=='string')throw Error('Archive recovery manifest required');
+  const assertManifestStable=()=>{
+   if(JSON.stringify(options.manifest)!==manifestSnapshot)
+    throw Error('Archive manifest changed during leased recovery');
+  };
   const initialDigest=digestActive(options.activeJournalPath);
   const initialArchiveDigests=archiveDigests(options);
+  assertManifestStable();
   const plan=planArchivedPendingHydration(options);
+  assertManifestStable();
   const capacity=assessArchivedPendingCapacity(options);
+  assertManifestStable();
   if(capacity.state!=='ARCHIVED_PENDING_CAPACITY_RESERVED')
    throw Error('Archive recovery capacity blocked: '+capacity.reason);
+  assertManifestStable();
   if(digestActive(options.activeJournalPath)!==initialDigest)
    throw Error('Active journal changed during leased recovery');
+  assertManifestStable();
   if(archiveDigests(options)!==initialArchiveDigests)
    throw Error('Archive segments changed during leased recovery');
   const result=operation(Object.freeze({plan,capacity,
@@ -57,6 +70,7 @@ function withLeasedArchiveRecovery(options,operation){
    throw Error('Active journal changed during leased recovery');
   if(archiveDigests(options)!==initialArchiveDigests)
    throw Error('Archive segments changed during leased recovery');
+  assertManifestStable();
   return result;
  });
 }
