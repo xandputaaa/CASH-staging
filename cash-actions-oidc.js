@@ -77,8 +77,8 @@ async function verifiedGithubIdentity(token,{fetchImpl=fetch,now=Date.now()}={})
    !ALLOWED_WORKFLOWS.has(claims.workflow_ref)||
    !Number.isInteger(claims.iat)||!Number.isInteger(claims.exp)||
    claims.iat>t+60||claims.iat<t-900||claims.exp<=t||
-   claims.exp>claims.iat+900||
-   (claims.nbf!==undefined&&(!Number.isInteger(claims.nbf)||claims.nbf>t+60)))
+   claims.exp<=claims.iat||claims.exp>claims.iat+900||
+   (claims.nbf!==undefined&&(!Number.isInteger(claims.nbf)||claims.nbf>t)))
    return null;
   return {repository:claims.repository,workflow:claims.workflow_ref,
    event:claims.event_name};

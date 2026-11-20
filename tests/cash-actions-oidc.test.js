@@ -47,6 +47,9 @@ test('untrusted events, branches, repos, workflow paths and expired tokens all f
   {workflow_ref:'xandputaaa/CASH-staging/.github/workflows/evil.yml@refs/heads/main'},
   {iat:Math.floor(NOW/1000)-1300,exp:Math.floor(NOW/1000)+20},
   {exp:Math.floor(NOW/1000)-1},
+  {iat:Math.floor(NOW/1000)+30,exp:Math.floor(NOW/1000)+30}, // exp equals iat
+  {iat:Math.floor(NOW/1000)+30,exp:Math.floor(NOW/1000)+20}, // exp precedes iat
+  {nbf:Math.floor(NOW/1000)+1}, // not yet valid, even within clock tolerance
   {nbf:Math.floor(NOW/1000)+300}
  ];
  for(const o of overrides)assert.equal(await verifiedGithubIdentity(signed(o),{
