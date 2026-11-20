@@ -53,7 +53,7 @@ test('malformed JSON and oversized successful responses remain distinct, private
  assert.equal(diagnostics.late.forecastCount,null);
  assert.equal(diagnostics.early.independentQualifiedCount,0);
  assert.equal(diagnostics.late.independentQualifiedCount,0);
- assert.doesNotMatch(JSON.stringify(diagnostics),/SECRET_JSON|2500001|https:\\/\\/|Bearer/);
+ assert.doesNotMatch(JSON.stringify(diagnostics),/SECRET_JSON|2500001|https:|Bearer/);
 });
 test('aborted public requests are classified as timeout, never an empty journal',async()=>{
  const diagnostics=await inspect(async()=>{
