@@ -12,7 +12,9 @@
   receivedAt=0,seriesShown=[],geometry=null,requestId=0;
  // Retain existing tools and event handlers, but move them into collapsible
  // secondary screens so the initial viewport never becomes a 20-panel wall.
- const primary=el('cashManualCalls'),target=el('v3AssistMain');
+ const primary=el('cashManualCalls'),target=el('v3PositionInput');
+ const assist=el('cashManualAssist'),assistTarget=el('v3AssistMain');
+ if(assist&&assistTarget)assistTarget.appendChild(assist);
  if(primary&&target)target.appendChild(primary);
  function movePanel(id,destination,title){
   const node=el(id),container=el(destination);
@@ -25,7 +27,7 @@
   slot.className='v3-legacy-slot';slot.appendChild(node);
   wrapper.append(heading,slot);container.appendChild(wrapper);
  }
- [['cashManualAssist','Manual risk calculator'],['cashOrderVerify','Verified order lookup']]
+ [['cashOrderVerify','Verified order lookup']]
   .forEach(row=>movePanel(row[0],'v3AssistExtra',row[1]));
  [['cashProspective','Forward forecast journal'],['cashLateCheckpoint','Late checkpoint'],
   ['cashEvaluation','Evidence evaluation'],['cashSettlementCall','Settlement research'],
@@ -40,9 +42,9 @@
  const legacyMain=document.querySelector('body > main');
  if(legacyMain)legacyMain.hidden=true;
  function navigate(next){
-  if(!['market','assist','lab','system'].includes(next))return;
+  if(!['market','position','assist','lab','system'].includes(next))return;
   page=next;
-  for(const name of ['market','assist','lab','system']){
+  for(const name of ['market','position','assist','lab','system']){
    el('v3'+name[0].toUpperCase()+name.slice(1)).dataset.visible=String(name===page);
   }
   shell.querySelectorAll('[data-v3-nav]').forEach(btn=>
@@ -52,6 +54,8 @@
  }
  shell.querySelectorAll('[data-v3-nav]').forEach(btn=>btn.addEventListener('click',()=>navigate(btn.dataset.v3Nav)));
  el('v3AssistJump').addEventListener('click',()=>navigate('assist'));
+ el('v3PositionJump').addEventListener('click',()=>navigate('position'));
+ el('v3PositionMarket').addEventListener('click',()=>navigate('market'));
  shell.querySelectorAll('[data-v3-series]').forEach(btn=>btn.addEventListener('click',()=>{
   chartType=btn.dataset.v3Series;
   shell.querySelectorAll('[data-v3-series]').forEach(x=>x.setAttribute('aria-pressed',String(x===btn)));
@@ -62,6 +66,78 @@
   shell.querySelectorAll('[data-v3-range]').forEach(x=>x.setAttribute('aria-pressed',String(x===btn)));
   renderChart();
  }));
+
+ // A manually entered fill is not proof of an actual Kalshi position.
+ const posSet=(id,value)=>{const x=el(id);if(x)x.textContent=value};
+ const money=n=>Number.isFinite(n)?(n<0?'−$':'$')+Math.abs(n).toFixed(2):'—';
+ const signed=n=>Number.isFinite(n)?(n<0?'−$':'+$')+Math.abs(n).toFixed(2):'—';
+ function resetPosition(summary){
+  for(const id of ['v3PosPnl','v3PosQty','v3PosEntry','v3PosBid',
+   'v3PosCost','v3PosMarketValue','v3PosProceeds','v3PosBreakeven',
+   'v3PosFees','v3PosWin','v3PosLose'])posSet(id,'—');
+  el('v3PosPnl').removeAttribute('data-direction');
+  posSet('v3PosPercent','A current exit bid and source-verified fee metadata are required.');
+  posSet('v3PosReliability',summary||'No actual Kalshi fills are imported. Positions are entered manually and only held in this tab.');
+ }
+ document.addEventListener('cash:position-snapshot',event=>{
+  const packet=event.detail||{},tracked=packet.tracked,out=packet.snapshot;
+  if(!tracked){
+   posSet('v3PosState','NOT TRACKED');
+   posSet('v3PosName','No contract tracked');
+   posSet('v3PosContract','Choose your actual YES or NO fill below.');
+   resetPosition();
+   return;
+  }
+  const validEntry=['YES','NO'].includes(tracked.side)&&
+   Number.isSafeInteger(tracked.contracts)&&tracked.contracts>=1&&tracked.contracts<=100&&
+   Number.isFinite(tracked.entryPrice)&&tracked.entryPrice>=.01&&tracked.entryPrice<=.99&&
+   typeof tracked.marketId==='string';
+  posSet('v3PosName',validEntry?'BTC 15M · '+tracked.side:'Invalid manual position');
+  posSet('v3PosContract',validEntry?tracked.marketId:'Position entry failed validation');
+  if(!validEntry){posSet('v3PosState','RECHECK');resetPosition();return}
+  posSet('v3PosQty',String(tracked.contracts));
+  posSet('v3PosEntry',(tracked.entryPrice*100).toFixed(1)+'¢');
+  // Market rollover, expired metadata, hidden-tab clearing and any unsafe
+  // response always remove the displayed P&L, not preserve past prices.
+  const p=out?.position,stamp=Date.parse(out?.at);
+  const validated=out?.version==='CASH_MANUAL_CALLS_V1'&&
+   out?.mode==='EXPERIMENTAL_MANUAL_RESEARCH_ONLY'&&
+   out?.marketId===tracked.marketId&&
+   out?.automaticTradingEnabled===false&&out?.ordersPlaced===0&&
+   out?.tradingAuthorization===false&&
+   out?.calibratedWinProbability===null&&out?.expectedValue===null&&
+   Number.isFinite(stamp)&&Date.now()-stamp>=-2000&&Date.now()-stamp<=21000&&
+   p?.side===tracked.side&&p?.contracts===tracked.contracts&&
+   p?.entryPrice===tracked.entryPrice&&
+   p?.pricesAreNonExecutable===true&&p?.noPositionDataStored===true&&
+   Number.isFinite(p?.observedExitBid)&&Number.isFinite(p?.estimatedNetPnlUsd)&&
+   Number.isFinite(p?.estimatedNetProceeds)&&Number.isFinite(p?.estimatedEntryTotal)&&
+   Number.isFinite(p?.estimatedEntryFee)&&Number.isFinite(p?.estimatedExitFee)&&
+   p.estimatedEntryTotal<=10.000001;
+  if(!validated){
+   posSet('v3PosState','EXIT RECHECK');
+   resetPosition('Unverified or expired exit quote, fee metadata, or market match. CASH refuses to display a cached P&L. Check the live Kalshi contract yourself.');
+   posSet('v3PosQty',String(tracked.contracts));
+   posSet('v3PosEntry',(tracked.entryPrice*100).toFixed(1)+'¢');
+   return;
+  }
+  const n=tracked.contracts,cost=p.estimatedEntryTotal,profit=p.estimatedNetPnlUsd;
+  posSet('v3PosState','INDICATIVE / LIVE');
+  posSet('v3PosPnl',signed(profit));
+  el('v3PosPnl').dataset.direction=profit>=0?'up':'down';
+  posSet('v3PosPercent',(profit>=0?'+':'')+(profit/cost*100).toFixed(2)+'% of estimated entry cost · unrealized');
+  posSet('v3PosBid',(p.observedExitBid*100).toFixed(1)+'¢');
+  posSet('v3PosCost',money(cost));
+  posSet('v3PosMarketValue',money(p.observedExitBid*n));
+  posSet('v3PosProceeds',money(p.estimatedNetProceeds));
+  posSet('v3PosBreakeven',Number.isFinite(p.illustrativeBreakEvenBid)?
+    (p.illustrativeBreakEvenBid*100).toFixed(1)+'¢':'—');
+  posSet('v3PosFees',money(p.estimatedEntryFee)+' / '+money(p.estimatedExitFee));
+  posSet('v3PosWin',signed(n-cost));
+  posSet('v3PosLose',signed(-cost));
+  posSet('v3PosReliability','Observed '+tracked.side+' bid · modeled taker fees, not actual brokerage fees. Figures assume an immediate fill at the displayed bid, which is NOT guaranteed. No real position or order verified.');
+ });
+
  const reason=x=>String(x||'').replaceAll('_',' ').toLowerCase();
  function unavailable(message){
   el('v3Connection').classList.remove('live');
