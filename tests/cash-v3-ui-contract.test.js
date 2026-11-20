@@ -8,9 +8,9 @@ test('CASH v3 client, feed and existing server scripts parse in Node',()=>{
  for(const file of ['cash-v3.js','cash-v3-chart-feed.js','server.js'])
   assert.doesNotThrow(()=>execFileSync(process.execPath,['--check',path.join(base,file)]));
 });
-test('mobile-first navigation is four clear destinations with hidden research modules',()=>{
+test('mobile-first navigation includes contract positions and hidden research modules',()=>{
  const html=read('index.html'),js=read('cash-v3.js'),css=read('cash-v3.css');
- for(const name of ['market','assist','lab','system']){
+ for(const name of ['market','position','assist','lab','system']){
   assert.match(html,new RegExp('data-v3-nav="'+name+'"'));
   assert.match(html,new RegExp('id="v3'+name[0].toUpperCase()+name.slice(1)+'"'));
  }
