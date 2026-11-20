@@ -6,13 +6,15 @@
  */
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {observeShadowSnapshot}=require('./cash-shadow-observer');
+const {githubRunnerReadHeaders}=require('./cash-runner-read-auth');
 const URL='https://cash-simulation-web-staging.up.railway.app/api/model-lab/shadow/export';
 const SHA=x=>crypto.createHash('sha256').update(x).digest('hex');
 async function getPublicSnapshot(url,{fetchImpl=fetch}={}){
  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),15000);
  try{
+  const auth=await githubRunnerReadHeaders();
   const res=await fetchImpl(url,{signal:ctl.signal,redirect:'error',headers:{
-   Accept:'application/json','User-Agent':'CASH-shadow-GitHub-observer/1.0'
+   Accept:'application/json','User-Agent':'CASH-shadow-GitHub-observer/1.0',...auth
   }});
   if(!res.ok)throw Error('SHADOW_SOURCE_HTTP_'+res.status);
   const body=await res.text();
