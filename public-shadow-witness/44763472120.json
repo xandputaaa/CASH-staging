@@ -1,0 +1,28 @@
+{
+  "version": "CASH_SHADOW_GITHUB_PUBLIC_OBSERVATION_V1",
+  "provenance": "GITHUB_RUNNER_FETCH_AFTER_NETWORK_RESPONSE",
+  "sourceUrl": "https://cash-simulation-web-staging.up.railway.app/api/model-lab/shadow/export",
+  "sourceSha256": "a4f6a538c745693316aacbac20a78848d8e2bcd654a59adf24120c1698bbf804",
+  "githubRunId": "44763472120",
+  "githubRepository": "xandputaaa/CASH-staging",
+  "githubCommitSha": "a235b7af9e000a0a344aa6cf4cf0a907fdf96e32",
+  "observedAtRunner": "2026-11-20T15:27:43.490Z",
+  "status": "OBSERVED_PREEXPIRY",
+  "observedForecasts": [
+    {
+      "modelId": "CASH_SHADOW_SPOT_MOMENTUM_V1",
+      "marketId": "KXBTC15M-26NOV201030-30",
+      "side": "NO",
+      "frozenEventHash": "32fb0581d4b7840b2b4a2a7ca911481a40a4eaf6bc783f4974bb40504eb4bbdf",
+      "observedAtRunnerMs": 1795188463490,
+      "forecastAsOfMs": 1795187828007,
+      "contractClosesAtMs": 1795188600000,
+      "source": "UNVERIFIED_PUBLIC_SHADOW_JOURNAL",
+      "independentQualification": false
+    }
+  ],
+  "observedBeforeExpiryCount": 1,
+  "independentlyQualifiedCount": 0,
+  "realMoneyOrdersAllowed": false,
+  "note": "Pre-expiry GitHub observation of public source claims, not independent BRTI settlement attestation, calibrated accuracy, or permission to trade."
+}
