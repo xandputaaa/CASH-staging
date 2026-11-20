@@ -64,7 +64,7 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
   // Never replace missing runner time with source-provided or fabricated timestamps.
   let failureClock;
   try{failureClock=clock()}catch{failureClock=null}
-  result.observedAtRunner=Number.isSafeInteger(failureClock)&&failureClock>=0
+  result.observedAtRunner=Number.isSafeInteger(failureClock)&&failureClock>=0&&failureClock<=8640000000000000
    ?new Date(failureClock).toISOString():null;
  }
  fs.mkdirSync(outDirectory,{recursive:true});
