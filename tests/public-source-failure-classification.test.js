@@ -37,6 +37,31 @@ test('missing public routes and network errors have distinct fixed privacy-safe 
   throw Error('https://secret.example/private?token=DO_NOT_LEAK');
  });
  assert.equal(diagnostics.early.fetchFailureClass,'HTTP_NOT_FOUND');
- assert.equal(diagnostics.late.fetchFailureClass,'TRANSPORT_OR_INVALID_RESPONSE');
+ assert.equal(diagnostics.late.fetchFailureClass,'TRANSPORT_ERROR');
  assert.doesNotMatch(JSON.stringify(diagnostics),/DO_NOT_LEAK|secret.example/);
+});
+
+test('malformed JSON and oversized successful responses remain distinct, private and unqualified',async()=>{
+ const secret='SECRET_JSON_BODY_SHOULD_NOT_LEAK';
+ const diagnostics=await inspect(async url=>({
+  ok:true,status:200,text:async()=>url.includes('prospective')?
+   '{"sensitive":"'+secret+'",broken':'X'.repeat(2500001)
+ }));
+ assert.equal(diagnostics.early.fetchFailureClass,'INVALID_JSON');
+ assert.equal(diagnostics.late.fetchFailureClass,'BODY_TOO_LARGE');
+ assert.equal(diagnostics.early.forecastCount,null);
+ assert.equal(diagnostics.late.forecastCount,null);
+ assert.equal(diagnostics.early.independentQualifiedCount,0);
+ assert.equal(diagnostics.late.independentQualifiedCount,0);
+ assert.doesNotMatch(JSON.stringify(diagnostics),/SECRET_JSON|2500001|https:|Bearer/);
+});
+test('aborted public requests are classified as timeout, never an empty journal',async()=>{
+ const diagnostics=await inspect(async()=>{
+  const error=Error('https://private.example/token=SHOULD_NOT_LEAK');
+  error.name='AbortError';throw error;
+ });
+ assert.equal(diagnostics.early.fetchFailureClass,'TIMEOUT');
+ assert.equal(diagnostics.late.fetchFailureClass,'TIMEOUT');
+ assert.equal(diagnostics.early.status,'SOURCE_UNAVAILABLE_OR_UNFETCHED');
+ assert.doesNotMatch(JSON.stringify(diagnostics),/SHOULD_NOT_LEAK|private.example/);
 });
