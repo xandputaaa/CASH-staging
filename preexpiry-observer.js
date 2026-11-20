@@ -190,8 +190,15 @@ async function fetchPublic(url,fetchImpl=fetch){
    throw error;
   }
   const body=await resp.text();
-  if(Buffer.byteLength(body)>2500000)throw Error('Public journal too large');
-  return JSON.parse(body);
+  if(Buffer.byteLength(body)>2500000){
+   const error=Error('Public journal too large');
+   error.publicFetchClass='BODY_TOO_LARGE';throw error;
+  }
+  try{return JSON.parse(body)}
+  catch{
+   const error=Error('Public journal malformed');
+   error.publicFetchClass='INVALID_JSON';throw error;
+  }
  }finally{clearTimeout(timer)}
 }
 async function runObserver({
@@ -204,9 +211,10 @@ async function runObserver({
   try{return await fetchPublic(BASE+endpoint,fetchImpl)}
   catch(error){
    sourceFailures[kind]=[
-    'HTTP_UNAUTHORIZED','HTTP_FORBIDDEN','HTTP_NOT_FOUND','HTTP_OTHER'
+    'HTTP_UNAUTHORIZED','HTTP_FORBIDDEN','HTTP_NOT_FOUND','HTTP_OTHER',
+    'BODY_TOO_LARGE','INVALID_JSON'
    ].includes(error?.publicFetchClass)?error.publicFetchClass:
-    error?.name==='AbortError'?'TIMEOUT':'TRANSPORT_OR_INVALID_RESPONSE';
+    error?.name==='AbortError'?'TIMEOUT':'TRANSPORT_ERROR';
    return null;
   }
  }
