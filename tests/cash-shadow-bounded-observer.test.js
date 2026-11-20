@@ -83,3 +83,28 @@ test('regressing runner clock fails rather than claiming a new observation',asyn
   sleep:async()=>{},log:()=>{}
  }),/moved backwards/);
 });
+
+test('bounded retries summarize only fixed safe error codes without leaking arbitrary details',async()=>{
+ let tick=100000,calls=0;
+ const logs=[];
+ const results=[
+  {status:'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID',observedBeforeExpiryCount:0,errorCode:'SOURCE_AUTHORIZATION_REJECTED'},
+  {status:'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID',observedBeforeExpiryCount:0,errorCode:'SECRET_TOKEN_DO_NOT_LOG'},
+  {status:'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID',observedBeforeExpiryCount:0,errorCode:'SOURCE_HTTP_ERROR'}
+ ];
+ const r=await runBoundedShadowObserver({
+  maxWaitMs:65000,intervalMs:30000,now:()=>tick,
+  sleep:async ms=>{tick+=ms},
+  runObserver:async()=>{tick+=500;return results[Math.min(calls++,2)]},
+  log:line=>logs.push(line)
+ });
+ assert.equal(r.attempts,3);
+ assert.equal(r.result.observedBeforeExpiryCount,0);
+ assert.equal(r.failureCounts.SOURCE_AUTHORIZATION_REJECTED,1);
+ assert.equal(r.failureCounts.SOURCE_TRANSPORT_OR_UNKNOWN,1);
+ assert.equal(r.failureCounts.SOURCE_HTTP_ERROR,1);
+ const output=logs.join('\\n');
+ assert.match(output,/CASH_SHADOW_BOUNDED_OBSERVER_FAILURE_COUNTS=/);
+ assert.doesNotMatch(output,/SECRET_TOKEN_DO_NOT_LOG/);
+ assert.match(output,/CASH_SHADOW_BOUNDED_OBSERVER_QUALIFIED=0/);
+});
