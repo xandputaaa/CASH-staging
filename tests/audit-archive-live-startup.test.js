@@ -56,7 +56,7 @@ test('explicit archive startup replays pending history and durably appends new c
   const disk=fs.readFileSync(x.active,'utf8').trim().split('\n').map(JSON.parse);
   assert.equal(disk.length,1);
   assert.equal(disk[0].sequence,1);
-  assert.equal(verifyChain(disk),'')===false;
+  assert.match(verifyChain(disk),/^[a-f0-9]{64}$/);
   assert.equal(fs.existsSync(path.join(x.directory,'.shadow-journal-writer.lock')),false);
   const reboot=createLiveRecoveredMonitor({...x,maxEvents:8,maxRecords:4});
   assert.equal(reboot.snapshot().pending,2);
@@ -105,8 +105,9 @@ test('archive live startup remains explicit and external manifest fails closed',
   assert.throws(()=>assertSafeStartupConfiguration({CASH_AUDIT_DIR:x.directory}),/explicit live recovery/);
   assert.throws(()=>assertSafeStartupConfiguration({CASH_AUDIT_DIR:x.directory,
    CASH_ARCHIVE_LIVE_RECOVERY:'1'}),/exclusive writer/);
+  fs.writeFileSync(path.join(external,'shadow-archive-manifest.json'),'{}\n');
   assert.throws(()=>assertSafeStartupConfiguration({CASH_AUDIT_DIR:x.directory,
    CASH_ARCHIVE_LIVE_RECOVERY:'1',CASH_EXCLUSIVE_JOURNAL_WRITER:'1',
-   CASH_ARCHIVE_DIR:external}),/./);
+   CASH_ARCHIVE_DIR:external}),/External archived manifest/);
  }finally{cleanup(x);fs.rmSync(external,{recursive:true,force:true})}
 });
