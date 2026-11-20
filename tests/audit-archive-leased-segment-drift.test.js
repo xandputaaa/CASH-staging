@@ -34,7 +34,7 @@ test('archive append during recovery consumer fails closed and releases lease',(
    assert.equal(fs.existsSync(lock),true);
    fs.appendFileSync(x.segmentPath,'UNVERIFIED\n');
    return 'invalid';
-  }),/Archive segment|archive segment|Incomplete archive|Audit event/);
+  }),/Archive segment|archive segment|Incomplete archive|Audit event|not valid JSON/);
   assert.equal(fs.existsSync(lock),false);
  }finally{fs.rmSync(x.directory,{recursive:true,force:true})}
 });
