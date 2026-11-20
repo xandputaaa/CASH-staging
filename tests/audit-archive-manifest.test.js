@@ -24,3 +24,25 @@ test('manifest rejects duplicate filenames and path traversal',()=>sandbox(dir=>
  assert.throws(()=>verifyArchiveManifest({version:1,segments:[entry,entry]},{directory:dir}),/Invalid segment entry/);
  assert.throws(()=>verifyArchiveManifest({version:1,segments:[{...entry,filename:'../escape.jsonl'}]},{directory:dir}),/Invalid segment entry/);
 }));
+
+test('offline archive verifier refuses symlink segment paths even when target bytes are valid',()=>sandbox(dir=>{
+ const a=segment(dir,'original'),link=path.join(dir,'shadow-segment-alias.jsonl');
+ fs.symlinkSync(path.join(dir,a.filename),link);
+ assert.throws(()=>readSegment(link),/ELOOP|Unsafe archive segment/);
+ const manifest={version:1,segments:[{filename:'shadow-segment-alias.jsonl',
+  sha256:a.sha256,chainTip:a.chainTip,eventCount:1,previousChainTip:'GENESIS'}]};
+ assert.throws(()=>verifyArchiveManifest(manifest,{directory:dir}),/ELOOP|Unsafe archive segment/);
+}));
+test('offline archive verifier refuses hardlinked segment files',()=>sandbox(dir=>{
+ const a=segment(dir,'original'),alias=path.join(dir,'shadow-segment-alias.jsonl');
+ fs.linkSync(path.join(dir,a.filename),alias);
+ assert.throws(()=>readSegment(alias),/Unsafe archive segment/);
+ assert.throws(()=>readSegment(path.join(dir,a.filename)),/Unsafe archive segment/);
+}));
+test('offline archive verifier continues accepting unchanged single-link regular segments',()=>sandbox(dir=>{
+ const a=segment(dir,'regular'),file=path.join(dir,a.filename);
+ const result=readSegment(file);
+ assert.equal(result.sha256,a.sha256);
+ assert.equal(result.chainTip,a.chainTip);
+ assert.equal(result.events.length,1);
+}));

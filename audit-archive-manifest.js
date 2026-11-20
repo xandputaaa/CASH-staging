@@ -4,9 +4,25 @@ const fs=require('node:fs'),path=require('node:path'),{createHash}=require('node
 const {verifyChain}=require('./audit-journal');
 const SHA=/^[a-f0-9]{64}$/;
 function readSegment(file,{limit=650}={}){
- const stat=fs.lstatSync(file);
- if(!stat.isFile()||stat.isSymbolicLink()||stat.size>12*1024*1024)throw Error('Unsafe archive segment');
- const bytes=fs.readFileSync(file);
+ // Bind verification to one opened inode. A path-only lstat/read pair can
+ // follow a swapped symlink or read a different file between those calls.
+ let fd;
+ try{fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW)}
+ catch(error){
+  if(error?.code==='ELOOP')throw Error('Unsafe archive segment: symbolic link refused');
+  throw error;
+ }
+ let bytes;
+ try{
+  const before=fs.fstatSync(fd);
+  if(!before.isFile()||before.nlink!==1||before.size>12*1024*1024)
+   throw Error('Unsafe archive segment');
+  bytes=fs.readFileSync(fd);
+  const after=fs.fstatSync(fd);
+  if(before.dev!==after.dev||before.ino!==after.ino||
+     before.size!==after.size||bytes.length!==before.size)
+   throw Error('Archive segment changed during verification');
+ }finally{fs.closeSync(fd)}
  if(!bytes.length||bytes[bytes.length-1]!==10)throw Error('Incomplete archive segment');
  const events=bytes.toString('utf8').trimEnd().split('\n').map(x=>JSON.parse(x));
  const chainTip=verifyChain(events,{limit});
