@@ -23,7 +23,7 @@ async function runStartupSmoke({port=3000,read=readLocal,authorization}={}){
  const routes=[
   {path:'/',accept:x=>x.status===200&&x.body.includes('id="cashSimple"')&&
    x.body.includes('id="modeAdvanced"')&&x.body.includes('id="livePaperLab"')},
-  ...['/simple-ui.js','/view-mode.js','/live-paper.js','/kalshi15-ui.js']
+  ...['/simple-ui.js','/view-mode.js','/live-paper.js','/kalshi15-ui.js','/cash-v3.js']
    .map(path=>({path,accept:x=>x.status===200&&/javascript/.test(x.type)&&x.body.length>200})),
   {path:'/api/manual-calls',accept:x=>{
    if(x.status!==200)return false;
@@ -34,6 +34,16 @@ async function runStartupSmoke({port=3000,read=readLocal,authorization}={}){
     obj.automaticTradingEnabled===false&&obj.ordersPlaced===0&&
     obj.tradingAuthorization===false&&obj.calibratedWinProbability===null&&
     obj.expectedValue===null;
+  }},
+  {path:'/cash-v3.css',accept:x=>x.status===200&&/css/.test(x.type)&&x.body.length>200},
+  {path:'/api/cash-v3/market',accept:x=>{
+    if(x.status!==200)return false;
+    const obj=JSON.parse(x.body);
+    return obj.version==='CASH_MOBILE_V3_MARKET_V1'&&
+     obj.ordersEnabled===false&&obj.executionAuthorized===false&&
+     obj.chart?.version==='CASH_V3_CHART_V1'&&
+     obj.chart.inventedTicks===0&&obj.chart.syntheticForecastPath===false&&
+     obj.chart.realOrdersEnabled===false;
   }},
   {path:'/health',accept:x=>{
    if(x.status!==200)return false;
