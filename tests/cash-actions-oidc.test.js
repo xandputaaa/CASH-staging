@@ -47,8 +47,8 @@ test('untrusted events, branches, repos, workflow paths and expired tokens all f
   {workflow_ref:'xandputaaa/CASH-staging/.github/workflows/evil.yml@refs/heads/main'},
   {iat:Math.floor(NOW/1000)-1300,exp:Math.floor(NOW/1000)+20},
   {exp:Math.floor(NOW/1000)-1},
-  {exp:Math.floor(NOW/1000)-20}, // exp equals iat: no positive lifetime
-  {exp:Math.floor(NOW/1000)-21}, // exp precedes iat
+  {iat:Math.floor(NOW/1000)+30,exp:Math.floor(NOW/1000)+30}, // exp equals iat
+  {iat:Math.floor(NOW/1000)+30,exp:Math.floor(NOW/1000)+20}, // exp precedes iat
   {nbf:Math.floor(NOW/1000)+1}, // not yet valid, even within clock tolerance
   {nbf:Math.floor(NOW/1000)+300}
  ];
