@@ -93,3 +93,6 @@ body.cash-v3>main{display:none!important}
 @media(max-width:850px){#cashV3 .v3-layout{grid-template-columns:1fr}#cashV3 .v3-legacy-grid{grid-template-columns:1fr}#cashV3 .v3-graph{height:270px}}
 @media(max-width:490px){#cashV3{padding:18px 14px calc(125px + env(safe-area-inset-bottom))}#cashV3 .v3-top{margin-bottom:30px}#cashV3 .v3-card{padding:17px;border-radius:23px}#cashV3 .v3-graph{height:235px;min-height:235px}#cashV3 .v3-title{font-size:36px}#cashV3 .v3-price{font-size:39px}#cashV3 .v3-pill-group button{font-size:10px;min-width:35px;padding:7px}#cashV3 .v3-chart-toolbar{gap:9px}#cashV3 .v3-metric strong{font-size:18px}}
 @media(prefers-reduced-motion:reduce){#cashV3 *{animation:none!important;transition:none!important}}
+
+#cashV3 .v3-chart-state[hidden]{display:none}
+#cashV3 .v3-page[aria-hidden="true"]{display:none}
