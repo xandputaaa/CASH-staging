@@ -156,6 +156,7 @@ function makeManualCalls({quote={},fees={},spot={},position=null,now=Date.now()}
   entryPrice:held.entryPrice,observedExitBid:sideBid,
   ...exit,targetNetProfitUsd:target,lossReviewThresholdUsd:stop,
   illustrativeTakeProfitBid:targetBid,illustrativeStopReviewBid:stopBid,
+  illustrativeBreakEvenBid:triggerBid(held,fees.feeMultiplier,0,'TARGET'),
   pricesAreNonExecutable:true,
   noPositionDataStored:true
  };
