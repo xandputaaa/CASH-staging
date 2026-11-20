@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {privateSessionGate,newToken,checkToken,loginPage}=require('../private-session-gate');
+const {privateSessionGate,newToken,checkToken,newCsrfToken,verifyCsrfToken}=require('../private-session-gate');
 const {privateAccessGate}=require('../private-access-gate');
 const secret='unit-test-safari-private-password-123456';
 const host='cash-simulation-web-staging.up.railway.app';
@@ -17,52 +17,72 @@ function res(){
  };
 }
 const auth='Basic '+Buffer.from('cash:'+secret).toString('base64');
-test('unsigned visitor sees branded password form, not repeating Safari Basic prompt',async()=>{
- const request=req(),reply=res();
- assert.equal(await privateSessionGate(request,reply,secret),true);
- assert.equal(reply.status,200);
- assert.match(reply.body,/Private access\./);
- assert.match(reply.body,/type="password"/);
- assert.match(reply.body,/method="post" action="\/cash-login"/);
- assert.doesNotMatch(JSON.stringify(reply.headers),/WWW-Authenticate/);
- assert.doesNotMatch(reply.body,new RegExp(secret));
- assert.match(reply.headers['Content-Security-Policy'],/form-action 'self'/);
+async function browserForm(suffix='primary'){
+ const response=res();
+ assert.equal(await privateSessionGate(req('GET','/',{},'',suffix),response,secret),true);
+ assert.equal(response.status,200);
+ const token=response.body.match(/name="csrf" value="([^"]+)"/)?.[1];
+ assert.ok(token,'GET / must include login form token');
+ const cookie=response.headers['Set-Cookie'].split(';')[0];
+ assert.equal(cookie,'cash_login_csrf='+token);
+ return {token,cookie,response};
+}
+function postForm({token,cookie},password,headers={},suffix='primary'){
+ return req('POST','/cash-login',{
+  'content-type':'application/x-www-form-urlencoded',cookie,
+  ...headers
+ },'csrf='+encodeURIComponent(token)+'&password='+encodeURIComponent(password),suffix);
+}
+test('unsigned Safari visitor gets branded form with signed, browser-bound CSRF token',async()=>{
+ const {token,response}=await browserForm();
+ assert.match(response.body,/Private access\./);
+ assert.match(response.body,/type="password"/);
+ assert.match(response.body,/method="post" action="\/cash-login"/);
+ assert.doesNotMatch(JSON.stringify(response.headers),/WWW-Authenticate/);
+ assert.doesNotMatch(response.body,new RegExp(secret));
+ assert.match(response.headers['Content-Security-Policy'],/form-action 'self'/);
+ assert.match(response.headers['Set-Cookie'],/HttpOnly/);
+ assert.match(response.headers['Set-Cookie'],/Secure/);
+ assert.match(response.headers['Set-Cookie'],/SameSite=Lax/);
+ assert.equal(verifyCsrfToken(token,secret),true);
 });
-test('correct form password establishes signed HttpOnly secure browser session',async()=>{
- const body='password='+encodeURIComponent(secret);
- const login=req('POST','/cash-login',{
-  'content-type':'application/x-www-form-urlencoded',
-  origin:'https://'+host},body);
- const reply=res();
- assert.equal(await privateSessionGate(login,reply,secret),true);
- assert.equal(reply.status,303);
- assert.equal(reply.headers.Location,'/');
- const cookie=reply.headers['Set-Cookie'];
+test('valid cookie-bound form succeeds despite forwarded Safari origin and fetch metadata mismatches',async()=>{
+ const form=await browserForm();
+ const login=postForm(form,secret,{
+  origin:'https://cash-simulation-web-staging.up.railway.app:443',
+  'sec-fetch-site':'cross-site',host:'railway-internal-host:3000'
+ });
+ const response=res();
+ assert.equal(await privateSessionGate(login,response,secret),true);
+ assert.equal(response.status,303,'a legitimate form must not be rejected on Origin/Host');
+ assert.equal(response.headers.Location,'/');
+ const cookie=response.headers['Set-Cookie'];
  assert.match(cookie,/^cash_session=/);
- assert.match(cookie,/HttpOnly/);assert.match(cookie,/Secure/);
+ assert.match(cookie,/HttpOnly/);
+ assert.match(cookie,/Secure/);
  assert.match(cookie,/SameSite=Lax/);
- const session=cookie.split(';')[0];
- const after=req('GET','/',{cookie:session});
+ const after=req('GET','/',{cookie:cookie.split(';')[0]});
  const unlock=res();
  assert.equal(await privateSessionGate(after,unlock,secret),false);
  assert.equal(after.cashPrivateSessionAuthenticated,true);
  assert.equal(privateAccessGate(after,unlock,secret),false);
 });
-test('previously authorized Basic access still works for startup smoke and API',async()=>{
+test('Basic authentication remains available for private smoke probes',async()=>{
  const request=req('GET','/api/spot',{authorization:auth});
  assert.equal(await privateSessionGate(request,res(),secret),false);
  assert.equal(privateAccessGate(request,res(),secret),false);
 });
-test('invalid password yields calm form error, without Basic browser prompt',async()=>{
- const login=req('POST','/cash-login',{'content-type':'application/x-www-form-urlencoded'},
-   'password=incorrect');
+test('incorrect password returns a calm form error and fresh CSRF, not a browser challenge',async()=>{
+ const form=await browserForm();
  const response=res();
- assert.equal(await privateSessionGate(login,response,secret),true);
+ assert.equal(await privateSessionGate(postForm(form,'incorrect'),response,secret),true);
  assert.equal(response.status,401);
  assert.match(response.body,/Incorrect password/);
- assert.doesNotMatch(JSON.stringify(response.headers),/WWW-Authenticate/);
+ assert.match(response.body,/name="csrf" value="/);
+ assert.match(response.headers['Set-Cookie'],/^cash_login_csrf=/);
+ assert.equal(response.headers['WWW-Authenticate'],undefined);
 });
-test('unauthorized API and scripts reject without Basic challenge, do not expose content',async()=>{
+test('unauthed assets and API routes stay private without Basic challenge',async()=>{
  for(const route of ['/api/cash-v3/market','/cash-v3.js','/cash-v3.css']){
   const response=res();
   assert.equal(await privateSessionGate(req('GET',route),response,secret),true);
@@ -71,7 +91,7 @@ test('unauthorized API and scripts reject without Basic challenge, do not expose
   assert.equal(response.headers['WWW-Authenticate'],undefined);
  }
 });
-test('signed session rejects expired token, tampering, changed password and junk cookies',async()=>{
+test('session rejects expired, tampered or wrong-secret signed cookies',async()=>{
  const now=Date.now();
  const token=newToken(secret,now);
  assert.equal(checkToken(token,secret,now+200),true);
@@ -84,44 +104,60 @@ test('signed session rejects expired token, tampering, changed password and junk
   assert.equal(response.status,401);
  }
 });
-test('cross-site form requests refuse authentication before checking password',async()=>{
- const login=req('POST','/cash-login',{
-  'content-type':'application/x-www-form-urlencoded',
-  'sec-fetch-site':'cross-site',
-  origin:'https://different.example'},'password='+encodeURIComponent(secret));
- const response=res();
- assert.equal(await privateSessionGate(login,response,secret),true);
- assert.equal(response.status,403);
- assert.equal(response.headers['Set-Cookie'],undefined);
+test('a forged cross-site request without a matching CSRF cookie or form token fails closed',async()=>{
+ const form=await browserForm();
+ for(const variation of [
+  postForm({...form,cookie:''},secret,{
+   origin:'https://evil.example','sec-fetch-site':'cross-site'}),
+  postForm({...form,token:newCsrfToken(secret)},secret,{
+   origin:'https://evil.example','sec-fetch-site':'cross-site'}),
+  postForm({...form,cookie:'cash_login_csrf=forged'},secret),
+  postForm({...form,cookie:form.cookie+'; cash_login_csrf=duplicate'},secret)
+ ]){
+  const response=res();
+  assert.equal(await privateSessionGate(variation,response,secret),true);
+  assert.equal(response.status,403);
+  assert.match(response.body,/This sign-in page expired/);
+  assert.equal(response.headers['cash_session'],undefined);
+  assert.equal(response.headers['WWW-Authenticate'],undefined);
+ }
 });
-test('body type and size limits reject unsafe login requests',async()=>{
+test('CSRF signing enforces expiry, bounded token length and secret rotation',()=>{
+ const now=Date.now(),token=newCsrfToken(secret,now);
+ assert.equal(verifyCsrfToken(token,secret,now),true);
+ assert.equal(verifyCsrfToken(token,secret,now+20*60*1000+1),false);
+ assert.equal(verifyCsrfToken(token,secret+'changed',now),false);
+ assert.equal(verifyCsrfToken(token+'x',secret,now),false);
+ assert.equal(verifyCsrfToken('broken',secret,now),false);
+ assert.equal(verifyCsrfToken('x'.repeat(1000),secret,now),false);
+});
+test('invalid content types and oversized bodies reject before checking credentials',async()=>{
  const badType=req('POST','/cash-login',{'content-type':'application/json'},
   JSON.stringify({password:secret}));
  const r1=res();assert.equal(await privateSessionGate(badType,r1,secret),true);
  assert.equal(r1.status,415);
- const tooLong=req('POST','/cash-login',{'content-type':'application/x-www-form-urlencoded'},
-  'password='+('X'.repeat(3000)));
+ const form=await browserForm();
+ const tooLong=postForm(form,'X'.repeat(3000));
  const r2=res();assert.equal(await privateSessionGate(tooLong,r2,secret),true);
  assert.equal(r2.status,413);
 });
-test('logout clears Safari cookie and does not require Basic authentication',async()=>{
+test('logout clears valid session cookie',async()=>{
  const request=req('POST','/cash-logout');
  const response=res();
  assert.equal(await privateSessionGate(request,response,secret),true);
  assert.equal(response.status,303);
  assert.match(response.headers['Set-Cookie'],/Max-Age=0/);
 });
-test('repeated invalid form attempts are throttled without popup',async()=>{
+test('repeated invalid form password attempts are throttled',async()=>{
+ const form=await browserForm('throttle');
  for(let i=0;i<9;i++){
   const response=res();
-  const request=req('POST','/cash-login',
-   {'content-type':'application/x-www-form-urlencoded'},
-   'password=incorrect','throttle');
+  const request=postForm(form,'incorrect',{},'throttle');
   assert.equal(await privateSessionGate(request,response,secret),true);
   assert.equal(response.status,i<8?401:429);
-  if(i===8){assert.equal(response.headers['Retry-After'],'60');}
+  if(i===8)assert.equal(response.headers['Retry-After'],'60');
  }
 });
-test('configuration with no private password retains original public research behavior',async()=>{
+test('unset private password leaves original research behavior',async()=>{
  assert.equal(await privateSessionGate(req(),res(),undefined),false);
 });
