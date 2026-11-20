@@ -55,6 +55,8 @@ function withLeasedArchiveRecovery(options,operation){
    throw Error('Async archive recovery consumer unsupported');
   if(digestActive(options.activeJournalPath)!==initialDigest)
    throw Error('Active journal changed during leased recovery');
+  if(archiveDigests(options)!==initialArchiveDigests)
+   throw Error('Archive segments changed during leased recovery');
   return result;
  });
 }
