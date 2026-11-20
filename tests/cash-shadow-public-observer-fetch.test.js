@@ -60,3 +60,25 @@ test('shadow observer records privacy-safe authorization and parse failure categ
   }
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
+
+test('scheduled shadow observer logs only fixed failure codes, never source details',async()=>{
+ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+ const {runPublicShadowObserver}=require('../cash-shadow-public-observer-runner');
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'cash-shadow-log-'));
+ const lines=[],originalLog=console.log;
+ try{
+  console.log=(...args)=>lines.push(args.join(' '));
+  const result=await runPublicShadowObserver({
+   fetchImpl:async()=>({ok:false,status:401,text:async()=>{throw Error('secret response')}}),
+   clock:()=>1700000000000,outDirectory:dir,
+   env:{GITHUB_RUN_ID:'12345678',GITHUB_REPOSITORY:'xandputaaa/CASH-staging',GITHUB_SHA:'test'}
+  });
+  assert.equal(result.errorCode,'SOURCE_AUTHORIZATION_REJECTED');
+  assert.ok(lines.includes('CASH_SHADOW_SOURCE_ERROR_CODE=SOURCE_AUTHORIZATION_REJECTED'));
+  assert.doesNotMatch(lines.join('\n'),/secret response|Bearer |SHADOW_SOURCE_HTTP_401/);
+  assert.equal(result.independentlyQualifiedCount,0);
+ }finally{
+  console.log=originalLog;
+  fs.rmSync(dir,{recursive:true,force:true});
+ }
+});
