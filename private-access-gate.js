@@ -16,14 +16,32 @@ function authorized(header,password){
  const username=raw.slice(0,separator),candidate=raw.slice(separator+1);
  return timingSafeEqual(digest(username+'\\0'+candidate),digest('cash\\0'+password));
 }
+const attempts=new Map();
 function privateAccessGate(req,res,password){
  if(password===undefined)return false;
+ const now=Date.now();
+ const key=String(req.socket?.remoteAddress||'unknown');
+ // Bounded in-process throttling. For multiple replicas, enforce limits at the edge.
+ for(const [address,state] of attempts){
+  if(now-state.start>60000)attempts.delete(address);
+ }
+ const state=attempts.get(key);
+ if(state&&state.count>=20&&now-state.start<=60000){
+  res.writeHead(429,{'Content-Type':'text/plain; charset=utf-8',
+   'Cache-Control':'no-store','Retry-After':'60'});
+  res.end('Too many authentication attempts');
+  return true;
+ }
  if(!authorized(req.headers.authorization,password)){
+  if(attempts.size>=1000)attempts.clear();
+  if(!state||now-state.start>60000)attempts.set(key,{start:now,count:1});
+  else state.count++;
   res.writeHead(401,{'WWW-Authenticate':'Basic realm="CASH Private Research", charset="UTF-8"',
    'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});
   res.end('Private CASH research access required');
   return true;
  }
+ attempts.delete(key);
  return false;
 }
 module.exports={authorized,privateAccessGate};
