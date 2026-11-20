@@ -13,7 +13,8 @@ function selectKalshi(data,now){
   const active=data.markets.filter(m=>typeof m?.ticker==='string'&&/^KXBTC15M-[A-Za-z0-9-]+$/.test(m.ticker)&&(!m.status||m.status==='open'||m.status==='active')&&Number.isFinite(Date.parse(m.close_time))&&Date.parse(m.close_time)>now&&(!m.open_time||Date.parse(m.open_time)<=now));
   active.sort((a,b)=>Date.parse(a.close_time)-Date.parse(b.close_time));
   const m=active[0];if(!m)throw Error('No current Kalshi BTC 15m market');
-  const yesBid=price(m.yes_bid_dollars),yesAsk=price(m.yes_ask_dollars),noAsk=price(m.no_ask_dollars);
+  const yesBid=price(m.yes_bid_dollars),yesAsk=price(m.yes_ask_dollars),
+    noBid=price(m.no_bid_dollars),noAsk=price(m.no_ask_dollars);
   const numberStrike=Number(m.floor_strike);
   const targetPrice=Number.isFinite(numberStrike)&&numberStrike>1000&&numberStrike<10000000?
     numberStrike:null;
@@ -29,9 +30,9 @@ function selectKalshi(data,now){
     openTime:typeof m.open_time==='string'?m.open_time:null,endTime:m.close_time,
     targetPrice,targetSource:targetPrice===null?'MISSING':'KALSHI_FLOOR_STRIKE',
     contractRuleStatus,strikeType,
-    tieGoesToYes:canResolveTieAsYes,yesBid,yesAsk,noAsk,
+    tieGoesToYes:canResolveTieAsYes,yesBid,yesAsk,noBid,noAsk,
     status:yesAsk!==null&&noAsk!==null?'live':'partial',
-    quotedFields:'YES bid, YES ask and NO ask; public observed dollars per $1 payout, not guaranteed executable'};
+    quotedFields:'YES/NO public observed bids and asks per $1 payout; not guaranteed executable'};
 }
 function parseTokens(raw){const a=typeof raw==='string'?JSON.parse(raw):raw;if(!Array.isArray(a)||a.length!==2||!a.every(x=>/^\d{10,}$/.test(String(x))))throw Error('Invalid CLOB token IDs');return a.map(String)}
 function selectPolyEvent(data,slot,now){
