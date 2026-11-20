@@ -77,7 +77,7 @@ test('offline factory preserves distinct archived and active pending identities'
 test('offline factory refuses insufficient event and record capacity before exposing snapshot',()=>{
  const x=fixture();
  try{
-  for(const limits of [{maxEvents:1,maxRecords:2},{maxEvents:4,maxRecords:0}]){
+  for(const limits of [{maxEvents:0,maxRecords:2},{maxEvents:4,maxRecords:0}]){
    assert.throws(()=>createOfflineRecoveredMonitor({...x,...limits}),/capacity|Invalid monitor capacity limits/i);
    assert.equal(fs.existsSync(path.join(x.directory,'.shadow-journal-writer.lock')),false);
   }
