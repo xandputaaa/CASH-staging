@@ -8,6 +8,8 @@ const {createVenueFeeds}=require('./venue-feeds');
 const {createResolver}=require('./resolution-feed');
 const {createShadowMonitor}=require('./shadow-monitor');
 const {createAuditJournal}=require('./audit-journal');
+const {createLiveRecoveredMonitor}=require('./audit-archive-live-startup');
+const path=require('node:path');
 const page=fs.readFileSync('index.html');
 const ambientMarketMoodScript=fs.readFileSync('ambient-market-mood.js');
 const livePaperScript=fs.readFileSync('live-paper.js');
@@ -49,9 +51,15 @@ const feed=createMarketFeed();
 const venueFeeds=createVenueFeeds();
 const kalshiFeeFeed=createKalshiFeeFeed();
 const resolver=createResolver();
-// Explicit opt-in only: preserve existing behavior until all rollover participants use the lease.
-const auditJournal=createAuditJournal({exclusiveWriter:process.env.CASH_EXCLUSIVE_JOURNAL_WRITER==='1'});
-const shadow=createShadowMonitor({quotes:venueFeeds,results:resolver,journal:auditJournal,spot:feed});
+// Archive recovery is explicit and only permitted for a single, shared audit volume.
+// Legacy journals still refuse an un-recovered manifest and never rotate automatically.
+const useArchiveRecovery=process.env.CASH_ARCHIVE_LIVE_RECOVERY==='1';
+const shadow=useArchiveRecovery?createLiveRecoveredMonitor({
+ directory:process.env.CASH_AUDIT_DIR,quotes:venueFeeds,results:resolver,spot:feed
+}):createShadowMonitor({
+ quotes:venueFeeds,results:resolver,spot:feed,
+ journal:createAuditJournal({exclusiveWriter:process.env.CASH_EXCLUSIVE_JOURNAL_WRITER==='1'})
+});
 const brtiFeed=createKalshiBrtiFeed();
 const orderVerifier=createKalshiOrderVerifier();
 const prospective=createProspectiveMonitor({
