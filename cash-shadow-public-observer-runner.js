@@ -66,6 +66,8 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
  fs.writeFileSync(path.join(outDirectory,'shadow-public-observation.json'),
   JSON.stringify(result,null,2)+'\n',{mode:0o600});
  console.log('CASH_SHADOW_OBSERVER_STATUS='+result.status);
+ // Fixed enum only: safe for Actions logs even when the witness artifact is absent.
+ if(result.errorCode)console.log('CASH_SHADOW_SOURCE_ERROR_CODE='+result.errorCode);
  console.log('CASH_SHADOW_OBSERVED_PREEXPIRY='+result.observedBeforeExpiryCount);
  console.log('CASH_SHADOW_INDEPENDENTLY_QUALIFIED=0');
  console.log('CASH_SHADOW_ORDERS_ALLOWED=false');
