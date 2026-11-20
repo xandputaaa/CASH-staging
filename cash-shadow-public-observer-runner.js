@@ -51,7 +51,15 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
   result.status=evidence.observedBeforeExpiryCount?'OBSERVED_PREEXPIRY':'NO_ELIGIBLE_PREEXPIRY_RECORDS';
  }catch(error){
   result.status='PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID';
-  result.errorCode='CANNOT_WITNESS_SOURCE';
+  // Fixed diagnostic categories only: never publish URLs, headers, token data,
+  // response bodies, or arbitrary exception messages in witness artifacts.
+  const code=String(error?.message||'');
+  result.errorCode=code==='SHADOW_SOURCE_HTTP_401'||code==='SHADOW_SOURCE_HTTP_403'
+   ?'SOURCE_AUTHORIZATION_REJECTED'
+   :code==='SHADOW_SOURCE_TOO_LARGE'?'SOURCE_BODY_TOO_LARGE'
+   :code==='RUNNER_CLOCK_UNAVAILABLE'?'RUNNER_CLOCK_UNAVAILABLE'
+   :code.startsWith('SHADOW_SOURCE_HTTP_')?'SOURCE_HTTP_ERROR'
+   :error instanceof SyntaxError?'SOURCE_INVALID_JSON':'SOURCE_TRANSPORT_OR_UNKNOWN';
   result.observedAtRunner=new Date(clock()).toISOString();
  }
  fs.mkdirSync(outDirectory,{recursive:true});
