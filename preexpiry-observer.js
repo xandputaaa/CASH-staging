@@ -181,7 +181,14 @@ async function fetchPublic(url,fetchImpl=fetch){
  try{
   const resp=await fetchImpl(url,{signal:ctrl.signal,headers:{
    Accept:'application/json','User-Agent':'CASH-public-preexpiry-observer/1.0'}});
-  if(!resp.ok)throw Error('Public journal unavailable');
+  if(!resp.ok){
+   const kind=resp.status===401?'HTTP_UNAUTHORIZED':
+    resp.status===403?'HTTP_FORBIDDEN':
+    resp.status===404?'HTTP_NOT_FOUND':'HTTP_OTHER';
+   const error=Error('Public journal unavailable');
+   error.publicFetchClass=kind;
+   throw error;
+  }
   const body=await resp.text();
   if(Buffer.byteLength(body)>2500000)throw Error('Public journal too large');
   return JSON.parse(body);
@@ -191,9 +198,21 @@ async function runObserver({
  fetchImpl=fetch,clock=()=>Date.now(),outDirectory='witness',
  env=process.env,onEligibility=null
 }={}){
+ // Fixed diagnostic categories only: no URL, response body or credential.
+ const sourceFailures={};
+ async function load(kind,endpoint){
+  try{return await fetchPublic(BASE+endpoint,fetchImpl)}
+  catch(error){
+   sourceFailures[kind]=[
+    'HTTP_UNAUTHORIZED','HTTP_FORBIDDEN','HTTP_NOT_FOUND','HTTP_OTHER'
+   ].includes(error?.publicFetchClass)?error.publicFetchClass:
+    error?.name==='AbortError'?'TIMEOUT':'TRANSPORT_OR_INVALID_RESPONSE';
+   return null;
+  }
+ }
  const [early,late]=await Promise.all([
-  fetchPublic(BASE+'/api/prospective/export',fetchImpl).catch(()=>null),
-  fetchPublic(BASE+'/api/late-checkpoint/export',fetchImpl).catch(()=>null)
+  load('early','/api/prospective/export'),
+  load('late','/api/late-checkpoint/export')
  ]);
  const observedAt=new Date(clock()).toISOString();
  const initial=buildObservation({early,late,observedAt,
@@ -203,6 +222,7 @@ async function runObserver({
  const eligibility={};
  for(const [kind,snapshot] of Object.entries({early,late})){
   const aggregate=diagnosePublicEligibility(snapshot,kind,Date.parse(observedAt));
+  if(sourceFailures[kind])aggregate.fetchFailureClass=sourceFailures[kind];
   eligibility[kind]=aggregate;
   console.log('CASH_OBSERVER_PUBLIC_ELIGIBILITY_'+kind.toUpperCase()+'='+
    JSON.stringify(aggregate));
