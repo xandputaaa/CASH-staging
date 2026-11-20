@@ -33,11 +33,15 @@ function recoverPendingShadowCaptures({manifest,directory,activeJournalPath,limi
    throw Error('Archive segment changed after manifest verification');
   for(const event of reread.events)accept(event);
  }
+ const archiveBoundaryPending=[...records].filter(([,r])=>r.resolution===null)
+  .map(([id,r])=>Object.freeze({id,capture:Object.freeze({...r.capture})}))
+  .sort((a,b)=>a.id.localeCompare(b.id));
  for(const event of active)accept(event);
  const pending=[...records].filter(([,r])=>r.resolution===null)
   .map(([id,r])=>Object.freeze({id,capture:Object.freeze({...r.capture})}))
   .sort((a,b)=>a.id.localeCompare(b.id));
  return Object.freeze({pending:Object.freeze(pending),pendingCount:pending.length,
+  archiveBoundaryPending:Object.freeze(archiveBoundaryPending),
   capturedCount:records.size,resolvedCount:records.size-pending.length,
   archivedEvents:verified.totalEvents,activeEvents:active.length,
   evidenceStatus:'FILESYSTEM_JOURNAL_UNVERIFIED',mutatesStorage:false,
