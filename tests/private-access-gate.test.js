@@ -24,3 +24,18 @@ test('private gate returns 401 before routing and no-store',()=>{
  assert.equal(privateAccessGate({headers:{authorization:header('cash',password)}},{},password),false);
  assert.equal(privateAccessGate(req,{},undefined),false);
 });
+
+test('private gate throttles repeated failures and accepts authenticated recovery',()=>{
+ const req={headers:{},socket:{remoteAddress:'test-throttle-address'}};
+ let throttled=false;
+ for(let i=0;i<22;i++){
+  const res={writeHead(code){this.code=code},end(){}};
+  assert.equal(privateAccessGate(req,res,password),true);
+  if(res.code===429)throttled=true;
+ }
+ assert.equal(throttled,true);
+ const valid={headers:{authorization:header('cash',password)},socket:req.socket};
+ const blocked={writeHead(code){this.code=code},end(){}};
+ assert.equal(privateAccessGate(valid,blocked,password),true);
+ assert.equal(blocked.code,429);
+});
