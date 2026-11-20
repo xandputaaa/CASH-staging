@@ -23,7 +23,7 @@ test('partitioned filesystem recovery hydrates archived pending and replays dist
  try{
   const archived=capture('KXBTC15M-TEST-123456');
   const activeCapture=capture('KXBTC15M-TEST-654321');
-  const archivedEvent=event('CAPTURE',archived),filename='shadow-partition-segment.jsonl';
+  const archivedEvent=event('CAPTURE',archived),filename='shadow-segment-partition.jsonl';
   const raw=JSON.stringify(archivedEvent)+'\n';
   fs.writeFileSync(path.join(directory,filename),raw);
   const activeEvent=event('CAPTURE',activeCapture);
