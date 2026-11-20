@@ -503,7 +503,8 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
   console.log('CASH shadow baseline monitor: '+shadow.snapshot().storageMode+', '+shadow.snapshot().recoveredEvents+' recovered events, 0 qualifying forecasts');
   // Real route-level smoke test, with separate labels for app health and
   // volatile public market feeds. Runs only against this local server.
-  runStartupSmoke({port}).then(r=>{
+  runStartupSmoke({port,authorization:process.env.CASH_PRIVATE_ACCESS_PASSWORD===undefined?
+   undefined:'Basic '+Buffer.from('cash:'+process.env.CASH_PRIVATE_ACCESS_PASSWORD).toString('base64')}).then(r=>{
     console.log('CASH HTTP startup smoke: '+r.routeChecksPassed+'/'+r.httpRoutesChecked+
       ' routes, app='+ (r.passed?'OK':'FAIL')+
       ', market='+r.observedDataState+', KalshiFresh='+r.kalshiQuoteFresh+
