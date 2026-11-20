@@ -17,6 +17,6 @@ test('startup refuses archive manifest even when directory is external to audit 
  try{
   assert.equal(assertSafeStartupConfiguration({CASH_ARCHIVE_DIR:dir}),true);
   fs.writeFileSync(path.join(dir,'shadow-archive-manifest.json'),'{}');
-  assert.throws(()=>assertSafeStartupConfiguration({CASH_ARCHIVE_DIR:dir}),/Archive-aware live startup/);
+  assert.throws(()=>assertSafeStartupConfiguration({CASH_ARCHIVE_DIR:dir}),/External archived manifest/);
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
