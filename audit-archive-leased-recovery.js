@@ -14,6 +14,18 @@ function digestActive(file){
  if(bytes.length!==stat.size)throw Error('Active journal changed during leased recovery');
  return createHash('sha256').update(bytes).digest('hex');
 }
+function archiveDigests(options){
+ const {verifyArchiveManifest}=require('./audit-archive-manifest');
+ const verified=verifyArchiveManifest(options.manifest,{directory:options.directory,limit:options.limit===undefined?650:options.limit});
+ return verified.segments.map(segment=>{
+  const file=path.join(options.directory,segment.filename);
+  const stat=fs.lstatSync(file);
+  if(!stat.isFile()||stat.isSymbolicLink())throw Error('Unsafe archive segment during leased recovery');
+  const bytes=fs.readFileSync(file);
+  if(bytes.length!==stat.size)throw Error('Archive segment changed during leased recovery');
+  return createHash('sha256').update(bytes).digest('hex');
+ }).join(':');
+}
 const {planArchivedPendingHydration}=require('./audit-archive-pending-hydration-plan');
 const {assessArchivedPendingCapacity}=require('./audit-archive-pending-capacity');
 function withLeasedArchiveRecovery(options,operation){
@@ -27,12 +39,15 @@ function withLeasedArchiveRecovery(options,operation){
   throw Error('Leased recovery active journal must belong to locked directory');
  return withExclusiveJournalLease({directory:options.directory},()=>{
   const initialDigest=digestActive(options.activeJournalPath);
+  const initialArchiveDigests=archiveDigests(options);
   const plan=planArchivedPendingHydration(options);
   const capacity=assessArchivedPendingCapacity(options);
   if(capacity.state!=='ARCHIVED_PENDING_CAPACITY_RESERVED')
    throw Error('Archive recovery capacity blocked: '+capacity.reason);
   if(digestActive(options.activeJournalPath)!==initialDigest)
    throw Error('Active journal changed during leased recovery');
+  if(archiveDigests(options)!==initialArchiveDigests)
+   throw Error('Archive segments changed during leased recovery');
   const result=operation(Object.freeze({plan,capacity,
    evidenceStatus:'FILESYSTEM_JOURNAL_UNVERIFIED',
    liveStartupEnabled:false,automaticRolloverEnabled:false}));
