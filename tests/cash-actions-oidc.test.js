@@ -55,6 +55,23 @@ test('untrusted events, branches, repos, workflow paths and expired tokens all f
  for(const o of overrides)assert.equal(await verifiedGithubIdentity(signed(o),{
   fetchImpl:jwks,now:NOW}),null,JSON.stringify(o));
 });
+test('invalid signed identity claims never initiate a remote signing-key fetch',async()=>{
+ let requests=0;
+ const forbidden=async()=>{requests++;throw Error('Unexpected JWKS request')};
+ for(const overrides of [
+  {aud:'wrong-audience'},{repository:'untrusted/repo'},
+  {event_name:'pull_request'},{ref:'refs/heads/untrusted'},
+  {exp:Math.floor(NOW/1000)-1},{nbf:Math.floor(NOW/1000)+1}
+ ]){
+  assert.equal(await verifiedGithubIdentity(signed(overrides),{
+   fetchImpl:forbidden,now:NOW}),null);
+ }
+ assert.equal(requests,0);
+ // Valid-looking claims still require actual signature verification.
+ assert.equal(await verifiedGithubIdentity(signed(),{
+  fetchImpl:forbidden,now:NOW}),null);
+ assert.equal(requests,1);
+});
 test('unsigned forged JWT, unrelated JWKS, redirect and oversized token are rejected',async()=>{
  const token=signed(),bits=token.split('.');
  assert.equal(await verifiedGithubIdentity(bits[0]+'.'+bits[1]+'.'+bits[2].slice(1),{
