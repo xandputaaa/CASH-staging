@@ -8,6 +8,7 @@
  */
 const crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:path');
 const {augmentObservationWithExchange}=require('./exchange-preexpiry-check');
+const {githubRunnerReadHeaders}=require('./cash-runner-read-auth');
 const BASE='https://cash-simulation-web-staging.up.railway.app';
 const SHA=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const VALID_ID=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
@@ -179,8 +180,9 @@ function buildObservation({early,late,observedAt,runId,repository,commitSha}){
 async function fetchPublic(url,fetchImpl=fetch){
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),12000);
  try{
-  const resp=await fetchImpl(url,{signal:ctrl.signal,headers:{
-   Accept:'application/json','User-Agent':'CASH-public-preexpiry-observer/1.0'}});
+  const auth=await githubRunnerReadHeaders();
+  const resp=await fetchImpl(url,{signal:ctrl.signal,redirect:'error',headers:{
+   Accept:'application/json','User-Agent':'CASH-public-preexpiry-observer/1.0',...auth}});
   if(!resp.ok){
    const kind=resp.status===401?'HTTP_UNAUTHORIZED':
     resp.status===403?'HTTP_FORBIDDEN':
