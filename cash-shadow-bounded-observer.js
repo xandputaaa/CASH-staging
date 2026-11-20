@@ -28,11 +28,22 @@ async function runBoundedShadowObserver({
  const started=now();
  if(!Number.isSafeInteger(started))throw Error('Runner start clock invalid');
  let attempts=0,result=null;
+ // Aggregate fixed, non-sensitive categories across attempts; never log exception text.
+ const failureCounts=Object.create(null);
+ const allowedFailureCodes=new Set([
+  'SOURCE_AUTHORIZATION_REJECTED','SOURCE_HTTP_ERROR','SOURCE_BODY_TOO_LARGE',
+  'RUNNER_CLOCK_UNAVAILABLE','SOURCE_INVALID_JSON','SOURCE_TRANSPORT_OR_UNKNOWN'
+ ]);
  // This guard also protects tests and the runner from a clock that stalls.
  const maxAttempts=Math.floor(maxWaitMs/intervalMs)+1;
  while(attempts<maxAttempts){
   result=await runObserver(observerOptions);
   attempts++;
+  if(result?.status==='PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID'){
+   const code=allowedFailureCodes.has(result.errorCode)
+    ?result.errorCode:'SOURCE_TRANSPORT_OR_UNKNOWN';
+   failureCounts[code]=(failureCounts[code]||0)+1;
+  }
   if(!result||!Number.isSafeInteger(result.observedBeforeExpiryCount)||
     result.observedBeforeExpiryCount<0||
     typeof result.status!=='string'||
@@ -48,13 +59,14 @@ async function runBoundedShadowObserver({
   await sleep(intervalMs);
  }
  const elapsed=Math.max(0,now()-started);
+ log('CASH_SHADOW_BOUNDED_OBSERVER_FAILURE_COUNTS='+JSON.stringify(failureCounts));
  log('CASH_SHADOW_BOUNDED_OBSERVER_ATTEMPTS='+attempts);
  log('CASH_SHADOW_BOUNDED_OBSERVER_ELAPSED_MS='+elapsed);
  log('CASH_SHADOW_BOUNDED_OBSERVER_FINAL_STATUS='+result.status);
  log('CASH_SHADOW_BOUNDED_OBSERVER_PREEXPIRY='+result.observedBeforeExpiryCount);
  log('CASH_SHADOW_BOUNDED_OBSERVER_QUALIFIED=0');
  log('CASH_SHADOW_BOUNDED_OBSERVER_ORDERS=false');
- return {result,attempts,elapsedMs:elapsed,maxWaitMs};
+ return {result,attempts,elapsedMs:elapsed,maxWaitMs,failureCounts};
 }
 if(require.main===module)runBoundedShadowObserver().catch(error=>{
  console.error('CASH shadow observer bounded retry stopped without attestation');
