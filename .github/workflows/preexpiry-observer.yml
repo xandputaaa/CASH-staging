@@ -13,6 +13,7 @@ on:
     types: [completed]
 permissions:
   contents: read
+  id-token: write # short-lived signed token for private read-only witness exports
 jobs:
   capture-public-commitment:
     if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'schedule' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository))) }}
