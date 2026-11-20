@@ -65,10 +65,7 @@ test('settlement in active journal frees final resolution reserve but not histor
   assert.equal(result.requiredResolutionEvents,0);
   assert.equal(result.remainingRecordSlots,0);
   assert.equal(result.state,'ARCHIVED_PENDING_CAPACITY_RESERVED');
-  const blocked=assessArchivedPendingCapacity({...x,maxEvents:3,maxRecords:0});
-  assert.fail('Invalid zero record limit should have thrown');
- }catch(e){
-  if(e.code==='ERR_ASSERTION')throw e;
-  assert.match(e.message,/Invalid monitor capacity limits/);
+  assert.throws(()=>assessArchivedPendingCapacity({...x,maxEvents:3,maxRecords:0}),
+   /Invalid monitor capacity limits/);
  }finally{fs.rmSync(x.directory,{recursive:true,force:true})}
 });
