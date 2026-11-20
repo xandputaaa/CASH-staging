@@ -60,7 +60,12 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
    :code==='RUNNER_CLOCK_UNAVAILABLE'?'RUNNER_CLOCK_UNAVAILABLE'
    :code.startsWith('SHADOW_SOURCE_HTTP_')?'SOURCE_HTTP_ERROR'
    :error instanceof SyntaxError?'SOURCE_INVALID_JSON':'SOURCE_TRANSPORT_OR_UNKNOWN';
-  result.observedAtRunner=new Date(clock()).toISOString();
+  // A failed runner clock must not prevent a safe failure artifact from being written.
+  // Never replace missing runner time with source-provided or fabricated timestamps.
+  let failureClock;
+  try{failureClock=clock()}catch{failureClock=null}
+  result.observedAtRunner=Number.isSafeInteger(failureClock)&&failureClock>=0&&failureClock<=8640000000000000
+   ?new Date(failureClock).toISOString():null;
  }
  fs.mkdirSync(outDirectory,{recursive:true});
  fs.writeFileSync(path.join(outDirectory,'shadow-public-observation.json'),
