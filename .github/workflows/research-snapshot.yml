@@ -26,6 +26,11 @@ jobs:
           auth=()
           if [[ -n "${CASH_RESEARCH_PASSWORD:-}" ]]; then
             auth=(--user "cash:${CASH_RESEARCH_PASSWORD}")
+          elif [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            # Token comes from GitHub Actions itself, not a repository secret.
+            # Never print it or include it in saved evidence/artifacts.
+            oidc="$(node -e "require('./cash-runner-read-auth').githubRunnerReadHeaders().then(h=>process.stdout.write(h.Authorization||''))")"
+            if [[ -n "$oidc" ]]; then auth=(--header "Authorization: ${oidc}"); fi
           fi
           status="$(curl --silent --show-error --max-redirs 0 \
             --connect-timeout 10 --max-time 30 --retry 2 \
@@ -117,6 +122,11 @@ jobs:
           auth=()
           if [[ -n "${CASH_RESEARCH_PASSWORD:-}" ]]; then
             auth=(--user "cash:${CASH_RESEARCH_PASSWORD}")
+          elif [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            # Token comes from GitHub Actions itself, not a repository secret.
+            # Never print it or include it in saved evidence/artifacts.
+            oidc="$(node -e "require('./cash-runner-read-auth').githubRunnerReadHeaders().then(h=>process.stdout.write(h.Authorization||''))")"
+            if [[ -n "$oidc" ]]; then auth=(--header "Authorization: ${oidc}"); fi
           fi
           if curl --fail --silent --show-error --max-redirs 0 \
             --connect-timeout 10 --max-time 30 --retry 1 \
