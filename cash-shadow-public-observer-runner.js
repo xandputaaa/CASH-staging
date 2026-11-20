@@ -11,7 +11,7 @@ const SHA=x=>crypto.createHash('sha256').update(x).digest('hex');
 async function getPublicSnapshot(url,{fetchImpl=fetch}={}){
  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),15000);
  try{
-  const res=await fetchImpl(url,{signal:ctl.signal,headers:{
+  const res=await fetchImpl(url,{signal:ctl.signal,redirect:'error',headers:{
    Accept:'application/json','User-Agent':'CASH-shadow-GitHub-observer/1.0'
   }});
   if(!res.ok)throw Error('SHADOW_SOURCE_HTTP_'+res.status);
