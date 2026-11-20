@@ -35,6 +35,10 @@
  [['cashDiagnostics','Connectivity diagnostics'],['cashCognition','Model self-check']]
   .forEach(row=>movePanel(row[0],'v3SystemModules',row[1]));
  document.body.classList.add('cash-v3');
+ // Preserve all legacy modules but never leave the obsolete full dashboard
+ // visible underneath the OS shell, even if an external stylesheet fails.
+ const legacyMain=document.querySelector('body > main');
+ if(legacyMain)legacyMain.hidden=true;
  function navigate(next){
   if(!['market','assist','lab','system'].includes(next))return;
   page=next;
