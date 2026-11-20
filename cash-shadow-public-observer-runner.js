@@ -40,7 +40,8 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
   const {snapshot,sha256}=await getPublicSnapshot(URL,{fetchImpl});
   // This clock is intentionally read AFTER the complete network fetch.
   const observedAtMs=clock();
-  if(!Number.isSafeInteger(observedAtMs)||observedAtMs<0||observedAtMs>8640000000000000)\n   throw Error('RUNNER_CLOCK_UNAVAILABLE');
+  if(!Number.isSafeInteger(observedAtMs)||observedAtMs<0||observedAtMs>8640000000000000)
+   throw Error('RUNNER_CLOCK_UNAVAILABLE');
   result.observedAtRunner=new Date(observedAtMs).toISOString();
   const evidence=observeShadowSnapshot(snapshot,{
    observedAtMs,runId:result.githubRunId
