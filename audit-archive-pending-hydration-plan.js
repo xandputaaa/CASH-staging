@@ -13,7 +13,17 @@ function freezeEvidenceTree(value){
 function planArchivedPendingHydration(options){
  const recovered=verifyArchiveRecoveryConsistency(options);
  const minimumLeadMs=options.minimumLeadMs===undefined?60000:options.minimumLeadMs;
- const pendingRecords=recovered.pending.map(({id,capture})=>{
+ const archivedIds=new Set(recovered.archivedCaptureIds);
+ const activeIds=new Set(recovered.activeCaptureIds);
+ if(archivedIds.size!==recovered.archivedCaptureIds.length||
+    activeIds.size!==recovered.activeCaptureIds.length||
+    [...archivedIds].some(id=>activeIds.has(id))||
+    archivedIds.size+activeIds.size!==recovered.capturedCount)
+  throw Error('Recovered archive and active identity partitions disagree');
+ // Active CAPTURE events are replayed by the monitor from its active journal.
+ // Only unresolved captures originating in archived segments are pre-seeded.
+ const archivedPending=recovered.pending.filter(item=>archivedIds.has(item.id));
+ const pendingRecords=archivedPending.map(({id,capture})=>{
   if(capture.id!==id||!isValidCaptureEvidence(capture,minimumLeadMs))
    throw Error('Invalid archived pending capture');
   return freezeEvidenceTree({...structuredClone(capture),status:'PENDING',winner:null,
@@ -22,12 +32,15 @@ function planArchivedPendingHydration(options){
    pendingReason:null,captureSequence:null,
    archiveRecovered:true});
  });
- const ids=new Set(recovered.capturedIds);
- if(ids.size!==recovered.capturedCount||pendingRecords.some(r=>!ids.has(r.id)))
+ const ids=archivedIds;
+ if(pendingRecords.some(r=>!ids.has(r.id)))
   throw Error('Recovered pending identities do not match historical identity set');
  return Object.freeze({state:'ARCHIVED_PENDING_HYDRATION_PLANNED',
   capturedIds:Object.freeze([...ids]),pendingRecords:Object.freeze(pendingRecords),
-  capturedCount:recovered.capturedCount,pendingCount:pendingRecords.length,
+  capturedCount:ids.size,pendingCount:pendingRecords.length,
+  activeCaptureIds:Object.freeze([...activeIds].sort()),
+  activeCaptureCount:activeIds.size,activePendingCount:recovered.pendingCount-pendingRecords.length,
+  totalCapturedCount:recovered.capturedCount,totalPendingCount:recovered.pendingCount,
   resolvedCount:recovered.resolvedCount,archivedEvents:recovered.archivedEvents,
   activeEvents:recovered.activeEvents,
   evidenceStatus:'FILESYSTEM_JOURNAL_UNVERIFIED',mutatesStorage:false,

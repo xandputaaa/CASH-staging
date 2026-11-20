@@ -41,12 +41,15 @@ function verifyArchiveRecoveryConsistency({manifest,directory,activeJournalPath,
  const check=inspectArchiveSemanticIndex({manifest,directory,activeJournalPath,limit,minimumLeadMs});
  if(check.captures!==index.captures||check.resolutions!==index.resolutions||
     check.pendingIds.join('\n')!==index.pendingIds.join('\n')||
+    check.archivedCaptureIds.join('\n')!==index.archivedCaptureIds.join('\n')||
+    check.activeCaptureIds.join('\n')!==index.activeCaptureIds.join('\n')||
     check.archivedEvents!==index.archivedEvents||check.activeEvents!==index.activeEvents)
   throw Error('Archive recovery state changed during verification');
  const after=activeDigest();
  if(tip!==after)throw Error('Active journal changed during recovery');
  return Object.freeze({state:'ARCHIVE_RECOVERY_CONSISTENT',
   capturedIds:index.capturedIds,pending:pending.pending,
+  archivedCaptureIds:index.archivedCaptureIds,activeCaptureIds:index.activeCaptureIds,
   capturedCount:index.captures,resolvedCount:index.resolutions,
   pendingCount:index.pending,archivedEvents:index.archivedEvents,
   activeEvents:index.activeEvents,evidenceStatus:'FILESYSTEM_JOURNAL_UNVERIFIED',
