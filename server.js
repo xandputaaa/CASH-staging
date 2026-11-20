@@ -2,6 +2,15 @@
 const http=require('node:http'),fs=require('node:fs');
 const {privateAccessGate}=require('./private-access-gate');
 const {assertSafeStartupConfiguration}=require('./startup-configuration-gate');
+if(process.env.CASH_ONE_TIME_ARCHIVE_CUTOVER==='1'){
+  if(process.env.CASH_ARCHIVE_LIVE_RECOVERY!=='1'||
+     process.env.CASH_EXCLUSIVE_JOURNAL_WRITER!=='1')
+   throw Error('One-time journal cutover requires exclusive live archive recovery');
+  const {cutoverFullShadowJournal}=require('./audit-archive-one-time-cutover');
+  const migrated=cutoverFullShadowJournal({directory:process.env.CASH_AUDIT_DIR,expectedEvents:600});
+  console.log('CASH one-time archive cutover: '+migrated.state+
+   ', archived='+migrated.archivedEvents+', automaticRollover=DISABLED');
+}
 assertSafeStartupConfiguration();
 const {createMarketFeed}=require('./market-feed');
 const {createVenueFeeds}=require('./venue-feeds');
