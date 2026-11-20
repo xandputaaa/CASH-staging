@@ -10,6 +10,12 @@ function assertSafeStartupConfiguration(env=process.env){
  if(env.CASH_ARCHIVE_LIVE_RECOVERY!==undefined&&
     !['0','1'].includes(env.CASH_ARCHIVE_LIVE_RECOVERY))
   throw Error('Invalid CASH_ARCHIVE_LIVE_RECOVERY value');
+ if(env.CASH_ONE_TIME_ARCHIVE_CUTOVER!==undefined&&
+    !['0','1'].includes(env.CASH_ONE_TIME_ARCHIVE_CUTOVER))
+  throw Error('Invalid CASH_ONE_TIME_ARCHIVE_CUTOVER value');
+ if(env.CASH_ONE_TIME_ARCHIVE_CUTOVER==='1'&&
+    (env.CASH_ARCHIVE_LIVE_RECOVERY!=='1'||env.CASH_EXCLUSIVE_JOURNAL_WRITER!=='1'))
+  throw Error('One-time cutover requires explicit exclusive live recovery');
  const recovery=env.CASH_ARCHIVE_LIVE_RECOVERY==='1';
  const auditDir=env.CASH_AUDIT_DIR;
  if(auditDir!==undefined){
