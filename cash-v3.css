@@ -177,3 +177,48 @@ body.cash-v3>main{display:none!important}
 @media(prefers-reduced-motion:reduce){
  #cashV3 .v3-dock button{transition:none!important}
 }
+
+
+/* Contract inspector: source-backed position analytics; no simulated fills or orders. */
+#cashV3 .v3-dock{grid-template-columns:repeat(5,minmax(0,1fr))}
+#cashV3 .v3-position-page h2{font-weight:650;letter-spacing:-.035em}
+#cashV3 .v3-position-hero{padding:clamp(20px,3vw,31px);background:radial-gradient(circle at 86% -12%,rgba(126,151,196,.18),transparent 48%),linear-gradient(153deg,#1b1d25,#0e1015 56%,#0b0d11);border-color:#ffffff30}
+#cashV3 .v3-position-hero h2{font-size:clamp(23px,5vw,34px);margin:20px 0 6px;line-height:1.1}
+#cashV3 .v3-position-contract{color:#9ba4b2;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+#cashV3 .v3-position-return{display:grid;gap:5px;margin:24px 0 19px;padding:16px 0 20px;border-bottom:1px solid #ffffff19}
+#cashV3 .v3-position-return>span:first-child{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#adb4c0}
+#cashV3 .v3-position-return strong{font-size:clamp(38px,8vw,60px);line-height:1;letter-spacing:-.06em;font-variant-numeric:tabular-nums;color:#f5f7f9}
+#cashV3 .v3-position-return strong[data-direction="up"]{color:#a3f0c4}
+#cashV3 .v3-position-return strong[data-direction="down"]{color:#f4a8b2}
+#cashV3 #v3PosPercent{font-size:12px;color:#adb7c4}
+#cashV3 .v3-position-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+#cashV3 .v3-position-grid>div{border:1px solid #ffffff13;background:#ffffff08;border-radius:15px;padding:15px 12px;min-width:0}
+#cashV3 .v3-position-grid small,#cashV3 .v3-position-outcomes small{display:block;color:#9aa5b5;font-size:10px;line-height:1.45;margin-bottom:9px}
+#cashV3 .v3-position-grid strong{font-size:clamp(13px,2vw,18px);line-height:1.3;letter-spacing:-.03em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+#cashV3 .v3-position-caption{font-size:11px;line-height:1.6;color:#98a3b2;margin:16px 0 0}
+#cashV3 .v3-position-link{display:inline-flex;justify-content:center;gap:11px;margin-top:18px;background:#eff2f6;color:#11131a;border:0;border-radius:14px;min-height:48px;padding:13px 17px;font-size:12px;font-weight:750}
+#cashV3 .v3-position-columns{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:15px 0}
+#cashV3 .v3-position-columns h2{font-size:23px;margin:13px 0 14px}
+#cashV3 .v3-position-payoff-bar{display:flex;gap:6px;height:7px;margin:18px 0 15px}
+#cashV3 .v3-position-payoff-bar span{flex:1;border-radius:20px;background:#6fcb9a}
+#cashV3 .v3-position-payoff-bar span+span{background:#db8e9a}
+#cashV3 .v3-position-outcomes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+#cashV3 .v3-position-outcomes strong{font-size:24px;letter-spacing:-.045em;font-variant-numeric:tabular-nums}
+#cashV3 #v3PosWin{color:#a6e9c4}
+#cashV3 #v3PosLose{color:#f0acb6}
+#cashV3 .v3-position-study p{font-size:12px;line-height:1.65;color:#b5beca}
+#cashV3 .v3-position-details{border-top:1px solid #ffffff1b;margin-top:14px;padding-top:13px}
+#cashV3 .v3-position-details summary{font-size:12px;font-weight:650;cursor:pointer;min-height:40px;color:#e5e9ef}
+#cashV3 .v3-position-details p{margin:10px 0}
+#cashV3 .v3-position-input{margin-top:15px}
+#cashV3 .v3-position-input #cashManualCalls{display:block!important;border:1px solid #ffffff27;border-radius:24px;background:linear-gradient(150deg,#181c25,#101218);box-shadow:inset 0 1px #ffffff16;padding:clamp(18px,3vw,26px);margin:0;color:#f2f4f8}
+#cashV3 .v3-position-input #cashManualCalls h2{color:#e8edf4}
+#cashV3 .v3-position-input #cashManualCalls .assist-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:15px 0}
+#cashV3 .v3-position-input #cashManualCalls .assist-controls label{color:#aab5c4;font-size:12px;display:grid;gap:7px;min-width:0}
+#cashV3 .v3-position-input #cashManualCalls input,#cashV3 .v3-position-input #cashManualCalls select{width:100%;min-height:47px;background:#11141c;border:1px solid #ffffff30;border-radius:12px;color:#f5f6f9;padding:10px}
+#cashV3 .v3-position-input #cashManualCalls button{background:#303641;color:#fff;border:1px solid #ffffff30;border-radius:12px}
+#cashV3 .v3-position-input #cashManualCalls #callsTrack{background:#e3e7ec;color:#111418}
+#cashV3 .v3-position-input #cashManualCalls .notice{color:#aebbc9}
+@media(max-width:760px){#cashV3 .v3-position-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#cashV3 .v3-position-columns{grid-template-columns:1fr}}
+@media(max-width:460px){#cashV3 .v3-position-grid{gap:8px}#cashV3 .v3-position-grid>div{padding:12px 10px}#cashV3 .v3-position-input #cashManualCalls .assist-controls{grid-template-columns:1fr 1fr}#cashV3 .v3-dock{width:calc(100vw - 20px);gap:1px;padding:5px}#cashV3 .v3-dock button{font-size:9px;min-height:55px;padding:10px 1px 8px}#cashV3 .v3-position-return{margin-top:19px}}
+@media(prefers-reduced-motion:reduce){#cashV3 .v3-position-page,#cashV3 .v3-position-page *{animation:none!important;transition:none!important}}
