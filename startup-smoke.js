@@ -25,6 +25,16 @@ async function runStartupSmoke({port=3000,read=readLocal,authorization}={}){
    x.body.includes('id="modeAdvanced"')&&x.body.includes('id="livePaperLab"')},
   ...['/simple-ui.js','/view-mode.js','/live-paper.js','/kalshi15-ui.js']
    .map(path=>({path,accept:x=>x.status===200&&/javascript/.test(x.type)&&x.body.length>200})),
+  {path:'/api/manual-calls',accept:x=>{
+   if(x.status!==200)return false;
+   const obj=JSON.parse(x.body);
+   return obj.version==='CASH_MANUAL_CALLS_V1'&&
+    obj.mode==='EXPERIMENTAL_MANUAL_RESEARCH_ONLY'&&
+    ['WAIT','ENTER_YES','ENTER_NO'].includes(obj.call)&&
+    obj.automaticTradingEnabled===false&&obj.ordersPlaced===0&&
+    obj.tradingAuthorization===false&&obj.calibratedWinProbability===null&&
+    obj.expectedValue===null;
+  }},
   {path:'/health',accept:x=>{
    if(x.status!==200)return false;
    const obj=JSON.parse(x.body);
