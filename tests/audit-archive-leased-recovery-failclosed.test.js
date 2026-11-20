@@ -12,7 +12,8 @@ test('recovery refuses a competing writer lease before reading archive files',()
  try{
   let called=false;
   withExclusiveJournalLease({directory:x.directory},()=>{
-   assert.throws(()=>withLeasedArchiveRecovery({directory:x.directory},()=>{
+   assert.throws(()=>withLeasedArchiveRecovery({directory:x.directory,
+    activeJournalPath:path.join(x.directory,'shadow-events.jsonl')},()=>{
     called=true;
    }),/EEXIST/);
    assert.equal(called,false);
