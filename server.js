@@ -1,6 +1,7 @@
 'use strict';
 const http=require('node:http'),fs=require('node:fs');
 const {privateAccessGate}=require('./private-access-gate');
+const {privateSessionGate}=require('./private-session-gate');
 const {assertSafeStartupConfiguration}=require('./startup-configuration-gate');
 if(process.env.CASH_ONE_TIME_ARCHIVE_CUTOVER==='1'){
   if(process.env.CASH_ARCHIVE_LIVE_RECOVERY!=='1'||
@@ -87,6 +88,7 @@ const lateCheckpoint=createLateCheckpointMonitor({
 const earlyMove=createEarlyMoveMonitor({quotes:venueFeeds,spot:feed});
 const shadowModelLab=createShadowLiveFeed({quotes:venueFeeds,spot:feed});
 const server=http.createServer(async(req,res)=>{
+  if(await privateSessionGate(req,res,process.env.CASH_PRIVATE_ACCESS_PASSWORD))return;
   if(privateAccessGate(req,res,process.env.CASH_PRIVATE_ACCESS_PASSWORD))return;
   res.setHeader('Cache-Control','no-store');
   res.setHeader('Referrer-Policy','no-referrer');

@@ -18,7 +18,7 @@ function authorized(header,password){
 }
 const attempts=new Map();
 function privateAccessGate(req,res,password){
- if(password===undefined)return false;
+ if(password===undefined||req.cashPrivateSessionAuthenticated===true)return false;
  const now=Date.now();
  const key=String(req.socket?.remoteAddress||'unknown');
  // Bounded in-process throttling. For multiple replicas, enforce limits at the edge.
