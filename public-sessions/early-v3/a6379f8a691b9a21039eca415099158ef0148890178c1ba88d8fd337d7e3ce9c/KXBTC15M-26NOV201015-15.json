@@ -12,7 +12,12 @@
     "selfHashedForecastSequence": 315,
     "sourceType": "SINGLE_EXCHANGE_PROXY"
   },
-  "outcome": null,
+  "outcome": {
+    "selfHashedOutcomeEventSha256": "982244f4313b47ca011b37f75b7a3b255905db5b313dd22e5aad19b528ec68c2",
+    "selfHashedOutcomeSequence": 316,
+    "internallyReportedWinner": "NO",
+    "firstSeenBackupRunId": "44771014069"
+  },
   "firstReadOnlyBackup": {
     "runId": "44760862541",
     "headSha": "a235b7af9e000a0a344aa6cf4cf0a907fdf96e32",
