@@ -5,6 +5,11 @@
  const status=el('callsAction'),detail=el('callsEntryDetail'),manage=el('callsPositionDetail');
  const side=el('callsHeldSide'),fill=el('callsHeldFill'),qty=el('callsHeldQty');
  let tracked=null,serial=0,lastAt=0,lastMarket=null;
+ function broadcast(snapshot){
+  document.dispatchEvent(new CustomEvent('cash:position-snapshot',{
+   detail:{tracked:tracked?{...tracked}:null,snapshot,receivedAt:Date.now()}
+  }));
+ }
  const cents=n=>Number.isFinite(n)?(n*100).toFixed(1)+'¢':'—';
  const dollars=n=>Number.isFinite(n)?'$'+n.toFixed(2):'—';
  function clearStale(reason){
@@ -12,6 +17,7 @@
   status.style.color='#e3cb9c';
   detail.textContent=reason;
   manage.textContent=tracked?'Cannot verify exit; do not rely on the previous price.':'No position tracked. CASH will not place any orders.';
+  broadcast(null);
  }
  async function refresh(){
   const token=++serial;
@@ -75,6 +81,7 @@
    el('callsUpdated').textContent='Updated '+new Date(out.at).toLocaleTimeString()+
     ' · '+Math.max(0,Math.ceil((out.timeRemainingMs||0)/1000))+
     's remaining · research only · orders disabled';
+   broadcast(out);
   }catch{if(token===serial){lastAt=0;lastMarket=null;clearStale('Live calls unavailable. Never act on a cached call.');}}
  }
  el('callsTrack').addEventListener('click',()=>{
@@ -85,9 +92,10 @@
    return;
   }
   tracked={marketId:lastMarket,side:side.value,entryPrice:p/100,contracts:n};
+  broadcast(null);
   refresh();
  });
- el('callsClear').addEventListener('click',()=>{tracked=null;refresh()});
+ el('callsClear').addEventListener('click',()=>{tracked=null;broadcast(null);refresh()});
  refresh();setInterval(refresh,12000);
  setInterval(()=>{if(lastAt&&Date.now()-lastAt>21000){
   ++serial;lastAt=0;clearStale('Quote or signal expired. Await a fresh verified snapshot.');
