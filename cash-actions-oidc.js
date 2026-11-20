@@ -60,14 +60,8 @@ async function verifiedGithubIdentity(token,{fetchImpl=fetch,now=Date.now()}={})
   const header=partJSON(parts[0]),claims=partJSON(parts[1]);
   if(header.alg!=='RS256'||!/^[A-Za-z0-9_-]{1,160}$/.test(header.kid||'')||
    typeof parts[2]!=='string'||parts[2].length>1500)return null;
-  const keys=await signingKeys(fetchImpl,now);
-  const matching=keys.filter(k=>k.kid===header.kid);
-  if(matching.length!==1)return null;
-  const pub=crypto.createPublicKey({key:matching[0],format:'jwk'});
-  const signature=Buffer.from(parts[2],'base64url');
-  if(signature.length<128||signature.length>1024||
-   !crypto.verify('RSA-SHA256',Buffer.from(parts[0]+'.'+parts[1]),pub,signature))
-   return null;
+  // Reject untrusted claims before any remote JWKS request. Signature
+  // verification still gates every successful authorization below.
   const t=Math.floor(now/1000);
   if(claims.iss!==ISS||claims.aud!==AUD||
    claims.repository!=='xandputaaa/CASH-staging'||
@@ -80,6 +74,15 @@ async function verifiedGithubIdentity(token,{fetchImpl=fetch,now=Date.now()}={})
    claims.exp<=claims.iat||claims.exp>claims.iat+900||
    (claims.nbf!==undefined&&(!Number.isInteger(claims.nbf)||claims.nbf>t)))
    return null;
+  const keys=await signingKeys(fetchImpl,now);
+  const matching=keys.filter(k=>k.kid===header.kid);
+  if(matching.length!==1)return null;
+  const pub=crypto.createPublicKey({key:matching[0],format:'jwk'});
+  const signature=Buffer.from(parts[2],'base64url');
+  if(signature.length<128||signature.length>1024||
+   !crypto.verify('RSA-SHA256',Buffer.from(parts[0]+'.'+parts[1]),pub,signature))
+   return null;
+
   return {repository:claims.repository,workflow:claims.workflow_ref,
    event:claims.event_name};
  }catch{return null}
