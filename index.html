@@ -86,13 +86,52 @@ small,.muted,.notice{color:#bdc0c6}.tag{color:#e7e8ea;border-color:rgba(255,255,
 <article class="v3-card compact" id="v3MarketMetrics"><div class="v3-marketline"><span>ACTIVE CONTRACT</span><strong id="v3Ticker">Finding market…</strong></div>
 <div class="v3-keymetrics"><div class="v3-metric"><small>Round closes in</small><strong id="v3Countdown">—</strong></div><div class="v3-metric"><small>Kalshi BRTI target</small><strong id="v3Strike">—</strong></div>
 <div class="v3-metric"><small>YES ask</small><strong class="yes" id="v3Yes">—</strong></div><div class="v3-metric"><small>NO ask</small><strong class="no" id="v3No">—</strong></div></div>
-<p class="v3-footnote">Quotes are public observations, not guaranteed fills. Kalshi settlement uses official 60-second BRTI averages, not Kraken spot.</p></article></div>
+<p class="v3-footnote">Quotes are public observations, not guaranteed fills. Kalshi settlement uses official 60-second BRTI averages, not Kraken spot.</p><button class="v3-position-link" id="v3PositionJump" type="button">Inspect contract position <span aria-hidden="true">↗</span></button></article></div>
 <div class="v3-stack"><article class="v3-card glow" id="v3MarketCall"><div class="v3-row"><span class="v3-call-label">CASH INTELLIGENCE / LIVE SIGNAL</span><span class="v3-badge">EXPERIMENTAL</span></div>
 <div class="v3-call" id="v3Call" data-kind="wait">WAIT</div><p class="v3-call-reason" id="v3CallWhy">Checking model inputs and current contract conditions…</p>
 <div class="v3-call-entry" id="v3Entry">No validated trade edge. Manual decisions only.</div><button class="v3-text-button primary" type="button" id="v3AssistJump">Open decision assistant</button>
 <div class="v3-call-notice">CASH does not execute orders. The model has not completed 100 independently verified forward outcomes. A YES or NO signal is not a guarantee of profitability.</div></article>
 <article class="v3-card compact" id="v3MarketIntegrity"><div class="v3-row"><span class="v3-micro">SYSTEM / DATA INTEGRITY</span><span class="v3-badge">NO EXECUTION</span></div>
 <p class="v3-faint" id="v3Integrity" style="margin-top:13px">Verifying quote freshness, timestamped price history and official terms…</p></article></div></div></section>
+
+<section class="v3-page v3-position-page" id="v3Position" data-visible="false" aria-label="Contract position inspection">
+ <div class="v3-page-title"><span class="v3-overline">CASH OS / POSITION — KALSHI BTC 15M</span><h1 class="v3-title">Your contract, decoded.</h1><p class="v3-subtitle">An Apple-inspired contract inspector: entry, current bid, fees, exit value and binary settlement. Based on manually supplied fills—not connected brokerage holdings.</p></div>
+ <article class="v3-card v3-position-hero" aria-label="Manually tracked contract summary">
+  <div class="v3-row"><span class="v3-micro">POSITION / LIVE READ-ONLY ANALYTICS</span><span class="v3-badge" id="v3PosState">NO POSITION</span></div>
+  <h2 id="v3PosName">No contract tracked</h2>
+  <p class="v3-position-contract" id="v3PosContract">Track a manual Kalshi YES or NO fill below to view a contract breakdown.</p>
+  <div class="v3-position-return"><span>Estimated net exit P&amp;L</span><strong id="v3PosPnl" role="status" aria-live="polite">—</strong><span id="v3PosPercent">Requires a fresh observed bid and verified series fee metadata.</span></div>
+  <div class="v3-position-grid">
+   <div><small>Contracts</small><strong id="v3PosQty">—</strong></div>
+   <div><small>Average fill</small><strong id="v3PosEntry">—</strong></div>
+   <div><small>Observed exit bid</small><strong id="v3PosBid">—</strong></div>
+   <div><small>Estimated all-in cost</small><strong id="v3PosCost">—</strong></div>
+   <div><small>Gross bid market value</small><strong id="v3PosMarketValue">—</strong></div>
+   <div><small>Net proceeds if sold</small><strong id="v3PosProceeds">—</strong></div>
+   <div><small>Estimated break-even sell bid</small><strong id="v3PosBreakeven">—</strong></div>
+   <div><small>Entry / exit fee estimates</small><strong id="v3PosFees">—</strong></div>
+  </div>
+  <p class="v3-position-caption" id="v3PosReliability">Nothing here is a confirmed fill or executable order. CASH only knows positions you enter into this tab.</p>
+  <button type="button" id="v3PositionMarket" class="v3-position-link">View live contract chart <span aria-hidden="true">↗</span></button>
+ </article>
+ <div class="v3-position-columns">
+  <article class="v3-card v3-position-payoff">
+   <span class="v3-micro">SETTLEMENT / TWO POSSIBLE OUTCOMES</span><h2>What could this pay?</h2>
+   <div class="v3-position-payoff-bar" aria-hidden="true"><span></span><span></span></div>
+   <div class="v3-position-outcomes"><div><small>If held contract wins</small><strong id="v3PosWin">—</strong></div><div><small>If held contract loses</small><strong id="v3PosLose">—</strong></div></div>
+   <p class="v3-position-caption">Kalshi binary contracts settle at $1 or $0 per contract. Estimates shown are net of the modeled entry fee; any further applicable fees and actual fill differences may change results. BRTI 60-second averages—not Kraken spot—determine settlement.</p>
+  </article>
+  <article class="v3-card v3-position-study">
+   <span class="v3-micro">REFERENCE / YOUR SCREEN RECORDING</span><h2>The $636 QQQ put</h2>
+   <p>One same-day bearish put option, bought for <strong>$365</strong> and shown worth <strong>$671</strong>: an <strong>unrealized +$306 (+83.84%)</strong> before any unshown costs.</p>
+   <details class="v3-position-details"><summary>See how that contract worked</summary>
+    <p>QQQ $636 put expiring November 20. Average premium $3.65 × 100-share multiplier = $365 initial cost. Later marked at $6.71 × 100 = $671. The $632.35 expiration break-even equals the $636 strike minus $3.65 premium. The recording does not show the order entry, actual sale or a realized profit.</p>
+    <p><strong>Different instrument:</strong> this is an equity ETF option, not a Kalshi BTC 15-minute YES/NO contract. CASH borrows the clear position presentation—not options strike-price math, option Greeks, or an implied winning strategy.</p>
+   </details>
+  </article>
+ </div>
+ <div class="v3-position-input" id="v3PositionInput" aria-label="Manual contract tracking form"></div>
+</section>
 <section class="v3-page" id="v3Assist" data-visible="false" aria-label="Manual assistance"><div class="v3-page-title"><span class="v3-overline">CASH OS / ASSIST — 02</span><h1 class="v3-title">Decision assist.</h1><p class="v3-subtitle">Entry alerts and fee-aware exits for positions you manually enter. No automated trading.</p></div>
 <div class="v3-assist-main v3-card" id="v3AssistMain"></div><div class="v3-legacy-grid" id="v3AssistExtra" style="margin-top:15px"></div></section>
 <section class="v3-page" id="v3Lab" data-visible="false" aria-label="Research lab"><div class="v3-page-title"><span class="v3-overline">CASH OS / LAB — 03</span><h1 class="v3-title">Model lab.</h1><p class="v3-subtitle">Forecast records, settlement evidence and backtests are here when you need them—not scattered across the market page.</p></div>
@@ -102,6 +141,7 @@ small,.muted,.notice{color:#bdc0c6}.tag{color:#e7e8ea;border-color:rgba(255,255,
 <div class="v3-legacy-grid" id="v3SystemModules"></div></section>
 <nav class="v3-dock" aria-label="CASH primary navigation">
 <button type="button" data-v3-nav="market" role="tab" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 3 7-9 2 2M3 21h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Market</span></button>
+<button type="button" data-v3-nav="position" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M7 10h10M7 14h6"/></svg><span>Position</span></button>
 <button type="button" data-v3-nav="assist" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8l5 5v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h4Z M8 11h8 M8 15h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Assist</span></button>
 <button type="button" data-v3-nav="lab" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3 M8 3h8 M7 16h10" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Lab</span></button>
 <button type="button" data-v3-nav="system" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>System</span></button>
