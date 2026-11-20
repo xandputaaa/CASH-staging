@@ -3,6 +3,7 @@
 // Existing HTTP Basic clients remain compatible, but no forced browser popup.
 const {createHmac,randomBytes,timingSafeEqual}=require('node:crypto');
 const {authorized}=require('./private-access-gate');
+const {githubReadOnlyAccess}=require('./cash-actions-oidc');
 const COOKIE='cash_session',DURATION=7*24*60*60*1000;
 const failures=new Map();
 
@@ -156,6 +157,11 @@ async function privateSessionGate(req,res,secret){
  const path=new URL(req.url||'/','http://localhost').pathname;
  const basic=authorized(req.headers.authorization,secret);
  const valid=sessionCookie(req,secret);
+ // A scheduled GitHub-runner OIDC token can read ONLY three witness exports.
+ // It cannot authorize login, other APIs, dashboards or trading actions.
+ if(await githubReadOnlyAccess(req)){
+  req.cashPrivateSessionAuthenticated=true;return false;
+ }
  if(path==='/cash-login'&&req.method==='POST'){
   // Safari and embedded browser origin headers vary. Require a browser-bound
   // signed form token instead of rejecting legitimate same-site submissions.
