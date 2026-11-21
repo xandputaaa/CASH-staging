@@ -1,0 +1,27 @@
+{
+  "version": "CASH_PUBLIC_UNWITNESSED_SESSION_RECORD_V1",
+  "provenanceClass": "UNVERIFIED_RAILWAY_JOURNAL_EXPORTED_DURING_GITHUB_SCHEDULE",
+  "prediction": {
+    "sessionFirstEventSha256": "a6379f8a691b9a21039eca415099158ef0148890178c1ba88d8fd337d7e3ce9c",
+    "model": "KXBTC15M_SETTLEMENT_EARLY_V3",
+    "marketId": "KXBTC15M-26NOV211630-30",
+    "side": "WAIT",
+    "claimedFrozenAt": "2026-11-21T21:17:17.120Z",
+    "contractClosesAt": "2026-11-21T21:30:00.000Z",
+    "selfHashedForecastEventSha256": "fb71e8b3b514c177b9ee26d42f031f24c3b416402f2ed22af5f77a79414318f4",
+    "selfHashedForecastSequence": 557,
+    "sourceType": "SINGLE_EXCHANGE_PROXY"
+  },
+  "outcome": null,
+  "firstReadOnlyBackup": {
+    "runId": "44951250831",
+    "headSha": "0de8c1bd8e619a40bf675a4c1baf5cdf56e52f34",
+    "createdAt": "2026-11-21T21:22:58.000Z",
+    "completedAt": "2026-11-21T21:23:21.000Z",
+    "snapshotExportSha256": "13698f0f88f9ae88ae08d8b9e729d1ea131b916b95afa2c3736a038cd2b7e213"
+  },
+  "limitations": "Server-generated hash chain and claimed freeze timestamp, not proof of pre-expiry GitHub witnessing, exact CF BRTI, original market input integrity, tradeable odds, fill, or independently qualified accuracy.",
+  "independentQualifiedCount": 0,
+  "ordersEnabled": false,
+  "actualFillsVerified": 0
+}
