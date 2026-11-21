@@ -172,3 +172,14 @@ test('unsafe intermediate runner clocks fail closed before emitting witness summ
   assert.deepEqual(logs,[]);
  }
 });
+
+test('unsafe final raw runner clock fails even when subtraction appears safe',async()=>{
+ const logs=[];
+ let ticks=0;
+ await assert.rejects(()=>runBoundedShadowObserver({
+  maxWaitMs:0,now:()=>++ticks===1?100000:ticks===2?100001:Number.MAX_SAFE_INTEGER+1,
+  sleep:async()=>{},log:line=>logs.push(line),
+  runObserver:async()=>sample('OBSERVED_PREEXPIRY')
+ }),/final clock invalid/);
+ assert.deepEqual(logs,[]);
+});
