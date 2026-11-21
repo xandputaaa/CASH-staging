@@ -54,10 +54,12 @@ async function runBoundedShadowObserver({
       ?result.observedBeforeExpiryCount<1
       :result.observedBeforeExpiryCount!==0))
    throw Error('Shadow source observer returned inconsistent evidence');
-  if(result.status==='OBSERVED_PREEXPIRY')break;
+  // Check the runner clock even on a successful witness: otherwise a
+  // backwards clock bypasses the existing fail-closed timing guard.
   const elapsed=now()-started;
   if(!Number.isFinite(elapsed)||elapsed<0)
    throw Error('GitHub runner time moved backwards');
+  if(result.status==='OBSERVED_PREEXPIRY')break;
   const remaining=maxWaitMs-elapsed;
   if(remaining<intervalMs)break;
   await sleep(intervalMs);
