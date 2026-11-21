@@ -127,3 +127,14 @@ test('unknown zero-count status fails closed without success or archive summary'
  }),/inconsistent evidence/);
  assert.equal(logs.length,0);
 });
+
+test('successful witness still rejects a backwards runner clock without attestation',async()=>{
+ const logs=[];
+ let ticks=0;
+ await assert.rejects(()=>runBoundedShadowObserver({
+  maxWaitMs:0,now:()=>ticks++===0?100000:99000,
+  sleep:async()=>{},log:line=>logs.push(line),
+  runObserver:async()=>sample('OBSERVED_PREEXPIRY')
+ }),/moved backwards/);
+ assert.equal(logs.length,0);
+});
