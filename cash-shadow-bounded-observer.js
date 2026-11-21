@@ -32,7 +32,7 @@ async function runBoundedShadowObserver({
  const failureCounts=Object.create(null);
  const allowedFailureCodes=new Set([
   'SOURCE_AUTHORIZATION_REJECTED','SOURCE_HTTP_ERROR','SOURCE_BODY_TOO_LARGE',
-  'RUNNER_CLOCK_UNAVAILABLE','SOURCE_INVALID_JSON','SOURCE_TRANSPORT_OR_UNKNOWN'
+  'RUNNER_CLOCK_UNAVAILABLE','SOURCE_INVALID_JSON','SOURCE_INVALID_UTF8','SOURCE_TRANSPORT_OR_UNKNOWN'
  ]);
  // This guard also protects tests and the runner from a clock that stalls.
  const maxAttempts=Math.floor(maxWaitMs/intervalMs)+1;
