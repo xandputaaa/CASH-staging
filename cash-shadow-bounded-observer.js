@@ -70,6 +70,11 @@ async function runBoundedShadowObserver({
   lastClock=current;
   if(!Number.isSafeInteger(elapsed))
    throw Error('GitHub runner intermediate clock invalid');
+  // Authorization rejection is not a transient empty market window. Do not
+  // spend the remaining observation budget retrying a known denied source.
+  // Preserve the fixed diagnostic code and zero qualification.
+  if(result.status==='PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID'&&
+     result.errorCode==='SOURCE_AUTHORIZATION_REJECTED')break;
   if(result.status==='OBSERVED_PREEXPIRY')break;
   const remaining=maxWaitMs-elapsed;
   if(remaining<intervalMs)break;
