@@ -108,3 +108,22 @@ test('bounded retries summarize only fixed safe error codes without leaking arbi
  assert.doesNotMatch(output,/SECRET_TOKEN_DO_NOT_LOG/);
  assert.match(output,/CASH_SHADOW_BOUNDED_OBSERVER_QUALIFIED=0/);
 });
+
+test('non-success statuses cannot smuggle a pre-expiry count into bounded evidence',async()=>{
+ for(const status of ['NO_ELIGIBLE_PREEXPIRY_RECORDS','PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID','UNRECOGNIZED_STATUS']){
+  const logs=[];
+  await assert.rejects(()=>runBoundedShadowObserver({
+   maxWaitMs:0,now:()=>100000,sleep:async()=>{},log:line=>logs.push(line),
+   runObserver:async()=>({status,observedBeforeExpiryCount:1})
+  }),/inconsistent evidence/);
+  assert.equal(logs.length,0);
+ }
+});
+test('unknown zero-count status fails closed without success or archive summary',async()=>{
+ const logs=[];
+ await assert.rejects(()=>runBoundedShadowObserver({
+  maxWaitMs:0,now:()=>100000,sleep:async()=>{},log:line=>logs.push(line),
+  runObserver:async()=>({status:'UNRECOGNIZED_STATUS',observedBeforeExpiryCount:0})
+ }),/inconsistent evidence/);
+ assert.equal(logs.length,0);
+});
