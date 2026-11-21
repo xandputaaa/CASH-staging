@@ -90,6 +90,16 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
    :code==='RUNNER_CLOCK_UNAVAILABLE'?'RUNNER_CLOCK_UNAVAILABLE'
    :code.startsWith('SHADOW_SOURCE_HTTP_')?'SOURCE_HTTP_ERROR'
    :error instanceof SyntaxError?'SOURCE_INVALID_JSON':'SOURCE_TRANSPORT_OR_UNKNOWN';
+  // Fixed, privacy-safe run context for authorization failures. This only
+  // describes OIDC request eligibility, never whether a token was minted.
+  if(result.errorCode==='SOURCE_AUTHORIZATION_REJECTED'){
+   result.authorizationContext=env.GITHUB_ACTIONS==='true'&&
+    env.GITHUB_EVENT_NAME==='schedule'&&env.GITHUB_REF==='refs/heads/main'&&
+    env.GITHUB_REPOSITORY==='xandputaaa/CASH-staging'
+     ?env.ACTIONS_ID_TOKEN_REQUEST_URL&&env.ACTIONS_ID_TOKEN_REQUEST_TOKEN
+       ?'SCHEDULE_MAIN_OIDC_REQUEST_AVAILABLE':'SCHEDULE_MAIN_OIDC_REQUEST_UNAVAILABLE'
+     :'NON_SCHEDULE_OR_NON_MAIN_RUN';
+  }
   // A failed runner clock must not prevent a safe failure artifact from being written.
   // Never replace missing runner time with source-provided or fabricated timestamps.
   let failureClock;
@@ -103,6 +113,7 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
  console.log('CASH_SHADOW_OBSERVER_STATUS='+result.status);
  // Fixed enum only: safe for Actions logs even when the witness artifact is absent.
  if(result.errorCode)console.log('CASH_SHADOW_SOURCE_ERROR_CODE='+result.errorCode);
+ if(result.authorizationContext)console.log('CASH_SHADOW_AUTHORIZATION_CONTEXT='+result.authorizationContext);
  console.log('CASH_SHADOW_OBSERVED_PREEXPIRY='+result.observedBeforeExpiryCount);
  console.log('CASH_SHADOW_INDEPENDENTLY_QUALIFIED=0');
  console.log('CASH_SHADOW_ORDERS_ALLOWED=false');
