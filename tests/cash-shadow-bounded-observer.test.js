@@ -88,7 +88,7 @@ test('bounded retries summarize only fixed safe error codes without leaking arbi
  let tick=100000,calls=0;
  const logs=[];
  const results=[
-  {status:'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID',observedBeforeExpiryCount:0,errorCode:'SOURCE_AUTHORIZATION_REJECTED'},
+  {status:'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID',observedBeforeExpiryCount:0,errorCode:'SOURCE_HTTP_ERROR'},
   {status:'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID',observedBeforeExpiryCount:0,errorCode:'SECRET_TOKEN_DO_NOT_LOG'},
   {status:'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID',observedBeforeExpiryCount:0,errorCode:'SOURCE_INVALID_UTF8'}
  ];
@@ -100,7 +100,7 @@ test('bounded retries summarize only fixed safe error codes without leaking arbi
  });
  assert.equal(r.attempts,3);
  assert.equal(r.result.observedBeforeExpiryCount,0);
- assert.equal(r.failureCounts.SOURCE_AUTHORIZATION_REJECTED,1);
+ assert.equal(r.failureCounts.SOURCE_HTTP_ERROR,1);
  assert.equal(r.failureCounts.SOURCE_TRANSPORT_OR_UNKNOWN,1);
  assert.equal(r.failureCounts.SOURCE_INVALID_UTF8,1);
  const output=logs.join('\\n');
@@ -271,4 +271,34 @@ test('non-success permits absent or empty witness arrays without claiming eviden
   assert.equal(result.result.observedBeforeExpiryCount,0);
   assert.ok(logs.includes('CASH_SHADOW_BOUNDED_OBSERVER_QUALIFIED=0'));
  }
+});
+
+test('authorization rejection stops retries immediately without claiming witness evidence',async()=>{
+ let clock=100000,calls=0,slept=0;const logs=[];
+ const result=await runBoundedShadowObserver({
+  now:()=>clock,sleep:async ms=>{slept+=ms;clock+=ms},
+  runObserver:async()=>{calls++;clock+=500;return {
+   status:'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID',observedBeforeExpiryCount:0,
+   observedForecasts:[],errorCode:'SOURCE_AUTHORIZATION_REJECTED'}},
+  log:line=>logs.push(line)
+ });
+ assert.equal(calls,1);assert.equal(slept,0);
+ assert.equal(result.attempts,1);
+ assert.equal(result.failureCounts.SOURCE_AUTHORIZATION_REJECTED,1);
+ assert.equal(result.result.observedBeforeExpiryCount,0);
+ assert.ok(logs.includes('CASH_SHADOW_BOUNDED_OBSERVER_QUALIFIED=0'));
+});
+test('transient source errors can recover on a later pre-expiry witness',async()=>{
+ let clock=100000,calls=0;
+ const result=await runBoundedShadowObserver({
+  maxWaitMs:65000,now:()=>clock,
+  sleep:async ms=>{clock+=ms},
+  runObserver:async()=>{clock+=500;return ++calls===1?{
+   status:'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID',observedBeforeExpiryCount:0,
+   observedForecasts:[],errorCode:'SOURCE_HTTP_ERROR'
+  }:sample('OBSERVED_PREEXPIRY')},log:()=>{}
+ });
+ assert.equal(result.attempts,2);
+ assert.equal(result.result.status,'OBSERVED_PREEXPIRY');
+ assert.equal(result.failureCounts.SOURCE_HTTP_ERROR,1);
 });
