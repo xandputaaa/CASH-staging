@@ -17,8 +17,30 @@ async function getPublicSnapshot(url,{fetchImpl=fetch}={}){
    Accept:'application/json','User-Agent':'CASH-shadow-GitHub-observer/1.0',...auth
   }});
   if(!res.ok)throw Error('SHADOW_SOURCE_HTTP_'+res.status);
-  const body=await res.text();
-  if(Buffer.byteLength(body)>2500000)throw Error('SHADOW_SOURCE_TOO_LARGE');
+  // Bound the bytes as they arrive, not after res.text() has buffered them.
+  // A malicious or broken source must not exhaust the observer runner's memory.
+  const maxBytes=2500000;
+  const lengthHeader=res.headers?.get?.('content-length');
+  if(lengthHeader!==null&&lengthHeader!==undefined&&/^[0-9]+$/.test(lengthHeader)&&
+     Number(lengthHeader)>maxBytes)throw Error('SHADOW_SOURCE_TOO_LARGE');
+  let body;
+  if(res.body&&typeof res.body[Symbol.asyncIterator]==='function'){
+   const chunks=[];let total=0;
+   for await(const chunk of res.body){
+    const bytes=Buffer.from(chunk);
+    total+=bytes.length;
+    if(total>maxBytes){
+     await res.body.cancel?.().catch?.(()=>{});
+     throw Error('SHADOW_SOURCE_TOO_LARGE');
+    }
+    chunks.push(bytes);
+   }
+   body=Buffer.concat(chunks,total).toString('utf8');
+  }else{
+   // Compatibility with test response stubs that only implement text().
+   body=await res.text();
+   if(Buffer.byteLength(body)>maxBytes)throw Error('SHADOW_SOURCE_TOO_LARGE');
+  }
   return {snapshot:JSON.parse(body),sha256:SHA(body)};
  }finally{clearTimeout(timer)}
 }
