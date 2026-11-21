@@ -53,8 +53,11 @@ async function runBoundedShadowObserver({
     !['OBSERVED_PREEXPIRY','NO_ELIGIBLE_PREEXPIRY_RECORDS',
       'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID'].includes(result.status)||
     (result.status==='OBSERVED_PREEXPIRY'
-      ?result.observedBeforeExpiryCount<1
-      :result.observedBeforeExpiryCount!==0))
+      ?result.observedBeforeExpiryCount<1||
+        !Array.isArray(result.observedForecasts)||
+        result.observedForecasts.length!==result.observedBeforeExpiryCount
+      :result.observedBeforeExpiryCount!==0||
+        (Array.isArray(result.observedForecasts)&&result.observedForecasts.length!==0)))
    throw Error('Shadow source observer returned inconsistent evidence');
   // Check the runner clock even on a successful witness: otherwise a
   // backwards clock bypasses the existing fail-closed timing guard.

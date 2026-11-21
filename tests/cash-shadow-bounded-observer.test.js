@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {runBoundedShadowObserver,MAX_WAIT_MS}=require('../cash-shadow-bounded-observer');
 function sample(status='NO_ELIGIBLE_PREEXPIRY_RECORDS'){
- return {status,observedBeforeExpiryCount:status==='OBSERVED_PREEXPIRY'?1:0};
+ return {status,observedBeforeExpiryCount:status==='OBSERVED_PREEXPIRY'?1:0,observedForecasts:status==='OBSERVED_PREEXPIRY'?[{marketId:'TEST'}]:[]};
 }
 function harness(sequence,{start=100000,intervalMs=30000,maxWaitMs=180000}={}){
  let clock=start,calls=0,slept=0;
@@ -227,5 +227,24 @@ test('rejects final clock regression relative to last intermediate sample',async
   sleep:async()=>{},log:line=>logs.push(line),
   runObserver:async()=>sample('OBSERVED_PREEXPIRY')
  }),/final clock invalid/);
+ assert.deepEqual(logs,[]);
+});
+
+test('success cannot claim a pre-expiry count inconsistent with its witness records',async()=>{
+ for(const observedForecasts of [undefined,[],[{marketId:'A'},{marketId:'B'}]]){
+  const logs=[];
+  await assert.rejects(()=>runBoundedShadowObserver({
+   maxWaitMs:0,now:()=>100000,sleep:async()=>{},log:line=>logs.push(line),
+   runObserver:async()=>({status:'OBSERVED_PREEXPIRY',observedBeforeExpiryCount:1,observedForecasts})
+  }),/inconsistent evidence/);
+  assert.deepEqual(logs,[]);
+ }
+});
+test('non-success cannot carry uncounted witness records',async()=>{
+ const logs=[];
+ await assert.rejects(()=>runBoundedShadowObserver({
+  maxWaitMs:0,now:()=>100000,sleep:async()=>{},log:line=>logs.push(line),
+  runObserver:async()=>({status:'NO_ELIGIBLE_PREEXPIRY_RECORDS',observedBeforeExpiryCount:0,observedForecasts:[{marketId:'A'}]})
+ }),/inconsistent evidence/);
  assert.deepEqual(logs,[]);
 });
