@@ -44,11 +44,15 @@ async function runBoundedShadowObserver({
     ?result.errorCode:'SOURCE_TRANSPORT_OR_UNKNOWN';
    failureCounts[code]=(failureCounts[code]||0)+1;
   }
+  // A non-success status must never carry purported pre-expiry evidence.
+  // Reject unknown statuses instead of letting an upstream schema change
+  // silently enter the archive as an apparently valid observation.
   if(!result||!Number.isSafeInteger(result.observedBeforeExpiryCount)||
-    result.observedBeforeExpiryCount<0||
-    typeof result.status!=='string'||
-    (result.status==='OBSERVED_PREEXPIRY'&&
-     result.observedBeforeExpiryCount<1))
+    !['OBSERVED_PREEXPIRY','NO_ELIGIBLE_PREEXPIRY_RECORDS',
+      'PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID'].includes(result.status)||
+    (result.status==='OBSERVED_PREEXPIRY'
+      ?result.observedBeforeExpiryCount<1
+      :result.observedBeforeExpiryCount!==0))
    throw Error('Shadow source observer returned inconsistent evidence');
   if(result.status==='OBSERVED_PREEXPIRY')break;
   const elapsed=now()-started;
