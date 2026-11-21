@@ -19,7 +19,7 @@ test('shadow witness hashes original UTF-8 bytes across split multibyte chunks',
 });
 test('malformed UTF-8 response is rejected instead of silently changing source bytes',async()=>{
  const raw=Buffer.concat([Buffer.from('{"name":"'),Buffer.from([0xff]),Buffer.from('","events":[]}')]);
- await assert.rejects(getPublicSnapshot('https://example.invalid',{fetchImpl:async()=>stream([raw])}),TypeError);
+ await assert.rejects(getPublicSnapshot('https://example.invalid',{fetchImpl:async()=>stream([raw])}),/SHADOW_SOURCE_INVALID_UTF8/);
 });
 test('invalid UTF-8 cannot create a pre-expiry witness or source digest',async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'cash-shadow-utf8-'));
@@ -32,6 +32,6 @@ test('invalid UTF-8 cannot create a pre-expiry witness or source digest',async()
   assert.equal(artifact.observedBeforeExpiryCount,0);
   assert.equal(artifact.independentlyQualifiedCount,0);
   assert.equal(artifact.realMoneyOrdersAllowed,false);
-  assert.equal(artifact.errorCode,'SOURCE_TRANSPORT_OR_UNKNOWN');
+  assert.equal(artifact.errorCode,'SOURCE_INVALID_UTF8');
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
