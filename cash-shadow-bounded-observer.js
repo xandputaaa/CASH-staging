@@ -11,6 +11,7 @@
  */
 const {runPublicShadowObserver}=require('./cash-shadow-public-observer-runner');
 const MAX_WAIT_MS=180000,DEFAULT_INTERVAL_MS=30000;
+const validRunnerClock=value=>Number.isSafeInteger(value)&&value>=0&&value<=8640000000000000;
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function runBoundedShadowObserver({
  runObserver=runPublicShadowObserver,
@@ -26,7 +27,7 @@ async function runBoundedShadowObserver({
     Array.isArray(observerOptions))
   throw Error('Unsafe bounded shadow observer configuration');
  const started=now();
- if(!Number.isSafeInteger(started))throw Error('Runner start clock invalid');
+ if(!validRunnerClock(started))throw Error('Runner start clock invalid');
  let attempts=0,result=null;
  // Aggregate fixed, non-sensitive categories across attempts; never log exception text.
  const failureCounts=Object.create(null);
@@ -57,7 +58,7 @@ async function runBoundedShadowObserver({
   // Check the runner clock even on a successful witness: otherwise a
   // backwards clock bypasses the existing fail-closed timing guard.
   const current=now();
-  if(!Number.isSafeInteger(current))
+  if(!validRunnerClock(current))
    throw Error('GitHub runner intermediate clock invalid');
   const elapsed=current-started;
   if(elapsed<0)throw Error('GitHub runner time moved backwards');
@@ -72,7 +73,7 @@ async function runBoundedShadowObserver({
  // if time regresses after the last observation or becomes non-finite.
  const finalClock=now();
  const elapsed=finalClock-started;
- if(!Number.isSafeInteger(finalClock)||!Number.isSafeInteger(elapsed)||elapsed<0)
+ if(!validRunnerClock(finalClock)||!Number.isSafeInteger(elapsed)||elapsed<0)
   throw Error('GitHub runner final clock invalid');
  log('CASH_SHADOW_BOUNDED_OBSERVER_FAILURE_COUNTS='+JSON.stringify(failureCounts));
  log('CASH_SHADOW_BOUNDED_OBSERVER_ATTEMPTS='+attempts);
