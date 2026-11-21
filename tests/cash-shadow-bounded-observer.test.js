@@ -183,3 +183,24 @@ test('unsafe final raw runner clock fails even when subtraction appears safe',as
  }),/final clock invalid/);
  assert.deepEqual(logs,[]);
 });
+
+test('bounded observer rejects out-of-Date-range and negative runner clock samples',async()=>{
+ for(const phase of ['start','intermediate','final']){
+  for(const invalid of [-1,8640000000000001]){
+   const logs=[];let ticks=0,calls=0;
+   const now=()=>{
+    ticks++;
+    if(phase==='start'&&ticks===1)return invalid;
+    if(phase==='intermediate'&&ticks===2)return invalid;
+    if(phase==='final'&&ticks===3)return invalid;
+    return 100000;
+   };
+   await assert.rejects(()=>runBoundedShadowObserver({
+    maxWaitMs:0,now,sleep:async()=>{},log:line=>logs.push(line),
+    runObserver:async()=>{calls++;return sample('OBSERVED_PREEXPIRY')}
+   }),new RegExp(phase==='start'?'start clock invalid':phase+' clock invalid'));
+   assert.deepEqual(logs,[]);
+   assert.equal(calls,phase==='start'?0:1);
+  }
+ }
+});
