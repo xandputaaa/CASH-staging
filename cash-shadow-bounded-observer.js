@@ -57,7 +57,8 @@ async function runBoundedShadowObserver({
   // Check the runner clock even on a successful witness: otherwise a
   // backwards clock bypasses the existing fail-closed timing guard.
   const elapsed=now()-started;
-  if(!Number.isSafeInteger(elapsed)||elapsed<0)
+  if(elapsed<0)throw Error('GitHub runner time moved backwards');
+  if(!Number.isSafeInteger(elapsed))
    throw Error('GitHub runner intermediate clock invalid');
   if(result.status==='OBSERVED_PREEXPIRY')break;
   const remaining=maxWaitMs-elapsed;
