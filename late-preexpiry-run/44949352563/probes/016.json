@@ -1,0 +1,80 @@
+{
+  "version": "CASH_OFFSERVER_OBSERVATION_V1",
+  "observationClass": "GITHUB_RUNNER_UTC_CLOCK_PROVISIONAL",
+  "observedAtRunner": "2026-11-21T21:11:56.602Z",
+  "githubRunId": "44949352563",
+  "githubRepo": "xandputaaa/CASH-staging",
+  "githubCommitSha": "0de8c1bd8e619a40bf675a4c1baf5cdf56e52f34",
+  "frozenEvidence": [
+    {
+      "model": "KXBTC15M_SETTLEMENT_EARLY_V3",
+      "marketId": "KXBTC15M-26NOV211615-15",
+      "frozenSide": "WAIT",
+      "frozenAt": "2026-11-21T21:02:17.051Z",
+      "contractClosesAt": "2026-11-21T21:15:00Z",
+      "journalSequence": 555,
+      "frozenEventHash": "f20da6fd2d5e84058dc9479fb5a12f7b42e09be72562929daa5eef4d43ba9484",
+      "headHashSeen": "f20da6fd2d5e84058dc9479fb5a12f7b42e09be72562929daa5eef4d43ba9484",
+      "publicProxyOnly": true,
+      "exchangeAtWitness": {
+        "state": "MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET",
+        "source": "KALSHI_DIRECT_PUBLIC_GET_MARKET",
+        "observedAtRunner": "2026-11-21T21:11:56.888Z",
+        "independentValidation": false,
+        "isFill": false,
+        "quoteWasNotFrozenAtPrediction": true,
+        "publishedCloseTime": "2026-11-21T21:15:00Z",
+        "publicStrikeAtObserver": 60318.03,
+        "publicStrikeType": "greater_or_equal",
+        "publicMarketStatusAtObserver": "active",
+        "exchangePublicFieldsSha256": "74d0104e114d6ff5197a85aa482ce9bf83213dc7dbcf71266f9f64c2fcf80784",
+        "witnessTimeQuotesNotFills": {
+          "yesAskDollars": 0.42,
+          "noAskDollars": 0.59,
+          "yesAskSizeFp": 1732.88,
+          "noAskSizeFp": null
+        }
+      }
+    },
+    {
+      "model": "KXBTC15M_LATE_CHECKPOINT_SHADOW_V1",
+      "marketId": "KXBTC15M-26NOV211615-15",
+      "frozenSide": "WAIT",
+      "frozenAt": "2026-11-21T21:11:37.208Z",
+      "contractClosesAt": "2026-11-21T21:15:00Z",
+      "journalSequence": 261,
+      "frozenEventHash": "404e83f0ed3c5518e5654f216c2da4d10097eee9b7beff5b1ab6d241c5353ddc",
+      "headHashSeen": "404e83f0ed3c5518e5654f216c2da4d10097eee9b7beff5b1ab6d241c5353ddc",
+      "publicProxyOnly": true,
+      "exchangeAtWitness": {
+        "state": "MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET",
+        "source": "KALSHI_DIRECT_PUBLIC_GET_MARKET",
+        "observedAtRunner": "2026-11-21T21:11:56.888Z",
+        "independentValidation": false,
+        "isFill": false,
+        "quoteWasNotFrozenAtPrediction": true,
+        "publishedCloseTime": "2026-11-21T21:15:00Z",
+        "publicStrikeAtObserver": 60318.03,
+        "publicStrikeType": "greater_or_equal",
+        "publicMarketStatusAtObserver": "active",
+        "exchangePublicFieldsSha256": "74d0104e114d6ff5197a85aa482ce9bf83213dc7dbcf71266f9f64c2fcf80784",
+        "witnessTimeQuotesNotFills": {
+          "yesAskDollars": 0.42,
+          "noAskDollars": 0.59,
+          "yesAskSizeFp": 1732.88,
+          "noAskSizeFp": null
+        }
+      }
+    }
+  ],
+  "sourcesUnavailableOrInvalid": [],
+  "claimedIndependentlyQualifiedCount": 0,
+  "realOrdersEnabled": false,
+  "calibrated": false,
+  "evidenceWitnessedBeforeExpiry": 2,
+  "note": "External read-only observation at the GitHub runner clock. The workflow run and published artifact can later be checked against GitHub-controlled job timestamps. A hash/runner clock is not a cryptographic independent timestamp, proof against fabricated server histories, a calibrated edge, proof of execution, or an independently qualified accuracy score.",
+  "directExchangeComparisons": 2,
+  "directExchangeMatches": 2,
+  "directExchangeMismatchesOrUnavailable": 0,
+  "independentQualifiedCount": 0
+}
