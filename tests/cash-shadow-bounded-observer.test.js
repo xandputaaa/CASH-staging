@@ -248,3 +248,27 @@ test('non-success cannot carry uncounted witness records',async()=>{
  }),/inconsistent evidence/);
  assert.deepEqual(logs,[]);
 });
+
+test('non-success rejects malformed non-array witness payloads without attestation',async()=>{
+ for(const status of ['NO_ELIGIBLE_PREEXPIRY_RECORDS','PUBLIC_SOURCE_UNAVAILABLE_OR_INVALID']){
+  for(const observedForecasts of [{marketId:'A'},'hidden-witness',0,false]){
+   const logs=[];
+   await assert.rejects(()=>runBoundedShadowObserver({
+    maxWaitMs:0,now:()=>100000,sleep:async()=>{},log:line=>logs.push(line),
+    runObserver:async()=>({status,observedBeforeExpiryCount:0,observedForecasts})
+   }),/inconsistent evidence/);
+   assert.deepEqual(logs,[]);
+  }
+ }
+});
+test('non-success permits absent or empty witness arrays without claiming evidence',async()=>{
+ for(const observedForecasts of [undefined,null,[]]){
+  const logs=[];
+  const result=await runBoundedShadowObserver({
+   maxWaitMs:0,now:()=>100000,sleep:async()=>{},log:line=>logs.push(line),
+   runObserver:async()=>({status:'NO_ELIGIBLE_PREEXPIRY_RECORDS',observedBeforeExpiryCount:0,observedForecasts})
+  });
+  assert.equal(result.result.observedBeforeExpiryCount,0);
+  assert.ok(logs.includes('CASH_SHADOW_BOUNDED_OBSERVER_QUALIFIED=0'));
+ }
+});
