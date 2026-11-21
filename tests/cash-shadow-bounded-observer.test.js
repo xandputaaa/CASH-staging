@@ -138,3 +138,24 @@ test('successful witness still rejects a backwards runner clock without attestat
  }),/moved backwards/);
  assert.equal(logs.length,0);
 });
+
+test('final runner clock regression after successful observation emits no attestation',async()=>{
+ let ticks=0;
+ const logs=[];
+ await assert.rejects(()=>runBoundedShadowObserver({
+  maxWaitMs:0,now:()=>++ticks===1?100000:100500-(ticks===3?1000:0),
+  sleep:async()=>{},log:line=>logs.push(line),
+  runObserver:async()=>sample('OBSERVED_PREEXPIRY')
+ }),/final clock invalid/);
+ assert.deepEqual(logs,[]);
+});
+test('non-finite final runner clock emits no observer summary',async()=>{
+ let ticks=0;
+ const logs=[];
+ await assert.rejects(()=>runBoundedShadowObserver({
+  maxWaitMs:0,now:()=>++ticks===3?NaN:100000,
+  sleep:async()=>{},log:line=>logs.push(line),
+  runObserver:async()=>sample('OBSERVED_PREEXPIRY')
+ }),/final clock invalid/);
+ assert.deepEqual(logs,[]);
+});
