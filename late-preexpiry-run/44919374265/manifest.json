@@ -1,0 +1,33 @@
+{
+  "version": "CASH_DURABLE_GITHUB_LATE_OBSERVER_ARCHIVE_V1",
+  "sourceRunId": "44919374265",
+  "sourceWorkflow": "CASH pre-expiry public research observer",
+  "sourceRunEvent": "workflow_run",
+  "sourceRepository": "xandputaaa/CASH-staging",
+  "sourceHeadSha": "73a7d614e25a4d5a2e556607220ac8927ffd015f",
+  "sourceRunCreatedAt": "2026-11-21T15:28:40Z",
+  "sourceRunFinishedAt": "2026-11-21T15:31:52Z",
+  "validatedParentRunId": "44919329551",
+  "parentProvenance": "GITHUB_API_SUCCESSFUL_SCHEDULE_MAIN",
+  "sourceArtifactFiles": [
+    {
+      "file": "observer-origin.json",
+      "sha256": "acf95720ad2fdc38d07ff2657853e11ab2081cb139e2d52b037465b39cc11aa8",
+      "sizeBytes": 798
+    },
+    {
+      "file": "observer-run-summary.json",
+      "sha256": "1edb08d8c4ae86650c8391482361f0a538c259a1da8e7f9e67a3afe842af54c1",
+      "sizeBytes": 1625
+    }
+  ],
+  "distinctCommitments": 0,
+  "directionalCommitments": 0,
+  "lateDirectionalCommitments": 0,
+  "abstentionCommitments": 0,
+  "publicKalshiDirectComparisons": 0,
+  "archivedAtGitHubRunner": "2026-11-21T15:32:14.287Z",
+  "independentQualificationCount": 0,
+  "ordersAllowed": false,
+  "limitation": "Commit captures past GitHub Actions public witness artifacts after direct GitHub API run and parent verification. Run creation/completion times are GitHub metadata, NOT a cryptographic third-party timestamp, a independently authenticated BRTI index, forecast accuracy, order fill or profit."
+}
