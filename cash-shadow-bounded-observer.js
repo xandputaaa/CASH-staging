@@ -64,7 +64,11 @@ async function runBoundedShadowObserver({
   if(remaining<intervalMs)break;
   await sleep(intervalMs);
  }
- const elapsed=Math.max(0,now()-started);
+ // Validate the final clock sample too: do not publish a success summary
+ // if time regresses after the last observation or becomes non-finite.
+ const elapsed=now()-started;
+ if(!Number.isSafeInteger(elapsed)||elapsed<0)
+  throw Error('GitHub runner final clock invalid');
  log('CASH_SHADOW_BOUNDED_OBSERVER_FAILURE_COUNTS='+JSON.stringify(failureCounts));
  log('CASH_SHADOW_BOUNDED_OBSERVER_ATTEMPTS='+attempts);
  log('CASH_SHADOW_BOUNDED_OBSERVER_ELAPSED_MS='+elapsed);
