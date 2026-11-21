@@ -23,7 +23,7 @@ async function getPublicSnapshot(url,{fetchImpl=fetch}={}){
   const lengthHeader=res.headers?.get?.('content-length');
   if(lengthHeader!==null&&lengthHeader!==undefined&&/^[0-9]+$/.test(lengthHeader)&&
      Number(lengthHeader)>maxBytes)throw Error('SHADOW_SOURCE_TOO_LARGE');
-  let body;
+  let raw;
   if(res.body&&typeof res.body[Symbol.asyncIterator]==='function'){
    const chunks=[];let total=0;
    for await(const chunk of res.body){
@@ -35,13 +35,17 @@ async function getPublicSnapshot(url,{fetchImpl=fetch}={}){
     }
     chunks.push(bytes);
    }
-   body=Buffer.concat(chunks,total).toString('utf8');
+   raw=Buffer.concat(chunks,total);
   }else{
    // Compatibility with test response stubs that only implement text().
-   body=await res.text();
-   if(Buffer.byteLength(body)>maxBytes)throw Error('SHADOW_SOURCE_TOO_LARGE');
+   const body=await res.text();
+   raw=Buffer.from(body,'utf8');
+   if(raw.length>maxBytes)throw Error('SHADOW_SOURCE_TOO_LARGE');
   }
-  return {snapshot:JSON.parse(body),sha256:SHA(body)};
+  // Reject malformed UTF-8 rather than silently replacing bytes before hashing.
+  // Hash the exact response bytes used for the parsed snapshot.
+  const body=new TextDecoder('utf-8',{fatal:true}).decode(raw);
+  return {snapshot:JSON.parse(body),sha256:SHA(raw)};
  }finally{clearTimeout(timer)}
 }
 async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
