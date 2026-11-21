@@ -44,7 +44,9 @@ async function getPublicSnapshot(url,{fetchImpl=fetch}={}){
   }
   // Reject malformed UTF-8 rather than silently replacing bytes before hashing.
   // Hash the exact response bytes used for the parsed snapshot.
-  const body=new TextDecoder('utf-8',{fatal:true}).decode(raw);
+  let body;
+  try{body=new TextDecoder('utf-8',{fatal:true}).decode(raw)}
+  catch{throw Error('SHADOW_SOURCE_INVALID_UTF8')}
   return {snapshot:JSON.parse(body),sha256:SHA(raw)};
  }finally{clearTimeout(timer)}
 }
@@ -84,6 +86,7 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
   result.errorCode=code==='SHADOW_SOURCE_HTTP_401'||code==='SHADOW_SOURCE_HTTP_403'
    ?'SOURCE_AUTHORIZATION_REJECTED'
    :code==='SHADOW_SOURCE_TOO_LARGE'?'SOURCE_BODY_TOO_LARGE'
+   :code==='SHADOW_SOURCE_INVALID_UTF8'?'SOURCE_INVALID_UTF8'
    :code==='RUNNER_CLOCK_UNAVAILABLE'?'RUNNER_CLOCK_UNAVAILABLE'
    :code.startsWith('SHADOW_SOURCE_HTTP_')?'SOURCE_HTTP_ERROR'
    :error instanceof SyntaxError?'SOURCE_INVALID_JSON':'SOURCE_TRANSPORT_OR_UNKNOWN';
