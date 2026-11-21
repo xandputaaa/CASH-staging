@@ -204,3 +204,28 @@ test('bounded observer rejects out-of-Date-range and negative runner clock sampl
   }
  }
 });
+
+test('rejects regression between valid intermediate runner samples',async()=>{
+ const logs=[];
+ const samples=[100000,110000,105000];
+ let index=0,calls=0;
+ await assert.rejects(()=>runBoundedShadowObserver({
+  maxWaitMs:60000,intervalMs:1000,
+  now:()=>samples[Math.min(index++,samples.length-1)],
+  sleep:async()=>{},log:line=>logs.push(line),
+  runObserver:async()=>{calls++;return sample()}
+ }),/moved backwards/);
+ assert.equal(calls,2);
+ assert.deepEqual(logs,[]);
+});
+test('rejects final clock regression relative to last intermediate sample',async()=>{
+ const logs=[];
+ const samples=[100000,110000,109000];
+ let index=0;
+ await assert.rejects(()=>runBoundedShadowObserver({
+  maxWaitMs:0,now:()=>samples[Math.min(index++,samples.length-1)],
+  sleep:async()=>{},log:line=>logs.push(line),
+  runObserver:async()=>sample('OBSERVED_PREEXPIRY')
+ }),/final clock invalid/);
+ assert.deepEqual(logs,[]);
+});
