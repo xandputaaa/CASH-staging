@@ -56,7 +56,10 @@ async function runBoundedShadowObserver({
    throw Error('Shadow source observer returned inconsistent evidence');
   // Check the runner clock even on a successful witness: otherwise a
   // backwards clock bypasses the existing fail-closed timing guard.
-  const elapsed=now()-started;
+  const current=now();
+  if(!Number.isSafeInteger(current))
+   throw Error('GitHub runner intermediate clock invalid');
+  const elapsed=current-started;
   if(elapsed<0)throw Error('GitHub runner time moved backwards');
   if(!Number.isSafeInteger(elapsed))
    throw Error('GitHub runner intermediate clock invalid');
@@ -67,8 +70,9 @@ async function runBoundedShadowObserver({
  }
  // Validate the final clock sample too: do not publish a success summary
  // if time regresses after the last observation or becomes non-finite.
- const elapsed=now()-started;
- if(!Number.isSafeInteger(elapsed)||elapsed<0)
+ const finalClock=now();
+ const elapsed=finalClock-started;
+ if(!Number.isSafeInteger(finalClock)||!Number.isSafeInteger(elapsed)||elapsed<0)
   throw Error('GitHub runner final clock invalid');
  log('CASH_SHADOW_BOUNDED_OBSERVER_FAILURE_COUNTS='+JSON.stringify(failureCounts));
  log('CASH_SHADOW_BOUNDED_OBSERVER_ATTEMPTS='+attempts);
