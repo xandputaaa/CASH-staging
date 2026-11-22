@@ -6,7 +6,11 @@ let cached={until:0,token:null,inflight:null};
 async function githubRunnerReadHeaders({
  env=process.env,fetchImpl=fetch,now=Date.now()
 }={}){
- if(env.GITHUB_ACTIONS!=='true'||env.GITHUB_EVENT_NAME!=='schedule'||
+ const approvedFollowup=env.GITHUB_EVENT_NAME==='workflow_run'&&
+  (env.GITHUB_WORKFLOW==='CASH pre-expiry public research observer'||
+   env.GITHUB_WORKFLOW==='CASH Model Lab public shadow pre-expiry witness');
+ if(env.GITHUB_ACTIONS!=='true'||
+  (env.GITHUB_EVENT_NAME!=='schedule'&&!approvedFollowup)||
   env.GITHUB_REF!=='refs/heads/main'||
   env.GITHUB_REPOSITORY!=='xandputaaa/CASH-staging'||
   !env.ACTIONS_ID_TOKEN_REQUEST_URL||
