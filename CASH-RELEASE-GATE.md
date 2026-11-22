@@ -1,3 +1,67 @@
+# CASH OS — current release gate (as of 2026-11-22 UTC)
+
+> **The controlled three-deployment allowance has been fully used.** This is a private
+> simulation / manual-analysis staging release, **not** a validated trading system.
+> Do not initiate further Railway deployments, unpin the source SHA, migrate/delete
+> the research volume, or enable real-money trading without separate user approval.
+
+## Audited deployed release
+
+- Project: `CASH — Simulation Staging`; environment: `staging`
+- Service: `cash-simulation-web`, domain: `https://cash-simulation-web-staging.up.railway.app/`
+- Verified live source: `xandputaaa/CASH-staging@6553304bcddf15b3648aa8ed735188b544124c18`
+- Current deployment: `d136357a-74ed-4325-832d-c71fccd56e68` — `SUCCESS`
+- Railway status after rollout: online, 1 running replica, 0 crashed, 0 reported unresolved warnings/critical issues; no pending configuration changes.
+- The persistent `cash-shadow-audit` volume remains mounted at `/data`. Startup logged 600 old archived shadow events recovered as `FILESYSTEM_ARCHIVE_RECOVERED_UNVERIFIED`; *mounted and recovered do not mean externally certified, backed up, or independently validated*.
+- Last new-deploy startup: browser login 7/7, HTTP startup paths 11/11. Kraken BTC spot, Kalshi public market, and Polymarket public market feeds were reported live at startup; these feeds can subsequently be partial, stale, or unavailable. Orders remained disabled.
+- GitHub CI simulation tests passed on the final exact commit. The mobile UI code includes Market, Position, Assist, Lab, and System screens; actual iPhone Safari visual/interaction sign-off is **not** evidenced by HTTP smoke tests.
+- The service reports **0/100 independently qualifying forecast results** and no calibrated profitable model. Counts of frozen journal entries, internal hit rates, historical backtests, and provisional GitHub witnesses are not qualified outcomes.
+
+### Actual deployment consumption (3/3)
+
+| # | Deployment ID | Git SHA | Outcome |
+| --- | --- | --- | --- |
+| 1 | `1d44b481-978d-4d7c-a6c3-7c2c5d9dcbbd` | `fd338b57f93f1312a9710bded51d4be3a098273a` | SUCCESS (replaced) |
+| 2 | `efd1cefc-240c-40d7-8631-06dd5e779978` | `90138677ff63e0d20c9bfa6b2b04ece9042ef72d` | SUCCESS (replaced) |
+| 3 | `d136357a-74ed-4325-832d-c71fccd56e68` | `6553304bcddf15b3648aa8ed735188b544124c18` | SUCCESS (live) |
+
+All three updates applied to the existing staging service, not to an isolated canary.
+Do not treat the successful smoke tests as a substitute for a tested backup,
+full journal semantic integrity/recovery audit, or independent mobile-device QA.
+
+## Outstanding acceptance gates
+
+- [x] Live service online with fixed source SHA, healthy replica, no pending changes.
+- [x] Signed Safari-friendly browser-login, stylesheet, JS, chart, and manual-calls route smoke passed 7/7.
+- [x] Read-only app startup route validation passed 11/11.
+- [x] $10 hypothetical maximum-loss guards, fee/quote staleness checks, and no-order posture covered by automated tests.
+- [x] GitHub simulation tests passed on the deployed SHA.
+- [ ] **Post-deploy real scheduled OIDC proof:** a newly created scheduled pre-expiry or shadow observer running the final deployed SHA must fetch its matching protected export without 401, record a valid off-server source observation or explicitly report no eligible contracts, and never acquire UI/order privileges. PR tests and old pre-deploy scheduled successes are insufficient. Separate `workflow_run` follow-ups should also be checked for genuine eligible scheduled-parent provenance.
+- [ ] **Post-deploy real scheduled reconciliation proof:** a scheduled `CASH witnessed-settlement reconciliation` run on the final code successfully fetches both private settlement exports using ephemeral OIDC, emits the bounded provisional report, and no unauthorized source error. A green PR-only reconciliation run is not proof.
+- [ ] **True evidence quality:** ≥100 prospective, independently qualified, chronologically held-out, correctly settled directional calls *per frozen model/venue, on distinct contracts* before discussing the original 85% accuracy gate; no mixing retrospective records, proxy versus official BRTI, WAITs, repeated polls, or same-contract cohorts. A numerical hit rate alone cannot establish economic profitability.
+- [ ] **Executable economics:** fee freshness, tradeable quote depth, slippage, actual fill evidence (if trading is eventually approved), and calibrated net-EV verification. No automated orders without explicit separate authority.
+- [ ] **Disaster-recovery review:** verify persistent journal semantics, continuity, archive capacity and a non-destructive usable backup/restore procedure. Merely observing a volume mount and a 600-event recovery log does not complete this.
+- [ ] **iPhone Safari visual acceptance:** owner verifies logged-in dashboard, bottom navigation, chart responsive states, quote expiry, manual position entry, assists and sign-out on a real device.
+- [ ] **Kalshi data terms / privacy:** independently review whether deployment, storage, retention, display and sharing comply with current terms; no broad distribution until approved.
+
+## Next operational checkpoint (no new Railway deployment)
+
+Read GitHub Actions' next actual `schedule` events for the two witness observers
+and the settlement reconciliation workflow. Check the job logs for real authorized
+source reads, evidence provenance, missing/denied quotes, record counts and zero
+trade authority. Do not count successful jobs that actually saved only
+`SOURCE_UNAVAILABLE` or `SOURCE_AUTHORIZATION_REJECTED` as verified collection.
+If the next scheduled runs have not happened yet, keep these gates open; do not
+invent future results or redeploy just to manufacture success.
+
+---
+
+## Historical 2026-11-20 release plan (superseded, preserved for audit only)
+
+The following original checklist and three-deployment proposal predates the
+completed rollout above. Its unchecked boxes are historical, **not**
+authorization to restart a new three-deployment budget.
+
 # CASH controlled release gate — maximum three deployments
 
 This is a release procedure, not evidence of validated predictions or authorization for automated orders.
