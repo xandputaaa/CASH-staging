@@ -59,6 +59,50 @@ increases bounded settlement reads to eight per 20-second scan but does not
 increase capacity, modify the model, or fabricate directional calls. A
 legitimate WAIT never enters a directional performance denominator.
 
+## Early V3 evidence capacity — offline completed-segment candidate (NOT deployed)
+
+As of the November 22 staging rollout, early V3 has **306 / 320** frozen
+contract commitments and **305 source-reported outcomes**, with all 306 frozen
+as WAIT. Settled WAITs are not directional accuracy evidence. Preserve the
+existing source file and active volume; do not truncate history, expand
+historical scoring, fabricate directional forecasts or restart the service to
+free slots.
+
+A code-only candidate introduces `prospective-offline-rotation.js` for an
+**explicitly authorized, quiesced, offline** early-cohort handoff, plus
+read-only segment inventory and completed-market replay protection in
+`prospective-store.js` and `prospective-monitor.js`. It is not callable
+from the running web server; the default CLI is dry-run only. It requires:
+
+1. Exactly **320 saved original early forecasts and 320 accepted independently
+   double-read source-reported outcomes** in the active 640-event journal.
+   Any unresolved market or corrupt/partial hash chain blocks the operation.
+2. A complete **unredacted public-proxy** source export matching the on-disk
+   journal event by event, plus a separate existing local copy of the full
+   `public-sessions/early-v3` forecast/outcome GitHub research archive.
+   Licensed-BRTI redacted commitments are insufficient for this procedure.
+3. A controlled **offline**, quiesced maintenance window with exclusive writer,
+   an audit-volume backup, explicit fresh operator approval, and the exact
+   approval environment setting for the offline command. The command cannot
+   prove there are zero unseen writers; review operational stop conditions.
+4. A SHA-256-verified, non-overwriting hardlink publication of the *original*
+   640-event file to `prospective-kalshi-completed/<sha256>.jsonl`, fsync,
+   then removal of the old active *directory entry*. The same inode remains
+   preserved in the completed segment. A crash leaving both file names blocks
+   later startup and requires operator review; no automatic repair is run.
+
+A new active journal, once separately authorized and started, begins a new
+**distinct cohort** and rejects any market ID contained in earlier immutable
+completed segments. Historical outcomes and observations are not silently
+replayed into today's confidence, sample count or trading permissions.
+The completed segment retention cap is 32 fully settled cohorts and has an
+additional physical disk bound. This is not an infinite storage feature.
+
+**No automatic Railway deployment, restart, live rotation, or variable change
+is authorized by this documentation.** Backups of self-reported model data,
+even if complete, are *not independent pre-expiry witnessing* and do not
+advance the 0/100 qualification count.
+
 ## Outstanding acceptance gates
 
 - [x] Live service online with fixed source SHA, healthy replica, no pending changes.
