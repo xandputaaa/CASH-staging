@@ -9,10 +9,10 @@ const {observeShadowSnapshot}=require('./cash-shadow-observer');
 const {githubRunnerReadHeaders}=require('./cash-runner-read-auth');
 const URL='https://cash-simulation-web-staging.up.railway.app/api/model-lab/shadow/export';
 const SHA=x=>crypto.createHash('sha256').update(x).digest('hex');
-async function getPublicSnapshot(url,{fetchImpl=fetch}={}){
+async function getPublicSnapshot(url,{fetchImpl=fetch,env=process.env}={}){
  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),15000);
  try{
-  const auth=await githubRunnerReadHeaders();
+  const auth=await githubRunnerReadHeaders({env,fetchImpl});
   const res=await fetchImpl(url,{signal:ctl.signal,redirect:'error',headers:{
    Accept:'application/json','User-Agent':'CASH-shadow-GitHub-observer/1.0',...auth
   }});
@@ -65,7 +65,7 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
   note:'Pre-expiry GitHub observation of public source claims, not independent BRTI settlement attestation, calibrated accuracy, or permission to trade.'
  };
  try{
-  const {snapshot,sha256}=await getPublicSnapshot(URL,{fetchImpl});
+  const {snapshot,sha256}=await getPublicSnapshot(URL,{fetchImpl,env});
   // This clock is intentionally read AFTER the complete network fetch.
   const observedAtMs=clock();
   if(!Number.isSafeInteger(observedAtMs)||observedAtMs<0||observedAtMs>8640000000000000)
