@@ -16,7 +16,13 @@ async function getPublicSnapshot(url,{fetchImpl=fetch,env=process.env}={}){
   const res=await fetchImpl(url,{signal:ctl.signal,redirect:'error',headers:{
    Accept:'application/json','User-Agent':'CASH-shadow-GitHub-observer/1.0',...auth
   }});
-  if(!res.ok)throw Error('SHADOW_SOURCE_HTTP_'+res.status);
+  if(!res.ok){
+   const failure=Error('SHADOW_SOURCE_HTTP_'+res.status);
+   // Fixed boolean provenance, never the bearer token or its claims.
+   failure.sourceBearerAttached=typeof auth.Authorization==='string'&&
+    auth.Authorization.startsWith('Bearer ');
+   throw failure;
+  }
   // Bound the bytes as they arrive, not after res.text() has buffered them.
   // A malicious or broken source must not exhaust the observer runner's memory.
   const maxBytes=2500000;
@@ -90,6 +96,10 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
    :code==='RUNNER_CLOCK_UNAVAILABLE'?'RUNNER_CLOCK_UNAVAILABLE'
    :code.startsWith('SHADOW_SOURCE_HTTP_')?'SOURCE_HTTP_ERROR'
    :error instanceof SyntaxError?'SOURCE_INVALID_JSON':'SOURCE_TRANSPORT_OR_UNKNOWN';
+  // Distinguish a denied authenticated request from an unauthenticated one.
+  // This is an observed header-presence fact, not proof of valid credentials.
+  if(result.errorCode==='SOURCE_AUTHORIZATION_REJECTED')
+   result.sourceBearerAttached=error?.sourceBearerAttached===true;
   // Fixed, privacy-safe run context for authorization failures. This only
   // describes OIDC request eligibility, never whether a token was minted.
   if(result.errorCode==='SOURCE_AUTHORIZATION_REJECTED'){
@@ -114,6 +124,8 @@ async function runPublicShadowObserver({fetchImpl=fetch,clock=()=>Date.now(),
  // Fixed enum only: safe for Actions logs even when the witness artifact is absent.
  if(result.errorCode)console.log('CASH_SHADOW_SOURCE_ERROR_CODE='+result.errorCode);
  if(result.authorizationContext)console.log('CASH_SHADOW_AUTHORIZATION_CONTEXT='+result.authorizationContext);
+ if(result.errorCode==='SOURCE_AUTHORIZATION_REJECTED')
+  console.log('CASH_SHADOW_BEARER_ATTACHED='+result.sourceBearerAttached);
  console.log('CASH_SHADOW_OBSERVED_PREEXPIRY='+result.observedBeforeExpiryCount);
  console.log('CASH_SHADOW_INDEPENDENTLY_QUALIFIED=0');
  console.log('CASH_SHADOW_ORDERS_ALLOWED=false');

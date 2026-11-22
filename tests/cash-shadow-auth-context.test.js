@@ -52,6 +52,7 @@ test('injected scheduled runner environment mints OIDC only in memory and sends 
   assert.equal(calls[0].headers.Authorization,'Bearer '+secret);
   assert.equal(calls[1].headers.Authorization,'Bearer '+jwt);
   assert.equal(result.authorizationContext,'SCHEDULE_MAIN_OIDC_REQUEST_AVAILABLE');
+  assert.equal(result.sourceBearerAttached,true);
   assert.equal(result.observedBeforeExpiryCount,0);
   assert.equal(result.independentlyQualifiedCount,0);
   const artifact=fs.readFileSync(path.join(dir,'shadow-public-observation.json'),'utf8');
@@ -68,5 +69,26 @@ test('injected PR environment never requests OIDC or forwards an Authorization h
   assert.equal(calls.length,1);
   assert.equal(calls[0].headers.Authorization,undefined);
   assert.equal(result.authorizationContext,'NON_SCHEDULE_OR_NON_MAIN_RUN');
+  assert.equal(result.sourceBearerAttached,false);
+ }finally{fs.rmSync(dir,{recursive:true,force:true})}
+});
+
+test('scheduled OIDC metadata without a minted token reports no bearer attached',async()=>{
+ const env={...base,ACTIONS_ID_TOKEN_REQUEST_URL:'https://actions.githubusercontent.com/oidc',ACTIONS_ID_TOKEN_REQUEST_TOKEN:'FAKE_REQUEST_ONLY'};
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'cash-auth-failed-mint-'));
+ const calls=[];
+ try{
+  const result=await runPublicShadowObserver({env,outDirectory:dir,clock:()=>100000,
+   fetchImpl:async(url,options)=>{
+    calls.push({url,headers:options.headers});
+    return url.startsWith('https://actions.githubusercontent.com/')
+     ?{ok:false,status:403}:{ok:false,status:401};
+   }});
+  assert.equal(calls.length,2);
+  assert.equal(calls[1].headers.Authorization,undefined);
+  assert.equal(result.authorizationContext,'SCHEDULE_MAIN_OIDC_REQUEST_AVAILABLE');
+  assert.equal(result.sourceBearerAttached,false);
+  assert.equal(result.independentlyQualifiedCount,0);
+  assert.doesNotMatch(JSON.stringify(result),/FAKE_REQUEST_ONLY/);
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
