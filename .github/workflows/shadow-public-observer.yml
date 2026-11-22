@@ -5,11 +5,11 @@ on:
   schedule:
     - cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *'
   workflow_dispatch:
+  # Avoid mutual observer/reconciliation follow-up cascades and skipped runs.
+  # Keep 12/hour native schedule plus trusted research-snapshot fallback.
   workflow_run:
     workflows:
       - 'CASH dual-model research snapshot'
-      - 'CASH pre-expiry public research observer'
-      - 'CASH witnessed-settlement reconciliation'
     types: [completed]
 permissions:
   contents: read
