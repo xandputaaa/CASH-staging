@@ -13,7 +13,8 @@ const ALLOWED_EXPORTS=new Set([
 const ALLOWED_WORKFLOWS=new Set([
  'xandputaaa/CASH-staging/.github/workflows/preexpiry-observer.yml@refs/heads/main',
  'xandputaaa/CASH-staging/.github/workflows/shadow-public-observer.yml@refs/heads/main',
- 'xandputaaa/CASH-staging/.github/workflows/research-snapshot.yml@refs/heads/main'
+ 'xandputaaa/CASH-staging/.github/workflows/research-snapshot.yml@refs/heads/main',
+ 'xandputaaa/CASH-staging/.github/workflows/observed-settlement-reconciliation.yml@refs/heads/main'
 ]);
 let keyCache={expires:0,keys:null,inflight:null};
 function partJSON(part){
@@ -95,7 +96,10 @@ async function githubReadOnlyAccess(req,{fetchImpl=fetch,now=Date.now()}={}){
  const auth=req.headers.authorization;
  if(typeof auth!=='string'||!auth.startsWith('Bearer ')||
    auth.length>13000)return false;
- return !!await verifiedGithubIdentity(auth.slice(7),{fetchImpl,now});
+ const identity=await verifiedGithubIdentity(auth.slice(7),{fetchImpl,now});
+ // Reconciliation gets only the two settlement exports, not Model Lab shadow.
+ return !!identity&&(identity.workflow!=='xandputaaa/CASH-staging/.github/workflows/observed-settlement-reconciliation.yml@refs/heads/main'||
+  route!=='/api/model-lab/shadow/export');
 }
 module.exports={AUD,JWKS,ALLOWED_EXPORTS,ALLOWED_WORKFLOWS,
  verifiedGithubIdentity,githubReadOnlyAccess};
