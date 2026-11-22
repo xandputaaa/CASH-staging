@@ -81,7 +81,10 @@ const brtiFeed=createKalshiBrtiFeed();
 const orderVerifier=createKalshiOrderVerifier();
 const prospective=createProspectiveMonitor({
  quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed,
- store:createProspectiveStore()});
+ store:createProspectiveStore(),
+ // At most eight settlement reads per 20-second scan, four concurrent.
+ // This reduces recovery lag after a restart without changing verification.
+ settlementReadsPerScan:8});
 const lateCheckpoint=createLateCheckpointMonitor({
  quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed,
  feeFeed:kalshiFeeFeed
@@ -556,6 +559,17 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
        ', scored='+v.officiallyScored+', failures='+v.failures+
        ', audit='+v.storage+', qualified=0/100, orders=DISABLED');
       lastProspectiveLog=identity;
+    }
+    // Aggregate-only settlement status. Never print markets, prices, raw
+    // exchange responses, tokens or individual forecast directions.
+    if(v.scans===1||v.scans%9===0){
+      const d=v.pendingResolutionDiagnostics;
+      console.log('CASH settlement catchup: expired='+d.expiredAwaitingEvidence+
+       ', overdueTenMinutes='+d.overdueTenMinutes+
+       ', reasons='+JSON.stringify(d.blockedReasons)+
+       ', readsPerScan='+v.settlementBackfill.maxReadsPerScan+
+       ', slotsRemaining='+v.capacity.remainingRecords+
+       ', qualified=0/100, orders=DISABLED');
     }
   }).catch(()=>console.log('CASH prospective research: scanner exception; no trading authorization'));
   checkProspective();
