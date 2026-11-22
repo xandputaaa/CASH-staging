@@ -5,11 +5,11 @@ on:
   schedule:
     - cron: '12,27,42,57 * * * *'
   workflow_dispatch:
+  # Keep one trusted scheduled-parent fallback without cascading observers.
+  # The native 4/hour schedule remains the primary evidence trigger.
   workflow_run:
     workflows:
       - 'CASH dual-model research snapshot'
-      - 'CASH Model Lab shadow public settlement recheck'
-      - 'CASH witnessed-settlement reconciliation'
     types: [completed]
 permissions:
   contents: read

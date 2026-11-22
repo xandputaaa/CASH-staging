@@ -7,14 +7,14 @@ test('main shadow witness keeps an explicit best-effort schedule and manual disp
  assert.match(spec,/  schedule:\s*\n\s+- cron: '3,8,13,18,23,28,33,38,43,48,53,58 \* \* \* \*'/);
  assert.match(spec,/  workflow_dispatch:/);
 });
-test('only known, non-shadow existing workflows can opportunistically trigger observation',()=>{
+test('only the scheduled research snapshot may opportunistically trigger shadow observation',()=>{
  assert.match(spec,/  workflow_run:\s*\n    workflows:/);
+ assert.ok(spec.includes("      - 'CASH dual-model research snapshot'"));
  for(const source of [
-  'CASH dual-model research snapshot',
   'CASH pre-expiry public research observer',
-  'CASH witnessed-settlement reconciliation'
- ])assert.ok(spec.includes("      - '"+source+"'"));
- assert.doesNotMatch(spec,/\s+- 'CASH Model Lab public shadow pre-expiry witness'/);
+  'CASH witnessed-settlement reconciliation',
+  'CASH Model Lab public shadow pre-expiry witness'
+ ])assert.equal(spec.includes("      - '"+source+"'"),false);
 });
 test('a PR, failure, fork or unscheduled workflow cannot run a write-enabled shadow capture',()=>{
  const capture=spec.slice(spec.indexOf('  capture-shadow-public:'));
