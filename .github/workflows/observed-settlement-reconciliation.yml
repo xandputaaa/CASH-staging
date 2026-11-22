@@ -11,6 +11,7 @@ concurrency:
 permissions:
   contents: read
   actions: read
+  id-token: write # scheduled main-only, read-only short-lived export identity
 jobs:
   reconcile-witnessed-research:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -65,13 +66,64 @@ jobs:
               fi
             fi
           done < audit/witness-run-ids.txt
-      - name: Fetch later public-only Kalshi settlement journals
+      - name: Fetch protected read-only settlement journals with scheduled GitHub OIDC
         if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location --max-time 30 --retry 1 --max-filesize 2500000             'https://cash-simulation-web-staging.up.railway.app/api/prospective/export'             --output audit/recovery/early.json
-          curl --fail --silent --show-error --location --max-time 30 --retry 1 --max-filesize 2500000             'https://cash-simulation-web-staging.up.railway.app/api/late-checkpoint/export'             --output audit/recovery/late.json
+          node - <<'NODE'
+          'use strict';
+          const fs=require('node:fs');
+          const {githubRunnerReadHeaders}=require('./cash-runner-read-auth');
+          const base='https://cash-simulation-web-staging.up.railway.app';
+          const routes=[['early','/api/prospective/export'],['late','/api/late-checkpoint/export']];
+          const MAX=2500000;
+          (async()=>{
+            const headers=await githubRunnerReadHeaders();
+            if(typeof headers.Authorization!=='string'||
+               !headers.Authorization.startsWith('Bearer '))
+              throw Error('OIDC_IDENTITY_UNAVAILABLE');
+            for(const [label,route] of routes){
+              const ctl=new AbortController();
+              const timer=setTimeout(()=>ctl.abort(),20000);
+              try{
+                const response=await fetch(base+route,{
+                  headers:{...headers,Accept:'application/json',
+                    'User-Agent':'CASH-reconciliation-read-only/1.0'},
+                  signal:ctl.signal,redirect:'error'
+                });
+                if(!response.ok)throw Error('SOURCE_STATUS_'+response.status);
+                const len=response.headers.get('content-length');
+                if(len!==null&&/^[0-9]+$/.test(len)&&Number(len)>MAX)
+                  throw Error('SOURCE_TOO_LARGE');
+                if(!response.body||typeof response.body.getReader!=='function')
+                  throw Error('SOURCE_NOT_STREAMABLE');
+                const reader=response.body.getReader();
+                const chunks=[];let size=0;
+                while(true){
+                  const {done,value}=await reader.read();
+                  if(done)break;
+                  const piece=Buffer.from(value);
+                  size+=piece.length;
+                  if(size>MAX){
+                    await reader.cancel().catch(()=>{});
+                    throw Error('SOURCE_TOO_LARGE');
+                  }
+                  chunks.push(piece);
+                }
+                const raw=Buffer.concat(chunks,size);
+                const body=new TextDecoder('utf-8',{fatal:true}).decode(raw);
+                JSON.parse(body);
+                fs.writeFileSync('audit/recovery/'+label+'.json',raw,{mode:0o600});
+              }finally{clearTimeout(timer)}
+            }
+            console.log('CASH_RECON_PRIVATE_SOURCE_FETCH=VERIFIED');
+          })().catch(()=>{
+            // Never echo bearer tokens, headers or private payloads into runner logs.
+            console.error('CASH_RECON_PRIVATE_SOURCE_FETCH=UNAVAILABLE');
+            process.exitCode=1;
+          });
+          NODE
       - name: Diagnose bounded reconciliation input sizes (metadata only)
         if: github.event_name != 'pull_request'
         shell: bash
