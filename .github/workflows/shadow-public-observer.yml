@@ -170,3 +170,10 @@ jobs:
           path: audit/shadow-source-observation-coverage.json
           retention-days: 90
           if-no-files-found: warn
+
+      # Preserve earlier diagnostic uploads before marking an unavailable
+      # protected source as an actual failed scheduled witness. A successfully
+      # read journal with no eligible contracts remains a legitimate success.
+      - name: Require readable shadow export for trusted scheduled witness
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_run')
+        run: node cash-observer-source-gate.js shadow
