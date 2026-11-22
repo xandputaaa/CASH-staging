@@ -9,7 +9,7 @@ const {createHash}=require('node:crypto');
 const {evaluateProspective,NAME,digest}=require('./kalshi-prospective-model');
 const {hasVerifiedEvidence}=require('./shadow-monitor');
 const {prospectiveScorecard}=require('./prospective-scorecard');
-const MAX=320;
+const MAX=320,MAX_SETTLEMENT_READS_PER_SCAN=8,SETTLEMENT_CONCURRENCY=4;
 const supported=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const clockISO=t=>new Date(t).toISOString();
@@ -28,8 +28,11 @@ function outcomeReason(result){
  return OUTCOME_REASONS[result?.reason]||'UNCONFIRMED_PUBLIC_OUTCOME';
 }
 function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.now(),
- maxRecords=MAX,store=null}={}){
+ maxRecords=MAX,store=null,settlementReadsPerScan=4}={}){
  if(!quotes||!spot||!results)throw Error('Missing prospective data feeds');
+ if(!Number.isInteger(settlementReadsPerScan)||settlementReadsPerScan<1||
+    settlementReadsPerScan>MAX_SETTLEMENT_READS_PER_SCAN)
+  throw Error('Unsafe prospective settlement read limit');
  const records=[],ids=new Set(),events=[];
  let lastHash='GENESIS',inflight=null,scans=0,lastScanAt=null,failures=0,pendingCursor=0;
  let liveAssessment=null;
@@ -136,17 +139,33 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
      }
     }
    }catch{failures++;noteReadiness('SOURCE_OR_JOURNAL_EXCEPTION');}
-   // Stagger official outcome polling; max 4 lookups per scan. A result is
-   // acceptable only after two separate public reads and evidence checks.
+   // Bounded, fair catch-up for a durable pending backlog. Each 20-second
+   // scan may read up to eight distinct settled markets, in at most four
+   // concurrent read-only requests. No winner, source or quote may choose
+   // which market is scanned; the existing FIFO cursor is preserved.
+   // Resolver still requires TWO matching public reads at least 20s apart.
    const pending=records.filter(x=>x.status==='PENDING'&&Date.parse(x.endTime)<=clock());
    const start=pending.length?pendingCursor%pending.length:0;
-   const selected=Array.from({length:Math.min(4,pending.length)},(_,i)=>pending[(start+i)%pending.length]);
+   const selected=Array.from({length:Math.min(settlementReadsPerScan,pending.length)},
+    (_,i)=>pending[(start+i)%pending.length]);
    pendingCursor=pending.length?(start+selected.length)%pending.length:0;
-   for(const record of selected){
-    try{
-     const result=await results.lookup({venue:'Kalshi',marketId:record.marketId,slug:null});
+   // Process each bounded network batch in selection order. Only a verified,
+   // fully checked result is appended. Errors never fabricate misses or wins.
+   for(let offset=0;offset<selected.length;offset+=SETTLEMENT_CONCURRENCY){
+    const batch=selected.slice(offset,offset+SETTLEMENT_CONCURRENCY);
+    const lookedUp=await Promise.all(batch.map(async record=>{
+     try{return {record,result:await results.lookup({
+      venue:'Kalshi',marketId:record.marketId,slug:null})}}
+     catch{return {record,error:true}}
+    }));
+    for(const {record,result,error} of lookedUp){
      record.outcomeAttempts=(record.outcomeAttempts||0)+1;
      record.lastOutcomeCheckAt=clockISO(clock());
+     if(error){
+      failures++;
+      record.lastOutcomeReason='OUTCOME_CHECK_EXCEPTION';
+      continue;
+     }
      if(result?.status!=='verified'){
       record.lastOutcomeReason=outcomeReason(result);
       continue;
@@ -157,18 +176,18 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
       record.lastOutcomeReason='EVIDENCE_REJECTED';
       continue;
      }
-     append('OUTCOME',{marketId:record.marketId,winner:result.winner,evidence:result});
-     record.lastOutcomeReason='OFFICIAL_RESULT_ACCEPTED';
-     record.winner=result.winner;record.resolvedAt=result.checkedAt;
-     record.outcomeEvidence=result;
-     record.status=result.winner==='VOID'?'VOID':record.side===null?'WAIT_RESOLVED':
-      record.side===result.winner?'HIT':'MISS';
-     resolved++;
-    }catch{
-     failures++;
-     record.outcomeAttempts=(record.outcomeAttempts||0)+1;
-     record.lastOutcomeCheckAt=clockISO(clock());
-     record.lastOutcomeReason='OUTCOME_CHECK_EXCEPTION';
+     try{
+      append('OUTCOME',{marketId:record.marketId,winner:result.winner,evidence:result});
+      record.lastOutcomeReason='OFFICIAL_RESULT_ACCEPTED';
+      record.winner=result.winner;record.resolvedAt=result.checkedAt;
+      record.outcomeEvidence=result;
+      record.status=result.winner==='VOID'?'VOID':record.side===null?'WAIT_RESOLVED':
+       record.side===result.winner?'HIT':'MISS';
+      resolved++;
+     }catch{
+      failures++;
+      record.lastOutcomeReason='OUTCOME_CHECK_EXCEPTION';
+     }
     }
    }
    lastScanAt=clockISO(clock());
@@ -226,6 +245,14 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
    model:NAME,
    state:records.length>=maxRecords?'CAPACITY_BLOCKED':'COLLECTING_EXPERIMENTAL',
    scans,lastScanAt,failures,
+   settlementBackfill:{maxReadsPerScan:settlementReadsPerScan,
+    maxConcurrentReads:SETTLEMENT_CONCURRENCY,
+    pendingCursorMode:'FIFO_PENDING_MARKET_ROUND_ROBIN',
+    twoIndependentReadRequirementUnchanged:true,
+    independentlyQualifiedCount:0},
+   capacity:{maxRecords,remainingRecords:Math.max(0,maxRecords-records.length),
+    automaticRolloverEnabled:false,
+    note:'Full journals block new captures but existing forecast and outcome evidence is retained.'},
    captureReadiness:{...readiness,reasons:{...readiness.reasons},
     note:'Repeated readiness checks are diagnostics, not independently frozen contracts.'},
    storage:store?.mode||'VOLATILE_SERVER_SESSION',headHash:lastHash,
