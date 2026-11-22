@@ -10,10 +10,12 @@ const yaml=fs.readFileSync(
 const WITNESS='CASH pre-expiry public research observer';
 test('trusted scheduled parents add chances to witness late checkpoints, never recursively self-trigger',()=>{
  assert.match(yaml,/  workflow_run:\s*\n    workflows:/);
- for(const n of ['CASH dual-model research snapshot',
-  'CASH Model Lab shadow public settlement recheck',
+ assert.ok(yaml.includes("      - 'CASH dual-model research snapshot'"));
+ // Do not cascade from shadow or reconciliation completions. These can
+ // generate a high number of skip-only workflow_run invocations on PRs.
+ for(const n of ['CASH Model Lab shadow public settlement recheck',
   'CASH witnessed-settlement reconciliation'])
-  assert.ok(yaml.includes("      - '"+n+"'"));
+  assert.equal(yaml.includes("      - '"+n+"'"),false);
  const runs=yaml.slice(yaml.indexOf('  workflow_run:'),
    yaml.indexOf('permissions:'));
  assert.doesNotMatch(runs,/\bCASH pre-expiry public research observer\b/);
