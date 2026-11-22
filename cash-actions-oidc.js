@@ -16,6 +16,15 @@ const ALLOWED_WORKFLOWS=new Set([
  'xandputaaa/CASH-staging/.github/workflows/research-snapshot.yml@refs/heads/main',
  'xandputaaa/CASH-staging/.github/workflows/observed-settlement-reconciliation.yml@refs/heads/main'
 ]);
+// Only the two main-branch witness workflows may read sources from trusted
+// scheduled-parent workflow_run jobs. No PR, manual, push or other workflow
+// gains this extra identity, and each follow-up is scoped to its own exports.
+const FOLLOWUP_EXPORTS=new Map([
+ ['xandputaaa/CASH-staging/.github/workflows/preexpiry-observer.yml@refs/heads/main',
+  new Set(['/api/prospective/export','/api/late-checkpoint/export'])],
+ ['xandputaaa/CASH-staging/.github/workflows/shadow-public-observer.yml@refs/heads/main',
+  new Set(['/api/model-lab/shadow/export'])]
+]);
 let keyCache={expires:0,keys:null,inflight:null};
 function partJSON(part){
  if(typeof part!=='string'||part.length>8000||!/^[A-Za-z0-9_-]+$/.test(part))
@@ -64,11 +73,14 @@ async function verifiedGithubIdentity(token,{fetchImpl=fetch,now=Date.now()}={})
   // Reject untrusted claims before any remote JWKS request. Signature
   // verification still gates every successful authorization below.
   const t=Math.floor(now/1000);
+  const validFollowup=claims.event_name==='workflow_run'&&
+   FOLLOWUP_EXPORTS.has(claims.workflow_ref);
   if(claims.iss!==ISS||claims.aud!==AUD||
    claims.repository!=='xandputaaa/CASH-staging'||
    String(claims.repository_id)!=='1460135200'||
    String(claims.repository_owner_id)!=='353902871'||
-   claims.ref!=='refs/heads/main'||claims.event_name!=='schedule'||
+   claims.ref!=='refs/heads/main'||
+   (claims.event_name!=='schedule'&&!validFollowup)||
    !ALLOWED_WORKFLOWS.has(claims.workflow_ref)||
    !Number.isInteger(claims.iat)||!Number.isInteger(claims.exp)||
    claims.iat>t+60||claims.iat<t-900||claims.exp<=t||
@@ -97,9 +109,13 @@ async function githubReadOnlyAccess(req,{fetchImpl=fetch,now=Date.now()}={}){
  if(typeof auth!=='string'||!auth.startsWith('Bearer ')||
    auth.length>13000)return false;
  const identity=await verifiedGithubIdentity(auth.slice(7),{fetchImpl,now});
- // Reconciliation gets only the two settlement exports, not Model Lab shadow.
- return !!identity&&(identity.workflow!=='xandputaaa/CASH-staging/.github/workflows/observed-settlement-reconciliation.yml@refs/heads/main'||
-  route!=='/api/model-lab/shadow/export');
+ if(!identity)return false;
+ // Workflow-run identities can ONLY read their matching witness source.
+ if(identity.event==='workflow_run')
+  return FOLLOWUP_EXPORTS.get(identity.workflow)?.has(route)===true;
+ // Scheduled reconciliation gets only the two settlement exports.
+ return identity.workflow!=='xandputaaa/CASH-staging/.github/workflows/observed-settlement-reconciliation.yml@refs/heads/main'||
+  route!=='/api/model-lab/shadow/export';
 }
 module.exports={AUD,JWKS,ALLOWED_EXPORTS,ALLOWED_WORKFLOWS,
  verifiedGithubIdentity,githubReadOnlyAccess};
