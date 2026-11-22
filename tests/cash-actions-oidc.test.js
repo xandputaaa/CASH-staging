@@ -105,3 +105,16 @@ test('GitHub runner mints only scheduled main-branch identity, never PR identity
   assert.deepEqual(result,{});
  }
 });
+
+test('scheduled reconciliation identity receives settlement-only exports, not shadow or dashboard',async()=>{
+ const workflow='xandputaaa/CASH-staging/.github/workflows/observed-settlement-reconciliation.yml@refs/heads/main';
+ const token=signed({workflow_ref:workflow});
+ for(const url of ['/api/prospective/export','/api/late-checkpoint/export']){
+  assert.equal(await githubReadOnlyAccess({method:'GET',url,
+   headers:{authorization:'Bearer '+token}},{fetchImpl:jwks,now:NOW}),true);
+ }
+ for(const url of ['/api/model-lab/shadow/export','/api/cash-v3/market']){
+  assert.equal(await githubReadOnlyAccess({method:'GET',url,
+   headers:{authorization:'Bearer '+token}},{fetchImpl:jwks,now:NOW}),false);
+ }
+});
