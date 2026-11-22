@@ -43,7 +43,10 @@ test('untrusted events, branches, repos, workflow paths and expired tokens all f
   {aud:'other'},{iss:'https://attacker.example'},
   {repository:'attacker/repo'},{repository_id:'999'},
   {repository_owner_id:'0'},{event_name:'pull_request'},
-  {event_name:'workflow_run'},{ref:'refs/heads/feature'},
+  {event_name:'push'},
+  {event_name:'workflow_run',workflow_ref:'xandputaaa/CASH-staging/.github/workflows/research-snapshot.yml@refs/heads/main'},
+  {event_name:'workflow_run',workflow_ref:'xandputaaa/CASH-staging/.github/workflows/observed-settlement-reconciliation.yml@refs/heads/main'},
+  {ref:'refs/heads/feature'},
   {workflow_ref:'xandputaaa/CASH-staging/.github/workflows/evil.yml@refs/heads/main'},
   {iat:Math.floor(NOW/1000)-1300,exp:Math.floor(NOW/1000)+20},
   {exp:Math.floor(NOW/1000)-1},
@@ -116,5 +119,51 @@ test('scheduled reconciliation identity receives settlement-only exports, not sh
  for(const url of ['/api/model-lab/shadow/export','/api/cash-v3/market']){
   assert.equal(await githubReadOnlyAccess({method:'GET',url,
    headers:{authorization:'Bearer '+token}},{fetchImpl:jwks,now:NOW}),false);
+ }
+});
+
+test('trusted scheduled-parent workflow_run identity stays restricted to its own public research exports',async()=>{
+ const early='xandputaaa/CASH-staging/.github/workflows/preexpiry-observer.yml@refs/heads/main';
+ const shadow='xandputaaa/CASH-staging/.github/workflows/shadow-public-observer.yml@refs/heads/main';
+ for(const [workflow,allowed,denied] of [
+  [early,['/api/prospective/export','/api/late-checkpoint/export'],['/api/model-lab/shadow/export']],
+  [shadow,['/api/model-lab/shadow/export'],['/api/prospective/export','/api/late-checkpoint/export']]
+ ]){
+  const token=signed({event_name:'workflow_run',workflow_ref:workflow});
+  assert.equal((await verifiedGithubIdentity(token,{fetchImpl:jwks,now:NOW})).event,'workflow_run');
+  for(const url of allowed)assert.equal(await githubReadOnlyAccess({method:'GET',url,
+   headers:{authorization:'Bearer '+token}},{fetchImpl:jwks,now:NOW}),true,url);
+  for(const url of [...denied,'/','/api/cash-v3/market','/api/orders']){
+   assert.equal(await githubReadOnlyAccess({method:'GET',url,
+    headers:{authorization:'Bearer '+token}},{fetchImpl:jwks,now:NOW}),false,url);
+  }
+  assert.equal(await githubReadOnlyAccess({method:'POST',url:allowed[0],
+   headers:{authorization:'Bearer '+token}},{fetchImpl:jwks,now:NOW}),false);
+ }
+});
+
+test('runner mints follow-up identity only on trusted main-branch witness workflow',async()=>{
+ const base={GITHUB_ACTIONS:'true',GITHUB_EVENT_NAME:'workflow_run',
+  GITHUB_REF:'refs/heads/main',GITHUB_REPOSITORY:'xandputaaa/CASH-staging',
+  GITHUB_WORKFLOW:'CASH pre-expiry public research observer',
+  ACTIONS_ID_TOKEN_REQUEST_URL:'https://pipelines.actions.githubusercontent.com/token?id=1',
+  ACTIONS_ID_TOKEN_REQUEST_TOKEN:'private-action-request'};
+ const mint=async(_url,opts)=>{
+  assert.equal(opts.redirect,'error');
+  assert.equal(opts.headers.Authorization,'Bearer '+base.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
+  return {ok:true,text:async()=>JSON.stringify({value:'a.b.c'})};
+ };
+ assert.equal((await githubRunnerReadHeaders({env:base,fetchImpl:mint})).Authorization,'Bearer a.b.c');
+ assert.equal((await githubRunnerReadHeaders({env:{...base,GITHUB_WORKFLOW:'CASH Model Lab public shadow pre-expiry witness'},fetchImpl:mint})).Authorization,'Bearer a.b.c');
+ for(const changes of [
+  {GITHUB_WORKFLOW:'CASH witnessed-settlement reconciliation'},
+  {GITHUB_WORKFLOW:'Untrusted workflow'},
+  {GITHUB_EVENT_NAME:'pull_request'},
+  {GITHUB_EVENT_NAME:'workflow_dispatch'},
+  {GITHUB_REF:'refs/heads/feature'},
+  {GITHUB_REPOSITORY:'untrusted/repo'}
+ ]){
+  assert.deepEqual(await githubRunnerReadHeaders({env:{...base,...changes},
+   fetchImpl:async()=>{throw Error('Forbidden OIDC mint')}}),{});
  }
 });
