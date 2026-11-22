@@ -29,6 +29,36 @@ All three updates applied to the existing staging service, not to an isolated ca
 Do not treat the successful smoke tests as a substitute for a tested backup,
 full journal semantic integrity/recovery audit, or independent mobile-device QA.
 
+## Late-checkpoint evidence persistence candidate (NOT deployed)
+
+The late research scorecard is a separate model from early V3. In a *real
+scheduled* November 22 research backup (run `44978875092`), the early model
+had 302 freezes, all **302 WAIT**, 301 officially resolved and zero directional
+calls. Thus early's 0 scored was **not** a settlement outage. The same backup
+showed 154 frozen late decisions (62 directional, 92 WAIT), 62 directional
+self-scored outcomes (59 HIT, 3 MISS), zero independently qualifying results.
+These numbers are historical provisional research, not verified edge, realized
+profitability, independently time-attested predictions, or a frozen holdout.
+
+A source-level candidate now supports `CASH_LATE_DURABLE_RESEARCH=1` as an
+explicit *future rollout* option, only with existing `CASH_AUDIT_DIR` and
+`CASH_EXCLUSIVE_JOURNAL_WRITER=1`. **This flag must stay unset until the
+operator separately approves deployment and an archive preflight.** When
+enabled, the pre-existing tested late store reads its own hash-chained
+`late-checkpoint-events.jsonl`, rejects invalid/truncated or duplicate
+completed segments, and fsyncs accepted events. Existing pre-rollout
+GitHub-only late forecasts are **not imported** or declared independently
+witnessed. No automatic rotation, deletion, archival overwrite or limit
+increase occurs. At the 160-frozen-market cap, new late forecasts remain
+blocked until an explicitly authorized **offline** non-destructive rotation
+and preflight; use `late-checkpoint-rotation.js` under its own instructions.
+Do not try to clear, truncate or reset a corrupt file to force startup.
+
+The separate prospective early journal has a 320-forecast cap. PR #214
+increases bounded settlement reads to eight per 20-second scan but does not
+increase capacity, modify the model, or fabricate directional calls. A
+legitimate WAIT never enters a directional performance denominator.
+
 ## Outstanding acceptance gates
 
 - [x] Live service online with fixed source SHA, healthy replica, no pending changes.

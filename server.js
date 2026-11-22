@@ -50,6 +50,7 @@ const {createEarlyMoveMonitor}=require('./early-move');
 const earlyMoveScript=fs.readFileSync('early-move-ui.js');
 const settlementCallScript=fs.readFileSync('settlement-call-ui.js');
 const {createProspectiveStore}=require('./prospective-store');
+const {createLateCheckpointStore}=require('./late-checkpoint-store');
 const {createShadowLiveFeed}=require('./cash-shadow-live-feed');
 const {createKalshiBrtiFeed}=require('./kalshi-brti');
 const {createKalshiOrderVerifier}=require('./kalshi-order-verify');
@@ -85,9 +86,16 @@ const prospective=createProspectiveMonitor({
  // At most eight settlement reads per 20-second scan, four concurrent.
  // This reduces recovery lag after a restart without changing verification.
  settlementReadsPerScan:8});
+// Optional, append-only late evidence journal. This is disabled until a
+// separately approved rollout sets CASH_LATE_DURABLE_RESEARCH=1. No file is
+// copied, deleted, migrated, repaired or reset automatically; existing public
+// GitHub research archives remain separate from this new local ledger.
+const lateStore=process.env.CASH_LATE_DURABLE_RESEARCH==='1'
+ ?createLateCheckpointStore({directory:process.env.CASH_AUDIT_DIR})
+ :null;
 const lateCheckpoint=createLateCheckpointMonitor({
  quotes:venueFeeds,spot:feed,results:resolver,brti:brtiFeed,
- feeFeed:kalshiFeeFeed
+ feeFeed:kalshiFeeFeed,store:lateStore
 });
 const earlyMove=createEarlyMoveMonitor({quotes:venueFeeds,spot:feed});
 const shadowModelLab=createShadowLiveFeed({quotes:venueFeeds,spot:feed});
@@ -573,6 +581,8 @@ if(require.main===module)server.listen(port,'0.0.0.0',()=>{
     }
   }).catch(()=>console.log('CASH prospective research: scanner exception; no trading authorization'));
   checkProspective();
+  console.log('CASH late checkpoint durability: '+(lateStore?.mode||'VOLATILE_SERVER_SESSION')+
+    ', migration=NONE, qualified=0/100, orders=DISABLED');
   const prospectiveTimer=setInterval(checkProspective,20000);
   prospectiveTimer.unref();
   // Isolated Model Lab: record first, fsync to explicitly mounted audit

@@ -16,6 +16,14 @@ function assertSafeStartupConfiguration(env=process.env){
  if(env.CASH_ONE_TIME_ARCHIVE_CUTOVER==='1'&&
     (env.CASH_ARCHIVE_LIVE_RECOVERY!=='1'||env.CASH_EXCLUSIVE_JOURNAL_WRITER!=='1'))
   throw Error('One-time cutover requires explicit exclusive live recovery');
+ // Late model persistence is an explicit, separate opt-in. Do not silently
+ // instantiate a new disk ledger or mix old ephemeral research into it.
+ if(env.CASH_LATE_DURABLE_RESEARCH!==undefined&&
+    !['0','1'].includes(env.CASH_LATE_DURABLE_RESEARCH))
+  throw Error('Invalid CASH_LATE_DURABLE_RESEARCH value');
+ if(env.CASH_LATE_DURABLE_RESEARCH==='1'&&
+    (env.CASH_EXCLUSIVE_JOURNAL_WRITER!=='1'||!env.CASH_AUDIT_DIR))
+  throw Error('Late durable research requires a mounted audit directory and exclusive writer');
  const recovery=env.CASH_ARCHIVE_LIVE_RECOVERY==='1';
  const auditDir=env.CASH_AUDIT_DIR;
  if(auditDir!==undefined){
