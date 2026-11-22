@@ -22,8 +22,21 @@
     "headSha": "5e909aa33f6b4138beb8952b740539f66fb4ef05",
     "reportSha256": "9a706a82cf314c989f943a657451f86a430b17ec102e1432cfba0cb6ec35ca51"
   },
-  "directlyRecheckedFinal": null,
-  "conditionalPaper": null,
+  "directlyRecheckedFinal": {
+    "winner": "NO",
+    "directKalshiTwoReadStatus": "DIRECT_FINAL_TWO_READ_JOURNAL_HASH_MATCH",
+    "officialPublicFieldsSha256": "231b2646d7819f14093e0494ab976cc4927e1dd766f6c84d072ed5022b00579c",
+    "cashJournalPublicFieldsSha256": "231b2646d7819f14093e0494ab976cc4927e1dd766f6c84d072ed5022b00579c",
+    "directReadSeparationMs": 21057,
+    "provenanceReconciliationGitHubRunId": "45059643014"
+  },
+  "conditionalPaper": {
+    "observedPublicAskAtOriginalFreeze": 0.88,
+    "assumedNetOneContractUSDRoundedCentiCentFee": 0.1126,
+    "assumedNetOneContractUSDConservativeCentFee": 0.11,
+    "actualFillConfirmed": false,
+    "actualProfitVerified": false
+  },
   "independentQualification": 0,
   "ordersEnabled": false,
   "provenanceLimitations": "Public GitHub workflow witnesses and public Kalshi API records are not exchange-signed forecast truth, licensed BRTI audit, real fill, profit, calibrated odds or certified independent accuracy. Branch can be altered by authorized repository writers."
