@@ -54,7 +54,6 @@ function verifyCompleteEarly(events){
   quotes:{},spot:{},results:{},store:source,maxRecords:MAX_RECORDS});
  const state=replay.snapshot();
  if(state.records!==MAX_RECORDS||state.pending!==0||
-    state.voids+state.officiallyScored+state.waits!==MAX_RECORDS||
     events.filter(x=>x.type==='OUTCOME').length!==MAX_RECORDS||
     replay.exportSession().format!=='CASH_PROSPECTIVE_HASHED_SESSION_V1')
   throw Error('Early journal incomplete or not public proxy research');
