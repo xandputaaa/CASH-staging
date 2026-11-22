@@ -74,6 +74,14 @@ jobs:
         run: |
           set -euo pipefail
           node public-session-archive-inspection.js archive-store
+      - name: Verify exact early journal archive coverage and report remaining frozen slots (read only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node early-archive-capacity.js \
+            source-read-only/cash-public-research-unverified.json \
+            archive-store
+          echo 'CASH_EARLY_CAPACITY_REPORT_NEVER_ROTATES_DISK=true'
       - name: Reject any deletion, rewrite or backdated outcome before Git push
         shell: bash
         run: |
