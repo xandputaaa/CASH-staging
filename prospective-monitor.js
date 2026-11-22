@@ -55,6 +55,17 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
   events.push(e);lastHash=e.hash;
   return e;
  }
+ // Previous offline-completed segments are immutable separate cohorts. Seed
+ // only their contract identities, never count them as a fresh prediction,
+ // re-score them, or make a "current" call from old historical records.
+ if(store?.priorMarketIds!==undefined){
+  if(!Array.isArray(store.priorMarketIds)||
+     store.priorMarketIds.length>10240||
+     new Set(store.priorMarketIds).size!==store.priorMarketIds.length||
+     store.priorMarketIds.some(id=>!supported.test(id)))
+   throw Error('Invalid prospective completed-market index');
+  for(const id of store.priorMarketIds)ids.add(id);
+ }
  // Replay externally persisted records only after checking hashes and semantics.
  if(store&&Array.isArray(store.events)){
   for(const event of store.events){
@@ -256,6 +267,8 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
    captureReadiness:{...readiness,reasons:{...readiness.reasons},
     note:'Repeated readiness checks are diagnostics, not independently frozen contracts.'},
    storage:store?.mode||'VOLATILE_SERVER_SESSION',headHash:lastHash,
+   priorCompletedSegments:store?.priorCompletedSegments||0,
+   priorCompletedMarketCount:store?.priorMarketIds?.length||0,
    records:records.length,directional:predictions.length,
    waits:records.filter(x=>x.side===null).length,
    sourceBreakdown:{
