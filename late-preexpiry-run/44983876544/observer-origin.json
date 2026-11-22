@@ -1,0 +1,20 @@
+{
+  "version": "CASH_PUBLIC_LATE_GITHUB_OBSERVER_ORIGIN_V1",
+  "sourceWorkflow": "CASH pre-expiry public research observer",
+  "runId": "44983876544",
+  "event": "workflow_run",
+  "repository": "xandputaaa/CASH-staging",
+  "headBranch": "main",
+  "headSha": "7d093e902adc7afa3a12803933fb6ddf26400d1c",
+  "parent": {
+    "id": "44983844925",
+    "name": "CASH dual-model research snapshot",
+    "event": "schedule",
+    "conclusion": "success",
+    "headBranch": "main",
+    "headRepository": "xandputaaa/CASH-staging"
+  },
+  "independentlyQualifiedCount": 0,
+  "ordersEnabled": false,
+  "note": "GitHub workflow-event metadata, cross-check with direct GitHub API before archiving. No independently certified trading prediction, inference-time BRTI calculation, executable quote, fill or profit."
+}
