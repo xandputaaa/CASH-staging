@@ -67,3 +67,10 @@ jobs:
           path: witness/observer-run-summary.json
           retention-days: 30
           if-no-files-found: error
+
+      # The observation tool may intentionally return an empty or diagnostic
+      # artifact instead of throwing. An all-401 or unreadable-journal run is
+      # an operational failure, NOT a green evidence-collection success.
+      - name: Verify scheduled read access to both protected public journals
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_run'
+        run: node cash-observer-source-gate.js preexpiry
