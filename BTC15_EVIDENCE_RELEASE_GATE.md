@@ -42,3 +42,35 @@ PR tests use synthetic data to reject forged calibration, fake fills, inflated d
 7. A new explicitly approved Railway deployment and real iPhone/web QA are needed before integrating any new UI or runtime code; an evidence-only GitHub PR does not authorize it.
 
 **No deployment, journal rollover, credential alteration, brokerage action, or model parameter change was performed in this evidence-only branch.**
+
+
+## November 23 frozen-price source-only audit
+
+The original GitHub Actions scheduled research export artifact from successful snapshot run
+[45230604706](https://github.com/xandputaaa/CASH-staging/actions/runs/45230604706)
+was inspected without changing either live source. The late `CASH_LATE_CHECKPOINT_SHADOW_V1`
+export contained 148 original frozen forecasts (62 directional, 86 WAIT); 61 of those
+directional forecasts had source-reported outcomes, all 61 reported hits, and one was pending.
+The original 295-event self-hash chain recomputed correctly. **None** are independently
+qualified or verified fills; the late journal storage mode was `VOLATILE_SERVER_SESSION`.
+
+Original public YES/NO asks for the 62 directional freezes had a **$0.983 median** (per $1
+maximum payout): 47 were at least $0.95, and 25 were at least $0.99. The source's own
+hypothetical one-contract fee audit reported **25 winning contracts with nonpositive
+conservative net** and only **+$1.233 aggregate conditional conservative net** over the
+61 scored contracts, assuming all could have been bought at the original published asks,
+with no execution slippage. These are selected *source-reported paper calculations*,
+not validated, realized, fillable, independently settled or statistically forward-tested
+returns. A very high directional self-score on nearly-$1 asks is **not** proof of a
+positive expected value.
+
+`late-quote-concentration.js` now aggregates original frozen asks and source-only
+outcomes only after self-hash verification, with explicit unknown/unpriced separation.
+The existing reconciliation evidence gate incorporates the resulting warning;
+its real-money decision remains `NO_GO_REAL_MONEY`.
+
+The independently observed session archive writer failure on November 23 had a separate
+cause: workflow run 45230701265 passed relative `archive-store` to an absolute-path-only
+validator. GitHub-only repair PR #221 was merged as `3ffcfcfd732a5b540f6702aa63831392e26f8390`.
+No Railway redeployment was involved. A **new actual successful scheduled** archive commit
+after that merge remains necessary to prove the repaired retention workflow.
