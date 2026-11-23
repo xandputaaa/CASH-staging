@@ -165,6 +165,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cash-provisional-settlement-reconciliation-${{ github.run_id }}
-          path: |\n            audit/report/provisional-reconciliation.json\n            audit/report/btc15-evidence-gate.json
+          path: |
+            audit/report/provisional-reconciliation.json
+            audit/report/btc15-evidence-gate.json
           retention-days: 30
           if-no-files-found: error
