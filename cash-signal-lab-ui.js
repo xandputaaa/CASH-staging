@@ -26,8 +26,14 @@
   return n;
  }
  let last=null,markersEnabled=true;
- function clear(message){
-  id('slState').textContent='SOURCE UNAVAILABLE';
+ function clear(message,status='UNAVAILABLE'){
+  const badges={
+   INSUFFICIENT_DATA:'AWAITING 30 CANDLES',
+   STALE:'STALE / NO SIGNAL',
+   PAUSED:'PAUSED / HIDDEN',
+   UNAVAILABLE:'SOURCE UNAVAILABLE'
+  };
+  id('slState').textContent=badges[status]||badges.UNAVAILABLE;
   id('slBias').textContent='NO CONFIRMATION';id('slBias').dataset.bias='none';
   id('slMeta').textContent=message||'CASH refuses to reuse stale study readings.';
   id('slCandles').replaceChildren();
@@ -75,14 +81,20 @@
    lab?.version==='CASH_SIGNAL_LAB_V1'&&lab.executionAuthorized===false&&
    lab.independentlyValidated===false&&Array.isArray(btc.candles)&&Array.isArray(lab.markers)&&
    lab.status==='HISTORICAL_STUDY'&&btc.status!=='OHLC_UNAVAILABLE';
-  if(!valid){last=null;clear(lab?.reason||'Source history unavailable or insufficient.');return}
+  if(!valid){
+   last=null;
+   clear(lab?.reason||'Source history unavailable or insufficient.',
+    lab?.status==='INSUFFICIENT_DATA'?'INSUFFICIENT_DATA':
+    lab?.status==='STALE'?'STALE':'UNAVAILABLE');
+   return;
+  }
   const now=Date.now(),lastTime=Date.parse(lab.lastClosedAt);
   if(!Number.isFinite(lastTime)||lastTime>now+2000||now-lastTime>120000){
-   last=null;clear('Latest verified closed candle expired.');return;
+   last=null;clear('Latest verified closed candle expired.','STALE');return;
   }
   const candles=btc.candles.filter(b=>b?.kind==='CLOSED_1M'&&
    Number.isFinite(b.t)&&[b.open,b.high,b.low,b.close].every(Number.isFinite));
-  if(candles.length<30){last=null;clear('Insufficient closed source candles.');return}
+  if(candles.length<30){last=null;clear('Insufficient closed source candles.','INSUFFICIENT_DATA');return}
   last={candles,markers:lab.markers};
   id('slState').textContent='● CLOSED CANDLES / RESEARCH';
   const bias=lab.bias==='BULLISH BIAS'?'BULLISH BIAS':lab.bias==='BEARISH BIAS'?'BEARISH BIAS':'NO CONFIRMATION';
