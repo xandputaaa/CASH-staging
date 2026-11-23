@@ -67,6 +67,10 @@ test('CASH chart only appends actual same-source post-candle spot ticks and newe
  assert.equal(result.no.points.at(-1).kind,'OBSERVED_KALSHI_QUOTE');
  assert.equal(result.inventedTicks,0);
  assert.equal(result.syntheticForecastPath,false);
+ assert.equal(result.btc.signalLab.version,'CASH_SIGNAL_LAB_V1');
+ assert.equal(result.btc.signalLab.status,'INSUFFICIENT_DATA');
+ assert.equal(result.btc.signalLab.executionAuthorized,false);
+ assert.ok(result.btc.candles.every(c=>c.kind==='CLOSED_1M'));
  assert.equal(result.realOrdersEnabled,false);
  assert.equal(calls,2);
  await feed.query({quote:quote(),spot:spot()});
@@ -86,6 +90,9 @@ test('source failure is explicit, does not manufacture chart history',async()=>{
  const x=await feed.query({quote:quote(),spot:{status:'unavailable',history:[]}});
  assert.equal(x.btc.status,'OHLC_UNAVAILABLE');
  assert.equal(x.btc.points.length,0);
+ assert.deepEqual(x.btc.candles,[]);
+ assert.equal(x.btc.signalLab.status,'UNAVAILABLE');
+ assert.deepEqual(x.btc.signalLab.markers,[]);
  assert.equal(x.yes.status,'CANDLES_UNAVAILABLE');
  assert.equal(x.no.status,'CANDLES_UNAVAILABLE');
  assert.equal(x.syntheticForecastPath,false);
