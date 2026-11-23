@@ -1,0 +1,59 @@
+{
+  "version": "CASH_SCHEDULED_WITNESS_WATCH_V1",
+  "attempts": 11,
+  "stopReason": "LATE_CHECKPOINT_EXTERNALLY_OBSERVED_AND_DIRECTLY_MATCHED",
+  "validProbes": 11,
+  "invalidProbes": 0,
+  "emptyProbes": 10,
+  "provisionalLateProbes": 0,
+  "directLateProbes": 1,
+  "captureCompletenessProven": false,
+  "evidenceRecorded": 1,
+  "additionalImmutableProbeFiles": 1,
+  "probeArchiveIncludesAbstentions": true,
+  "probeArchiveSelectionBasedOnOutcome": false,
+  "lateDirectionalRecorded": 0,
+  "directExchangeMatches": 1,
+  "firstObservedAtRunner": "2026-11-23T20:11:52.270Z",
+  "eligibilityPolls": {
+    "early": {
+      "validSourcePolls": 11,
+      "unavailableSourcePolls": 0,
+      "invalidSourcePolls": 0,
+      "eligibleForecastPolls": 0,
+      "expiredOnlyPolls": 11,
+      "otherIneligiblePolls": 0,
+      "emptyJournalPolls": 0
+    },
+    "late": {
+      "validSourcePolls": 11,
+      "unavailableSourcePolls": 0,
+      "invalidSourcePolls": 0,
+      "eligibleForecastPolls": 1,
+      "expiredOnlyPolls": 10,
+      "otherIneligiblePolls": 0,
+      "emptyJournalPolls": 0
+    }
+  },
+  "witnessConversion": {
+    "early": {
+      "diagnosticPolls": 11,
+      "diagnosticsMissingPolls": 0,
+      "eligibleWithWitnessPolls": 0,
+      "eligibleWithoutWitnessPolls": 0,
+      "eligibleWithDirectMatchPolls": 0,
+      "witnessWithoutEligibilityPolls": 0
+    },
+    "late": {
+      "diagnosticPolls": 11,
+      "diagnosticsMissingPolls": 0,
+      "eligibleWithWitnessPolls": 1,
+      "eligibleWithoutWitnessPolls": 0,
+      "eligibleWithDirectMatchPolls": 1,
+      "witnessWithoutEligibilityPolls": 0
+    }
+  },
+  "independentQualifiedCount": 0,
+  "ordersEnabled": false,
+  "lastError": null
+}
