@@ -35,7 +35,7 @@ function auditedGroup(kind,coverage,results){
     priced+unpriced!==hits+misses||
     !results||results.directionalVerifiedOutcomes!==hits+misses||
     results.hits!==hits||results.misses!==misses||
-    results.directionalWitnessed!==witnessed)
+    !valid(results.directionalWitnessed)||results.directionalWitnessed<witnessed)
   throw Error('Inconsistent research denominator for '+kind);
  const evidenceDeficits=[];
  if(!publicDirectional)evidenceDeficits.push('NO_FROZEN_PUBLIC_DIRECTIONAL_FORECASTS');
@@ -50,6 +50,7 @@ function auditedGroup(kind,coverage,results){
   frozen,waits,directional,publicProxyDirectional:publicDirectional,
   preExpiryWitnessedDirectional:witnessed,
   notWitnessedDirectional:unwitnessed,
+  unreconciledDirectionalProbes:results.directionalWitnessed-witnessed,
   sourceScoredHits:hits,sourceScoredMisses:misses,
   sourceScoredDirectional:hits+misses,
   directPublicKalshiFinalRecheckedDirectional:directlyRechecked,
