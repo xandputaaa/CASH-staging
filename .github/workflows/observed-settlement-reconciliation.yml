@@ -26,7 +26,7 @@ jobs:
           node-version: '22'
       - name: Validate reconciliation logic without external API on pull requests
         if: github.event_name == 'pull_request'
-        run: node --test tests/witness-run-window.test.js tests/observed-settlement-reconciler.test.js tests/public-evidence-ledger.test.js tests/witnessed-paper-economics.test.js
+        run: node --test tests/witness-run-window.test.js tests/observed-settlement-reconciler.test.js tests/public-evidence-ledger.test.js tests/witnessed-paper-economics.test.js tests/btc15-evidence-gate.test.js tests/late-quote-concentration.test.js
       - name: Locate recent successful GitHub-runner witness artifacts
         if: github.event_name != 'pull_request'
         shell: bash
@@ -156,11 +156,17 @@ jobs:
         run: |
           set -euo pipefail
           node observed-settlement-reconcile-cli.js             audit/witness audit/witness-runs.json             audit/recovery/early.json audit/recovery/late.json             audit/report/provisional-reconciliation.json
+      - name: Produce read-only BTC15 evidence go/no-go summary (no model promotion)
+        if: github.event_name != 'pull_request'
+        continue-on-error: true # Report failures must not destroy the original reconciliation artifact
+        run: node btc15-evidence-gate.js audit/report/provisional-reconciliation.json audit/report/btc15-evidence-gate.json audit/recovery/late.json
       - name: Retain a provisional audit report only (no raw licensed data)
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: cash-provisional-settlement-reconciliation-${{ github.run_id }}
-          path: audit/report/provisional-reconciliation.json
+          path: |
+            audit/report/provisional-reconciliation.json
+            audit/report/btc15-evidence-gate.json
           retention-days: 30
           if-no-files-found: error
