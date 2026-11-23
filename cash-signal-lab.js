@@ -29,18 +29,26 @@ function ema(values,n){
  return out;
 }
 function rsi(values,n=PERIOD){
+ // Wilder smoothing (the conventional RSI calculation), using closed bars only.
  const scores=Array(values.length).fill(null);
- for(let i=n;i<values.length;i++){
-  let gains=0,losses=0;
-  for(let j=i-n+1;j<=i;j++){
-   const change=values[j]-values[j-1];
-   if(change>0)gains+=change;
-   else losses-=change;
-  }
-  scores[i]=losses===0?(gains===0?50:100):100-100/(1+gains/losses);
+ if(values.length<=n)return scores;
+ let gain=0,loss=0;
+ for(let i=1;i<=n;i++){
+  const diff=values[i]-values[i-1];
+  gain+=Math.max(diff,0);loss+=Math.max(-diff,0);
+ }
+ gain/=n;loss/=n;
+ const score=()=>loss===0?(gain===0?50:100):100-100/(1+gain/loss);
+ scores[n]=score();
+ for(let i=n+1;i<values.length;i++){
+  const diff=values[i]-values[i-1];
+  gain=(gain*(n-1)+Math.max(diff,0))/n;
+  loss=(loss*(n-1)+Math.max(-diff,0))/n;
+  scores[i]=score();
  }
  return scores;
 }
+
 function evaluateSignalLab(candles,{now=Date.now(),sourceAvailable=true}={}){
  const empty={version:'CASH_SIGNAL_LAB_V1',market:'KRAKEN_BTC_USD_SPOT',
   timeframe:'CLOSED_1M',study:'EMA9_EMA21_RSI14',
