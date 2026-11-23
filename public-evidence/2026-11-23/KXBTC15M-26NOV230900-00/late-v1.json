@@ -1,0 +1,43 @@
+{
+  "version": "CASH_PUBLIC_GITHUB_WITNESS_LEDGER_V1",
+  "prediction": {
+    "model": "KXBTC15M_LATE_CHECKPOINT_SHADOW_V1",
+    "marketId": "KXBTC15M-26NOV230900-00",
+    "side": "YES",
+    "contractClosesAt": "2026-11-23T14:00:00.000Z",
+    "frozenEventSha256": "3f96fa6bdcb3eb30151e818172b9b092cecf72ed831b7aae7e113698d5a40a1a"
+  },
+  "observations": [
+    {
+      "githubObserverRunId": "45189264481",
+      "githubObserverHeadSha": "5e909aa33f6b4138beb8952b740539f66fb4ef05",
+      "observedAtRunner": "2026-11-23T13:58:43.967Z",
+      "githubRunCreatedAt": "2026-11-23T13:58:34.000Z",
+      "githubRunEvent": "schedule",
+      "directKalshiActiveMarketCorroborated": true
+    }
+  ],
+  "firstReconciliation": {
+    "githubRunId": "45205693635",
+    "headSha": "5e909aa33f6b4138beb8952b740539f66fb4ef05",
+    "reportSha256": "ad35e25bbe6fe1175242c226a3e6d2d14da8b240461c13d6a6d3ce82a2b63035"
+  },
+  "directlyRecheckedFinal": {
+    "winner": "YES",
+    "directKalshiTwoReadStatus": "DIRECT_FINAL_TWO_READ_JOURNAL_HASH_MATCH",
+    "officialPublicFieldsSha256": "a58e2a3fd8f2158f4a1062dadfca7592180eaa8d5c1224a4562d319969a0a2ce",
+    "cashJournalPublicFieldsSha256": "a58e2a3fd8f2158f4a1062dadfca7592180eaa8d5c1224a4562d319969a0a2ce",
+    "directReadSeparationMs": 21289,
+    "provenanceReconciliationGitHubRunId": "45205693635"
+  },
+  "conditionalPaper": {
+    "observedPublicAskAtOriginalFreeze": 0.951,
+    "assumedNetOneContractUSDRoundedCentiCentFee": 0.0457,
+    "assumedNetOneContractUSDConservativeCentFee": 0.039,
+    "actualFillConfirmed": false,
+    "actualProfitVerified": false
+  },
+  "independentQualification": 0,
+  "ordersEnabled": false,
+  "provenanceLimitations": "Public GitHub workflow witnesses and public Kalshi API records are not exchange-signed forecast truth, licensed BRTI audit, real fill, profit, calibrated odds or certified independent accuracy. Branch can be altered by authorized repository writers."
+}
