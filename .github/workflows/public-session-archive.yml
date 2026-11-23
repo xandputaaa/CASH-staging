@@ -78,9 +78,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The validator deliberately requires an absolute archive root.
+          # The checkout is still the existing isolated public-only Git branch.
           node early-archive-capacity.js \
             source-read-only/cash-public-research-unverified.json \
-            archive-store
+            "$GITHUB_WORKSPACE/archive-store"
           echo 'CASH_EARLY_CAPACITY_REPORT_NEVER_ROTATES_DISK=true'
       - name: Reject any deletion, rewrite or backdated outcome before Git push
         shell: bash
