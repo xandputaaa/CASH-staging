@@ -1,0 +1,34 @@
+/* CASH / Signal Lab: observed OHLC candles and historical markers only. */
+#cashV3 .v3-signal-lab{padding:clamp(17px,3vw,25px);overflow:hidden;background:linear-gradient(155deg,rgba(32,37,49,.92),rgba(12,15,22,.96));}
+#cashV3 .sl-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-top:15px}
+#cashV3 .sl-header h2{color:#f4f6fa;font-size:clamp(19px,3.5vw,26px);font-weight:680;letter-spacing:-.045em;margin:0 0 4px}
+#cashV3 .sl-header p{font-size:11px;color:#aab4c2;line-height:1.55;margin:0}
+#cashV3 .sl-toggle{flex-shrink:0;min-height:36px;border-radius:24px;padding:8px 11px;font-size:10px;letter-spacing:.04em}
+#cashV3 .sl-bias{font-size:clamp(25px,6vw,36px);font-weight:700;letter-spacing:-.055em;margin:20px 0 6px;color:#e5e6e9}
+#cashV3 .sl-bias[data-bias="up"]{color:#a1e6bf}
+#cashV3 .sl-bias[data-bias="down"]{color:#eea7ad}
+#cashV3 .sl-meta{font-size:11px;color:#b7bdc9;line-height:1.5}
+#cashV3 .sl-graph{margin-top:16px;border:1px solid #ffffff14;border-radius:18px;background:linear-gradient(145deg,#10151f,#0a0e17);padding:8px 5px}
+#cashV3 #slCandles{display:block;width:100%;height:250px;overflow:visible}
+#cashV3 .sl-gridline{stroke:#ffffff16;stroke-width:1}
+#cashV3 .sl-wick{stroke-width:2}
+#cashV3 line.sl-candle-up{stroke:#7bdab1}
+#cashV3 rect.sl-candle-up{fill:#7bdab1}
+#cashV3 line.sl-candle-down{stroke:#e89ca5}
+#cashV3 rect.sl-candle-down{fill:#e89ca5}
+#cashV3 .sl-marker{font-size:11px;font-weight:800;paint-order:stroke;stroke:#0e141b;stroke-width:3px;stroke-linejoin:round;letter-spacing:.5px}
+#cashV3 .sl-marker-up{fill:#78eab6}
+#cashV3 .sl-marker-down{fill:#ffa2ae}
+#cashV3 .sl-time{fill:#9caabc;font-size:10px}
+#cashV3 .sl-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:11px;color:#adb7c4;font-size:10px}
+#cashV3 .sl-legend span{display:flex;align-items:center;gap:6px}
+#cashV3 .sl-legend i{width:8px;height:8px;border-radius:50%;background:#abb3bf}
+#cashV3 .sl-legend i.sl-up{background:#7bdab1}
+#cashV3 .sl-legend i.sl-down{background:#e89ca5}
+#cashV3 .sl-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:18px}
+#cashV3 .sl-metrics>div{border:1px solid #ffffff16;border-radius:13px;background:#ffffff09;padding:12px 9px;min-width:0}
+#cashV3 .sl-metrics small{display:block;color:#a6b0bd;font-size:10px;margin-bottom:7px}
+#cashV3 .sl-metrics strong{font-size:clamp(12px,2vw,18px);font-variant-numeric:tabular-nums;letter-spacing:-.03em;overflow-wrap:anywhere}
+#cashV3 .sl-notice{font-size:10px;color:#aab4c1;line-height:1.65;margin:17px 0 0}
+@media(max-width:500px){#cashV3 .sl-header{flex-wrap:wrap}#cashV3 .sl-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#cashV3 #slCandles{height:200px}}
+@media(prefers-reduced-motion:reduce){#cashV3 .v3-signal-lab *{transition:none!important;animation:none!important}}
