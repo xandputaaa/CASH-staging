@@ -7,6 +7,7 @@ const good=()=>({version:'CASH_LIVE_OPERATION_CHECK_V1',
  model:{independentValidatedForecasts:0,canExecuteRealTrade:false}});
 async function fake(port,path){
  if(path==='/')return {status:200,type:'text/html',body:'id="cashSimple" id="modeAdvanced" id="livePaperLab"'};
+ if(path==='/cash-signal-lab.css')return {status:200,type:'text/css',body:'/* verified study CSS */'.repeat(30)};
  if(path==='/cash-v3.css')return {status:200,type:'text/css',body:'/* verified style */'.repeat(30)};
  if(path==='/api/cash-v3/market')return {status:200,type:'application/json',body:JSON.stringify({version:'CASH_MOBILE_V3_MARKET_V1',ordersEnabled:false,executionAuthorized:false,chart:{version:'CASH_V3_CHART_V1',inventedTicks:0,syntheticForecastPath:false,realOrdersEnabled:false}})};
  if(path==='/api/manual-calls')return {status:200,type:'application/json',body:JSON.stringify({version:'CASH_MANUAL_CALLS_V1',mode:'EXPERIMENTAL_MANUAL_RESEARCH_ONLY',call:'WAIT',automaticTradingEnabled:false,ordersPlaced:0,tradingAuthorization:false,calibratedWinProbability:null,expectedValue:null})};
@@ -17,8 +18,8 @@ async function fake(port,path){
 test('startup route smoke checks homepage, JS, health and live readout without requiring winning predictions',async()=>{
  const r=await runStartupSmoke({port:3000,read:fake});
  assert.equal(r.passed,true);
- assert.equal(r.httpRoutesChecked,11);
- assert.equal(r.routeChecksPassed,11);
+ assert.equal(r.httpRoutesChecked,13);
+ assert.equal(r.routeChecksPassed,13);
  assert.equal(r.observedDataState,'ONLINE_PARTIAL_DATA');
  assert.equal(r.noRealTrading,true);
  assert.equal(r.qualificationCount,0);
@@ -35,7 +36,7 @@ test('missing script and forged trading gate fail startup smoke independently of
  assert.ok(r.failedPaths.some(x=>x.includes('/api/live-check')));
 });
 
-test('private startup smoke forwards credentials to all eleven loopback checks',async()=>{
+test('private startup smoke forwards credentials to all thirteen loopback checks',async()=>{
  const authorization='Basic '+Buffer.from('cash:valid-test-only').toString('base64');
  let calls=0;
  const r=await runStartupSmoke({authorization,read:async(port,path,timeoutMs,passed)=>{
@@ -45,7 +46,7 @@ test('private startup smoke forwards credentials to all eleven loopback checks',
   return fake(port,path);
  }});
  assert.equal(r.passed,true);
- assert.equal(calls,11);
+ assert.equal(calls,13);
 });
 test('readLocal transmits optional authorization over loopback only',async()=>{
  const http=require('node:http');
