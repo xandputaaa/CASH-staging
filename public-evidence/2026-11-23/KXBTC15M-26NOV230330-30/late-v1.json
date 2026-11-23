@@ -1,0 +1,30 @@
+{
+  "version": "CASH_PUBLIC_GITHUB_WITNESS_LEDGER_V1",
+  "prediction": {
+    "model": "KXBTC15M_LATE_CHECKPOINT_SHADOW_V1",
+    "marketId": "KXBTC15M-26NOV230330-30",
+    "side": "WAIT",
+    "contractClosesAt": "2026-11-23T08:30:00.000Z",
+    "frozenEventSha256": "be81749d6bd29ee068aaae925b822208adf83aa9bc343396749912b8c4a703e7"
+  },
+  "observations": [
+    {
+      "githubObserverRunId": "45137578339",
+      "githubObserverHeadSha": "5e909aa33f6b4138beb8952b740539f66fb4ef05",
+      "observedAtRunner": "2026-11-23T08:26:49.879Z",
+      "githubRunCreatedAt": "2026-11-23T08:18:38.000Z",
+      "githubRunEvent": "schedule",
+      "directKalshiActiveMarketCorroborated": true
+    }
+  ],
+  "firstReconciliation": {
+    "githubRunId": "45142012698",
+    "headSha": "5e909aa33f6b4138beb8952b740539f66fb4ef05",
+    "reportSha256": "1d24f741eb2c01867801aa45401699b2d3dff190a0a72ecb1afafb1206224467"
+  },
+  "directlyRecheckedFinal": null,
+  "conditionalPaper": null,
+  "independentQualification": 0,
+  "ordersEnabled": false,
+  "provenanceLimitations": "Public GitHub workflow witnesses and public Kalshi API records are not exchange-signed forecast truth, licensed BRTI audit, real fill, profit, calibrated odds or certified independent accuracy. Branch can be altered by authorized repository writers."
+}
