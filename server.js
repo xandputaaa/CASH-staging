@@ -39,6 +39,8 @@ const {makeManualCalls}=require('./manual-entry-exit-calls');
 const {createCashV3ChartFeed}=require('./cash-v3-chart-feed');
 const cashV3Css=fs.readFileSync('cash-v3.css');
 const cashV3Js=fs.readFileSync('cash-v3.js');
+const signalLabCss=fs.readFileSync('cash-signal-lab.css');
+const signalLabUi=fs.readFileSync('cash-signal-lab-ui.js');
 const manualCallsScript=fs.readFileSync('manual-calls-ui.js');
 const manualAssistScript=fs.readFileSync('manual-assist-ui.js');
 const {createKalshiFeeFeed}=require('./kalshi-fees');
@@ -302,6 +304,14 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/cash-v3.js'){
     res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8',
      'Cache-Control':'private, no-store'});res.end(cashV3Js);return;
+  }
+  if(req.method==='GET'&&req.url==='/cash-signal-lab.css'){
+    res.writeHead(200,{'Content-Type':'text/css; charset=utf-8',
+     'Cache-Control':'private, no-store'});res.end(signalLabCss);return;
+  }
+  if(req.method==='GET'&&req.url==='/cash-signal-lab-ui.js'){
+    res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8',
+     'Cache-Control':'private, no-store'});res.end(signalLabUi);return;
   }
   if(req.method==='GET'&&req.url==='/api/cash-v3/market'){
     try{
