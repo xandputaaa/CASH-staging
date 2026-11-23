@@ -1,0 +1,50 @@
+{
+  "version": "CASH_OFFSERVER_OBSERVATION_V1",
+  "observationClass": "GITHUB_RUNNER_UTC_CLOCK_PROVISIONAL",
+  "observedAtRunner": "2026-11-23T03:12:31.586Z",
+  "githubRunId": "45104586918",
+  "githubRepo": "xandputaaa/CASH-staging",
+  "githubCommitSha": "5e909aa33f6b4138beb8952b740539f66fb4ef05",
+  "frozenEvidence": [
+    {
+      "model": "KXBTC15M_LATE_CHECKPOINT_SHADOW_V1",
+      "marketId": "KXBTC15M-26NOV222215-15",
+      "frozenSide": "YES",
+      "frozenAt": "2026-11-23T03:11:33.781Z",
+      "contractClosesAt": "2026-11-23T03:15:00Z",
+      "journalSequence": 179,
+      "frozenEventHash": "0d75ab5dbc8e699bae2e214b59e96613e9461c4d13d3e1de7a0a17138215a675",
+      "headHashSeen": "0d75ab5dbc8e699bae2e214b59e96613e9461c4d13d3e1de7a0a17138215a675",
+      "publicProxyOnly": true,
+      "exchangeAtWitness": {
+        "state": "MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET",
+        "source": "KALSHI_DIRECT_PUBLIC_GET_MARKET",
+        "observedAtRunner": "2026-11-23T03:12:31.709Z",
+        "independentValidation": false,
+        "isFill": false,
+        "quoteWasNotFrozenAtPrediction": true,
+        "publishedCloseTime": "2026-11-23T03:15:00Z",
+        "publicStrikeAtObserver": 60502.96,
+        "publicStrikeType": "greater_or_equal",
+        "publicMarketStatusAtObserver": "active",
+        "exchangePublicFieldsSha256": "a562f791005fb6a969ab21589a6ce925d86435abf3ab276f55eec4473b9f2145",
+        "witnessTimeQuotesNotFills": {
+          "yesAskDollars": 1,
+          "noAskDollars": 0.001,
+          "yesAskSizeFp": 0,
+          "noAskSizeFp": null
+        }
+      }
+    }
+  ],
+  "sourcesUnavailableOrInvalid": [],
+  "claimedIndependentlyQualifiedCount": 0,
+  "realOrdersEnabled": false,
+  "calibrated": false,
+  "evidenceWitnessedBeforeExpiry": 1,
+  "note": "External read-only observation at the GitHub runner clock. The workflow run and published artifact can later be checked against GitHub-controlled job timestamps. A hash/runner clock is not a cryptographic independent timestamp, proof against fabricated server histories, a calibrated edge, proof of execution, or an independently qualified accuracy score.",
+  "directExchangeComparisons": 1,
+  "directExchangeMatches": 1,
+  "directExchangeMismatchesOrUnavailable": 0,
+  "independentQualifiedCount": 0
+}
