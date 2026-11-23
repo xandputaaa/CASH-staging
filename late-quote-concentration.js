@@ -52,9 +52,12 @@ function lateQuoteConcentration(late){
       c.hits!==sourceHits||c.misses!==sourceMisses||
       c.scoredDirectional!==sourceHits+sourceMisses))||
     (pe&&(pe.directional!==directional||pe.waits!==waits||
-      pe.paperWins!==sourceHits||pe.paperLosses!==sourceMisses||
+      !Number.isSafeInteger(pe.paperWins)||pe.paperWins<0||
+      pe.paperWins>sourceHits||
+      !Number.isSafeInteger(pe.paperLosses)||pe.paperLosses<0||
+      pe.paperLosses>sourceMisses||
       !Number.isSafeInteger(pe.negativeNetWins)||
-      pe.negativeNetWins<0||pe.negativeNetWins>sourceHits)))
+      pe.negativeNetWins<0||pe.negativeNetWins>pe.paperWins)))
   throw Error('Source-only quote outcomes conflict with source-reported audit');
  const sorted=prices.sort((a,b)=>a-b);
  const mid=Math.floor(sorted.length/2);
