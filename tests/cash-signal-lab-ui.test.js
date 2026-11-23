@@ -66,6 +66,22 @@ test('historical verified candles render correctly; toggle removes only visual m
  assert.ok(!svg.children.some(n=>n.textContent==='BUY'),'markers hidden');
  assert.ok(svg.children.some(n=>n.tag==='rect'),'candles remain');
 });
+test('insufficient history and stale candles show distinct, non-trading statuses',()=>{
+ const {doc,emit}=boot();
+ const short=sample();
+ short.chart.btc.signalLab.status='INSUFFICIENT_DATA';
+ short.chart.btc.signalLab.reason='Need 30 consecutive fully closed candles';
+ short.chart.btc.signalLab.markers=[];
+ emit(short);
+ assert.equal(doc.getElementById('slState').textContent,'AWAITING 30 CANDLES');
+ assert.equal(doc.getElementById('slCandles').children.length,0);
+ const stale=sample();
+ stale.chart.btc.signalLab.status='STALE';
+ stale.chart.btc.signalLab.reason='Kraken update expired';
+ emit(stale);
+ assert.equal(doc.getElementById('slState').textContent,'STALE / NO SIGNAL');
+ assert.equal(doc.getElementById('slBias').textContent,'NO CONFIRMATION');
+});
 test('missing, stale or reauthorized data fail closed and clear prior drawing',()=>{
  const {doc,emit}=boot();emit(sample());
  const svg=doc.getElementById('slCandles');assert.ok(svg.children.length>10);
