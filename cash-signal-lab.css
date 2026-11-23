@@ -32,3 +32,6 @@
 #cashV3 .sl-notice{font-size:10px;color:#aab4c1;line-height:1.65;margin:17px 0 0}
 @media(max-width:500px){#cashV3 .sl-header{flex-wrap:wrap}#cashV3 .sl-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#cashV3 #slCandles{height:200px}}
 @media(prefers-reduced-motion:reduce){#cashV3 .v3-signal-lab *{transition:none!important;animation:none!important}}
+
+/* In the mobile flattened grid, preserve the primary CASH signal before research. */
+@media(max-width:760px){#cashV3 #v3SignalLab{order:5}}
