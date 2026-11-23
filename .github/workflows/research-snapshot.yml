@@ -199,6 +199,11 @@ jobs:
           path: recovery/*.json
           retention-days: 30
           if-no-files-found: error
+      - name: Warn when BTC15 research journal is close to its default capacity
+        if: github.event_name == 'schedule'
+        continue-on-error: true # Source warning cannot delete a prior backup or cancel future observers
+        shell: bash
+        run: node cash-journal-runway.js recovery/cash-public-research-unverified.json recovery/cash-late-checkpoint-unverified.json
       - name: Read-only PR dry-run of the public self-reported session archiver
         if: github.event_name == 'pull_request' && steps.research_fetch.outputs.available == 'true'
         shell: bash
