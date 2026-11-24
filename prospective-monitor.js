@@ -47,11 +47,11 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
   readiness.checks++;
   readiness.reasons[reason]=(readiness.reasons[reason]||0)+1;
  }
- function append(type,payload){
+ async function append(type,payload){
   const body={sequence:events.length+1,type,recordedAt:clockISO(clock()),payload,
    previousHash:lastHash};
   const e={...body,hash:hash(body)};
-  if(store)store.append(e);
+  if(store)await store.append(e);
   events.push(e);lastHash=e.hash;
   return e;
  }
@@ -143,7 +143,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
      if(p.marketId&&(p.state==='PROVISIONAL_DIRECTION'||
        p.reason==='EDGE_UNCLEAR_VS_VOLATILITY')){
       const frozen={...p};
-      append('FORECAST',frozen);
+      await append('FORECAST',frozen);
       records.push({...frozen,status:'PENDING',winner:null,resolvedAt:null,outcomeEvidence:null,
         lastOutcomeReason:'NOT_CHECKED_YET',lastOutcomeCheckAt:null,outcomeAttempts:0});
       ids.add(market);created++;if(!p.side)recordedWait++;
@@ -188,7 +188,7 @@ function createProspectiveMonitor({quotes,spot,results,brti=null,clock=()=>Date.
       continue;
      }
      try{
-      append('OUTCOME',{marketId:record.marketId,winner:result.winner,evidence:result});
+      await append('OUTCOME',{marketId:record.marketId,winner:result.winner,evidence:result});
       record.lastOutcomeReason='OFFICIAL_RESULT_ACCEPTED';
       record.winner=result.winner;record.resolvedAt=result.checkedAt;
       record.outcomeEvidence=result;
