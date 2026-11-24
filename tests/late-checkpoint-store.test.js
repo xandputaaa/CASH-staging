@@ -267,3 +267,25 @@ test('stale lock is never auto-cleared on store opening or append',async()=>{
   assert.equal(fs.existsSync(s.path),false);
  }finally{close(d)}
 });
+
+test('database semantic replay exceeds legacy 160-market capacity without weakening checks',async()=>{
+ const {verifyLateCheckpointSemantics}=require('../late-checkpoint-store');
+ const h=harness({mode:'VOLATILE_SERVER_SESSION',events:[],append(){}});
+ await h.m.scan();
+ const template=h.m.exportSession().events[0];
+ assert.ok(template);
+ let previousHash='GENESIS';
+ const events=Array.from({length:321},(_,i)=>{
+  const {hash,...body}=structuredClone(template);
+  body.sequence=i+1;body.previousHash=previousHash;
+  body.payload.marketId='KXBTC15M-TEST-'+String(i).padStart(6,'0');
+  const event={...body,hash:sha(body)};previousHash=event.hash;return event;
+ });
+ assert.equal(verifyLateCheckpointSemantics(events).forecasts,321);
+ assert.throws(()=>verifyLateCheckpointChain(events),/capacity/);
+ assert.throws(()=>verifyLateCheckpointChain(events.slice(0,161)),/capacity/);
+ const bad=structuredClone(events);
+ bad[320].payload.marketId=bad[0].payload.marketId;
+ const {hash,...body}=bad[320];bad[320].hash=sha(body);
+ assert.throws(()=>verifyLateCheckpointSemantics(bad),/source or timing invalid/);
+});
