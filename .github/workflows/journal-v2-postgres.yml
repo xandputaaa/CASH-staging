@@ -51,3 +51,13 @@ jobs:
           INSERT INTO cash_research_events_v2(stream,sequence,market_id,event_type,event_hash,previous_hash,original_event)
           VALUES ('early:v2:s1',1,'TEST','FORECAST',repeat('d',64),'GENESIS','{}');
           SQL
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install test-only PostgreSQL driver
+        run: npm install --no-save --package-lock=false --ignore-scripts pg@8.16.3
+      - name: Test concurrent adapter writes and rollback
+        env:
+          CASH_DISPOSABLE_DB_TEST: '1'
+        run: node tests/journal-v2-postgres.integration.js
