@@ -1,0 +1,30 @@
+{
+  "version": "CASH_SHADOW_GITHUB_PUBLIC_EXCHANGE_CHECK_V1",
+  "githubRunId": "45397017678",
+  "originalWitnessSourceSha256": "30d2ec990e1b49acc088855dcd3c8a9d24f72e0febc2c40538c3cdcb4e205e47",
+  "originalWitnessObservedAtRunner": "2026-11-24T12:48:12.706Z",
+  "sourceJournalSecondFetchSha256": "30d2ec990e1b49acc088855dcd3c8a9d24f72e0febc2c40538c3cdcb4e205e47",
+  "status": "PUBLIC_MARKETS_CHECKED",
+  "marketChecksAttempted": 1,
+  "preExpiryPublicExchangeMatches": 1,
+  "comparisonRecords": [
+    {
+      "marketId": "KXBTC15M-26NOV240800-00",
+      "side": "NO",
+      "frozenEventHash": "e254a3b59242029f2ac1f2bb5780502f84beb3ba8e3390363e707197093b9af4",
+      "contractClosesAtMs": 1795525200000,
+      "checkedAtRunner": "2026-11-24T12:48:13.397Z",
+      "state": "MATCHED_ACTIVE_PUBLIC_EXCHANGE_MARKET",
+      "publicFieldsSha256": "ae5369bf598bd9b8750b59d78d17232fdb6c9555ae8af11c25b4875194574dd3",
+      "publicStrikeCents": 6043351,
+      "rule": "greater_or_equal",
+      "independentQualification": false
+    }
+  ],
+  "independentQualificationCount": 0,
+  "sourceClockIndependentlyAttested": false,
+  "publishedKalshiBRTIIndependentlyReplicated": false,
+  "fillsVerified": false,
+  "ordersEnabled": false,
+  "note": "Two distinct public systems (CASH source + Kalshi public GET) are compared by GitHub after the source claim is observed. The exchange GET is after the source forecast was frozen, not a verified observation at forecast time. This is neither a certified independent BRTI settlement oracle nor calibrated predictive evidence."
+}
