@@ -83,7 +83,8 @@ test('incorrect password returns a calm form error and fresh CSRF, not a browser
  assert.equal(response.headers['WWW-Authenticate'],undefined);
 });
 test('unauthed assets and API routes stay private without Basic challenge',async()=>{
- for(const route of ['/api/cash-v3/market','/cash-v3.js','/cash-v3.css']){
+ for(const route of ['/api/cash-v3/market','/cash-v3.js','/cash-v3.css',
+  '/cash-signal-lab.css','/cash-signal-lab-ui.js']){
   const response=res();
   assert.equal(await privateSessionGate(req('GET',route),response,secret),true);
   assert.equal(response.status,401);

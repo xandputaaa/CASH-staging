@@ -8,6 +8,7 @@
  * Newest NO/YES points are actual quotes recorded by CASH.
  * No price interpolation, fake ticks, or calibrated trading claims.
  */
+const {evaluateSignalLab}=require('./cash-signal-lab');
 const KRAKEN='https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=1';
 const KALSHI='https://external-api.kalshi.com/trade-api/v2/series/KXBTC15M/markets/';
 const ID=/^KXBTC15M-[A-Za-z0-9-]{6,70}$/;
@@ -153,6 +154,9 @@ function createCashV3ChartFeed({fetchImpl=fetch,clock=()=>Date.now()}={}){
    Number.isFinite(Date.parse(spot.fetchedAt))&&now-Date.parse(spot.fetchedAt)<=12000;
   const yes=marketPoints(kalshi.data.yes,observed.yes,now-60*60000);
   const no=marketPoints(kalshi.data.no,observed.no,now-60*60000);
+  const closedCandles=kraken.error?[]:kraken.data.map(({t,open,high,low,close,kind})=>
+   ({t,open,high,low,close,kind}));
+  const signalLab=evaluateSignalLab(closedCandles,{now,sourceAvailable:!kraken.error});
   return Object.freeze({
    version:'CASH_V3_CHART_V1',
    generatedAt:new Date(now).toISOString(),
@@ -160,7 +164,7 @@ function createCashV3ChartFeed({fetchImpl=fetch,clock=()=>Date.now()}={}){
    btc:{source:'Kraken BTC/USD',status:kraken.error?'OHLC_UNAVAILABLE':
     validSpot?'LIVE':'HISTORY_ONLY',sampleAgeMs:
      validSpot?now-Date.parse(spot.fetchedAt):null,
-    points:btc,priceCurrency:'USD',timeBasis:'REAL_OBSERVATION',
+    points:btc,candles:closedCandles,signalLab,priceCurrency:'USD',timeBasis:'REAL_OBSERVATION',
     note:'Kraken 1-minute closed candles plus same-source timestamped spot observations; never BRTI.'},
    yes:{source:'Kalshi public YES ask',status:kalshi.error?'CANDLES_UNAVAILABLE':
     observed.yes.length?'OBSERVED':'HISTORY_ONLY',points:yes,

@@ -299,11 +299,13 @@
    const payload=await response.json();
    if(id!==requestId)return;
    data=payload;lastSuccess=Date.now();market();
+   window.dispatchEvent(new CustomEvent('cash:v3:market',{detail:payload}));
   }catch{
    if(id===requestId){
     data=null;lastSuccess=0;
     unavailable('Could not verify current quote and call sources.');
     renderChart();
+    window.dispatchEvent(new CustomEvent('cash:v3:market',{detail:null}));
    }
   }finally{clearTimeout(timer)}
  }
@@ -315,10 +317,12 @@
    data=null;lastSuccess=0;
    unavailable('Previously observed data expired. Awaiting refresh.');
    renderChart();
+   window.dispatchEvent(new CustomEvent('cash:v3:market',{detail:null}));
   }
  },1000);
  document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){requestId++;set('v3Connection','● PAUSED / HIDDEN');}
+  if(document.hidden){requestId++;set('v3Connection','● PAUSED / HIDDEN');
+   window.dispatchEvent(new CustomEvent('cash:v3:market',{detail:null}));}
   else refresh();
  });
 })();
