@@ -22,4 +22,16 @@ async function auditJournalPages(client,stream,{pageSize=256}={}){
  }
  return {sequence,headHash,forecastCount,outcomeCount};
 }
-module.exports={auditJournalPages};
+// Own the snapshot explicitly; never use a client with an existing transaction.
+async function auditJournalSnapshot(client,stream,options){
+ await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+ try{
+  const result=await auditJournalPages(client,stream,options);
+  await client.query('COMMIT');
+  return result;
+ }catch(error){
+  try{await client.query('ROLLBACK')}catch{throw Error('Audit transaction state uncertain; discard client')}
+  throw error;
+ }
+}
+module.exports={auditJournalPages,auditJournalSnapshot};
