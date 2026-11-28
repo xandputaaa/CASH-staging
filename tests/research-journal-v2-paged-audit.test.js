@@ -43,3 +43,18 @@ test('snapshot reports uncertain transaction when rollback fails',async()=>{
  const db={async query(sql){if(sql.startsWith('BEGIN'))return {rows:[]};throw Error('connection lost')}};
  await assert.rejects(auditJournalSnapshot(db,stream),/discard client/);
 });
+
+test('semantic audit runs inside the same snapshot before commit',async()=>{
+ const calls=[],base=client(fixture(2));
+ const db={async query(sql,args){calls.push(sql);return sql.startsWith('SELECT')?base.query(sql,args):{rows:[]}}};
+ await auditJournalSnapshot(db,stream,{pageSize:1},async(head,connection,id)=>{
+  assert.equal(connection,db);assert.equal(id,stream);assert.equal(head.sequence,2);
+  assert.ok(Object.isFrozen(head));assert.ok(!calls.includes('COMMIT'));calls.push('SEMANTIC');return true;
+ });
+ assert.deepEqual(calls.slice(-2),['SEMANTIC','COMMIT']);
+});
+test('semantic rejection rolls back snapshot',async()=>{
+ const calls=[],db={async query(sql){calls.push(sql);return {rows:[]}}};
+ await assert.rejects(auditJournalSnapshot(db,stream,{},async()=>false),/Semantic snapshot rejected/);
+ assert.equal(calls.at(-1),'ROLLBACK');assert.ok(!calls.includes('COMMIT'));
+});
