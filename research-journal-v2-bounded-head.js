@@ -5,8 +5,7 @@ const {appendResearchEvent}=require('./research-journal-v2-adapter');
 // validate the exact structural head and must not retain unbounded history.
 async function createBoundedJournalHead({client,stream,validateSnapshot,validateEvent,pageSize=256}){
  if(typeof validateSnapshot!=='function'||typeof validateEvent!=='function')throw Error('Explicit bounded semantic validators required');
- let head=await auditJournalSnapshot(client,stream,{pageSize});
- if(await validateSnapshot(Object.freeze({...head}))!==true)throw Error('Semantic snapshot rejected');
+ let head=await auditJournalSnapshot(client,stream,{pageSize},validateSnapshot);
  let busy=false,blocked=false;
  return {
   get head(){return {...head}},
