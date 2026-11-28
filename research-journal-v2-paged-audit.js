@@ -23,10 +23,12 @@ async function auditJournalPages(client,stream,{pageSize=256}={}){
  return {sequence,headHash,forecastCount,outcomeCount};
 }
 // Own the snapshot explicitly; never use a client with an existing transaction.
-async function auditJournalSnapshot(client,stream,options){
+async function auditJournalSnapshot(client,stream,options,validateSnapshot){
+ if(validateSnapshot!==undefined&&typeof validateSnapshot!=='function')throw Error('Invalid snapshot validator');
  await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
  try{
   const result=await auditJournalPages(client,stream,options);
+  if(validateSnapshot&&await validateSnapshot(Object.freeze({...result}),client,stream)!==true)throw Error('Semantic snapshot rejected');
   await client.query('COMMIT');
   return result;
  }catch(error){
