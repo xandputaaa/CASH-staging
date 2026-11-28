@@ -65,13 +65,13 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
   replayedForecasts=replay.forecasts;
  }
 
- function append(type,payload){
+ async function append(type,payload){
   const body={sequence:events.length+1,recordedAt:iso(clock()),type,payload,previousHash:headHash};
   const e={...body,hash:sha(body)};
-  if(store)store.append(e);
+  if(store)await store.append(e);
   events.push(e);headHash=e.hash;return e;
  }
- function stage(quote,source,seriesFees){
+ async function stage(quote,source,seriesFees){
   const now=clock(),marketId=quote?.marketId,expires=Date.parse(quote?.endTime);
   const lead=expires-now;
   if(!ID.test(marketId||'')){lastReason='NO_ELIGIBLE_KALSHI_MARKET';return}
@@ -115,7 +115,7 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
    validation:'UNVALIDATED_LATE_CHECKPOINT',realMoneyAuthorized:false,
    calibratedProbability:null,expectedValue:null
   };
-  append('FORECAST',captured);
+  await append('FORECAST',captured);
   records.push({...captured,status:'PENDING',winner:null,
    outcomeCheckedAt:null,outcomeReason:'NOT_YET_CHECKED',outcomeAttempts:0});
   seen.add(marketId);lastReason=captured.side?'FROZEN_DIRECTION':'FROZEN_WAIT';
@@ -160,7 +160,7 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
      ...(r.sourceType!=='OFFICIAL_BRTI_LIVE'?
        {evidenceSnapshot:x.evidenceSnapshot}: {})
     };
-    append('OUTCOME',p);
+    await append('OUTCOME',p);
     r.winner=x.winner;r.status=x.winner==='VOID'?'VOID':r.side===null?
      'WAIT_RESOLVED':r.side===x.winner?'HIT':'MISS';
     r.outcomeReason='OFFICIAL_RESULT_ACCEPTED';
@@ -179,7 +179,7 @@ function createLateCheckpointMonitor({quotes,spot,results,brti=null,feeFeed=null
      feeFeed?.query?feeFeed.query().catch(()=>null):Promise.resolve(null)
     ]);
     const useBrti=brti?.forecastingEnabled?.()===true;
-    stage(quote,useBrti?brti.internal():reference,seriesFees);
+    await stage(quote,useBrti?brti.internal():reference,seriesFees);
     countStageReason(lastReason);
    }catch{failures++;lastReason='SOURCE_OR_COLLECTION_ERROR';countStageReason(lastReason)}
    await settle();

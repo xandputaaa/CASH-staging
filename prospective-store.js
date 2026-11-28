@@ -16,6 +16,28 @@ function maybeStat(file){
  try{return fs.lstatSync(file)}
  catch(e){if(e.code==='ENOENT')return null;throw e}
 }
+function verifyProspectiveIntegrity(events){
+ if(!Array.isArray(events))throw Error('Prospective journal events must be an array');
+ let prev='GENESIS';
+ const activeForecasts=new Set();
+ for(const [i,e] of events.entries()){
+  if(!e||typeof e!=='object'||Array.isArray(e))
+   throw Error('Prospective journal integrity invalid');
+  const {hash,...body}=e;
+  if(e.previousHash!==prev||e.sequence!==i+1||
+    !['FORECAST','OUTCOME'].includes(e.type)||SHA(body)!==hash)
+   throw Error('Prospective journal integrity invalid');
+  if(e.type==='FORECAST'){
+   const id=e.payload?.marketId;
+   if(!ID.test(id||'')||activeForecasts.has(id))
+    throw Error('Prospective journal duplicate market or invalid identity');
+   activeForecasts.add(id);
+  }else if(!activeForecasts.has(e.payload?.marketId))
+   throw Error('Prospective outcome without a frozen market');
+  prev=hash;
+ }
+ return {headHash:prev,activeForecasts};
+}
 function createProspectiveStore({directory=process.env.CASH_AUDIT_DIR}={}){
  if(!directory)return {mode:'VOLATILE_SERVER_SESSION',events:[],
   priorMarketIds:[],priorCompletedSegments:0,append(){}};
@@ -39,24 +61,7 @@ function createProspectiveStore({directory=process.env.CASH_AUDIT_DIR}={}){
  if(bytes.length)try{events=bytes.toString('utf8').trimEnd().split('\n').map(x=>JSON.parse(x))}
  catch{throw Error('Prospective journal JSONL corrupted')}
  if(events.length>LIMIT)throw Error('Prospective journal event limit exceeded');
- let prev='GENESIS';
- const activeForecasts=new Set();
- for(const [i,e] of events.entries()){
-  if(!e||typeof e!=='object'||Array.isArray(e))
-   throw Error('Prospective journal integrity invalid');
-  const {hash,...body}=e;
-  if(e.previousHash!==prev||e.sequence!==i+1||
-    !['FORECAST','OUTCOME'].includes(e.type)||SHA(body)!==hash)
-   throw Error('Prospective journal integrity invalid');
-  if(e.type==='FORECAST'){
-   const id=e.payload?.marketId;
-   if(!ID.test(id||'')||activeForecasts.has(id))
-    throw Error('Prospective journal duplicate market or invalid identity');
-   activeForecasts.add(id);
-  }else if(!activeForecasts.has(e.payload?.marketId))
-   throw Error('Prospective outcome without a frozen market');
-  prev=hash;
- }
+ const activeForecasts=verifyProspectiveIntegrity(events).activeForecasts;
  // Lazily load offline inventory: no rotation module executes a write here.
  // An incomplete hardlink+unlink transition will appear as an overlap and
  // must block startup rather than being silently repaired.
@@ -134,4 +139,4 @@ function createProspectiveStore({directory=process.env.CASH_AUDIT_DIR}={}){
   priorMarketIds:prior.priorMarketIds.slice(),
   priorCompletedSegments:prior.completedSegments,path:filename};
 }
-module.exports={createProspectiveStore};
+module.exports={createProspectiveStore,verifyProspectiveIntegrity};

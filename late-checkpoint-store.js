@@ -22,9 +22,8 @@ const freezeKeys=['marketId','model','referenceModel','sourceType','indexSourceT
  'feeScheduleAtFreeze','validation','realMoneyAuthorized','calibratedProbability','expectedValue'];
 const outcomeKeys=['marketId','winner','checkedAt','firstObservedAt','evidenceSha256',
  'evidenceSourceUrl','confirmationCount','numericRuleStatus','evidenceSnapshot'];
-function verifyLateCheckpointChain(events,{maxEvents=MAX_EVENTS}={}){
- if(!Array.isArray(events)||events.length>maxEvents||maxEvents>MAX_EVENTS)
-  throw Error('Late journal event capacity exceeded');
+function verifyLateCheckpointSemantics(events){
+ if(!Array.isArray(events))throw Error('Late journal events must be an array');
  let prev='GENESIS',forecasts=0,outcomes=0;
  const records=new Map();
  for(const [i,e] of events.entries()){
@@ -82,9 +81,15 @@ function verifyLateCheckpointChain(events,{maxEvents=MAX_EVENTS}={}){
   }
   prev=e.hash;
  }
- if(forecasts>Math.floor(maxEvents/2)||outcomes>forecasts)
-  throw Error('Late replay reserved event capacity exceeded');
+ if(outcomes>forecasts)throw Error('Late replay outcome count invalid');
  return {headHash:prev,forecasts,outcomes,records};
+}
+function verifyLateCheckpointChain(events,{maxEvents=MAX_EVENTS}={}){
+ if(!Array.isArray(events)||events.length>maxEvents||maxEvents>MAX_EVENTS)
+  throw Error('Late journal event capacity exceeded');
+ const result=verifyLateCheckpointSemantics(events);
+ if(result.forecasts>Math.floor(maxEvents/2))throw Error('Late replay reserved event capacity exceeded');
+ return result;
 }
 function createLateCheckpointStore({directory=process.env.CASH_AUDIT_DIR}={}){
  if(!directory)return {
@@ -193,4 +198,4 @@ function createLateCheckpointStore({directory=process.env.CASH_AUDIT_DIR}={}){
   priorCompletedSegments:prior.completedSegments,
   append};
 }
-module.exports={createLateCheckpointStore,verifyLateCheckpointChain,MAX_EVENTS};
+module.exports={createLateCheckpointStore,verifyLateCheckpointChain,verifyLateCheckpointSemantics,MAX_EVENTS};
